@@ -267,7 +267,7 @@ This section should contain only stable and evidence-backed results.
 ### 7.0 Initial Local POC Baseline
 
 The first stable end-to-end results are local proof-of-concept baselines for
-`biased_mf`, `svdpp`, and `asymmetric_svd` on `ml_latest_small`. These runs are
+`biased_mf`, `svdpp`, `asymmetric_svd`, and `asvdpp` on `ml_latest_small`. These runs are
 evidence-backed and manifest-valid, but they are not part of the final benchmark
 ladder.
 
@@ -276,12 +276,14 @@ ladder.
 | `ml_latest_small` | `biased_mf` | `benchmark_random_v1`, seed 1 | 0.4922 | 0.8706 | 0.8909 | 112.45 |
 | `ml_latest_small` | `svdpp` | `benchmark_random_v1`, seed 1 | 0.4609 | 0.8670 | 0.8859 | 1192.53 |
 | `ml_latest_small` | `asymmetric_svd` | `benchmark_random_v1`, seed 1 | 0.7729 | 0.8533 | 0.8730 | 460.52 |
+| `ml_latest_small` | `asvdpp` | `benchmark_random_v1`, seed 1 | 0.4386 | 0.8708 | 0.8881 | 1478.63 |
 
 Associated evidence note:
 
 - `docs/evidence/models/biased_mf/2026-04-12_ml_latest_small_biased_mf_local_poc_baseline.md`
 - `docs/evidence/models/svdpp/2026-04-12_ml_latest_small_svdpp_local_poc_baseline.md`
 - `docs/evidence/models/asymmetric_svd/2026-04-12_ml_latest_small_asymmetric_svd_local_poc_baseline.md`
+- `docs/evidence/models/asvdpp/2026-04-13_ml_latest_small_asvdpp_local_poc_baseline.md`
 
 The current local comparison suggests that the implicit-feedback extension of
 `svdpp` improves rating prediction quality slightly on `ml_latest_small`, but
@@ -294,6 +296,12 @@ implementation on the default local device profile. Because `asymmetric_svd`
 uses the accepted detached-residual optimizer contract, this result is
 reportable as a repo-defined engineering baseline, not as an exact
 optimizer-faithful paper reproduction.
+
+The current local `asvdpp` baseline does not improve over `svdpp` or
+`asymmetric_svd` on `ml_latest_small`. This is an important negative result and
+is kept explicitly in the report. It suggests that the additional free-user
+factor block is not automatically beneficial under the present draft
+hyperparameters and local POC dataset scale.
 
 ### 7.1 Main Model Comparisons
 
