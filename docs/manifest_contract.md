@@ -77,6 +77,14 @@ Ein Run-Manifest muss mindestens enthalten:
 - `artifacts.metrics`
 - `artifacts.stdout_log`
 
+Zulaessige Datensatz-Kurzformen fuer Run-Manifeste:
+
+- `ml100k`
+- `ml1m`
+- `ml10m`
+- `ml20m`
+- `ml_latest_small` nur als lokaler POC, nie als offizieller Benchmark-Ersatz
+
 Optional, aber dringend empfohlen:
 
 - `dataset.source`

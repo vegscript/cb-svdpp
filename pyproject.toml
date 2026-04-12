@@ -8,14 +8,31 @@ version = "0.1.0"
 description = "Modular research-grade scaffold for layered recommender system experiments."
 requires-python = ">=3.10"
 dependencies = [
+  "jsonschema>=4.22",
   "numpy>=1.26",
+  "numba>=0.59",
+  "scipy>=1.12",
+  "scikit-learn>=1.4",
+  "pyarrow>=16.0",
+  "polars>=1.0",
+  "pydantic>=2.7",
+  "PyYAML>=6.0",
+  "threadpoolctl>=3.5",
+  "psutil>=5.9",
+  "typer>=0.12",
 ]
 
 [project.optional-dependencies]
 dev = [
+  "hypothesis>=6.100",
+  "mypy>=1.10",
+  "pre-commit>=3.7",
   "pytest>=8.0",
   "ruff>=0.5",
 ]
+
+[project.scripts]
+recsys-lab = "recsys_lab.cli.main:app"
 
 [tool.setuptools]
 package-dir = {"" = "src"}
@@ -25,6 +42,12 @@ where = ["src"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+[tool.mypy]
+python_version = "3.10"
+warn_unused_configs = true
+disallow_untyped_defs = false
+check_untyped_defs = true
 
 [tool.ruff]
 line-length = 100

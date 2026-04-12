@@ -15,6 +15,7 @@ training:
   lambda_b: 0.02
   lambda_p: 0.02
   lambda_q: 0.02
+  dtype: float32
 
 notes:
   - draft defaults only

@@ -101,6 +101,26 @@ Wenn ein Schritt lokalspezifisch ist, muss er:
 - dokumentiert sein
 - die Portabilitaet des Kernpfads nicht zerstoeren
 
+## Process Hygiene Contract
+
+Das Repo soll keine unnoetigen lang laufenden Prozesse als Normalfall
+erzeugen.
+
+Deshalb gilt:
+
+- Hilfsprozesse nach Task-Ende schliessen
+- keine stillen Watcher oder lokalen Server ohne ausdruecklichen Bedarf
+- keine vermeidbaren Parallelhosts offen halten
+- bei laengeren Runs auf Speicherverbrauch achten
+
+Operativer Default:
+
+- einmalskriptartige Kommandos statt dauerhafter Session-Prozesse
+- grossere Datenpfade bevorzugt streaming-, chunk- oder dateibasiert statt
+  unnoetig speicherresident
+- keine blind aggressive Prozessbereinigung, wenn die Prozessherkunft nicht
+  klar ist
+
 ## Benchmark Mode
 
 Performance-Benchmarks duerfen nur unter explizit dokumentierten

@@ -154,6 +154,20 @@ disqualifizieren.
 - Python ist die Orchestrierungsschicht. Hotpaths duerfen nur dann als reine
   Python-Loops bestehen bleiben, wenn Messung zeigt, dass es ausreicht.
 
+## Process Hygiene
+
+- Keine lang laufenden Hilfsprozesse offen lassen, wenn sie fuer den aktuellen
+  Task nicht mehr benoetigt werden.
+- Keine stillen Hintergrundserver, Watcher, Hosts oder REPLs offen lassen.
+- Vor und nach laengeren Schritten auf offensichtliche Altlasten achten, wenn
+  der Task Prozesse startet.
+- Prozesse nur dann beenden, wenn sie klar diesem Repo-Task zuordenbar sind.
+- Keine generischen System- oder Nutzerprozesse blind terminieren.
+- Arbeit so planen, dass die lokale RAM-Nutzung moeglichst unter der
+  80-Prozent-Marke bleibt.
+- Wenn ein Schritt diese Grenze voraussichtlich verletzt, muss vorher ein
+  kleinerer oder gestreamter Pfad bevorzugt werden.
+
 ## HPC And Performance Discipline
 
 - Performance-Claims brauchen Messung.

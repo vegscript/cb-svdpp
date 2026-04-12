@@ -69,7 +69,7 @@
       "required": ["short_name", "split_family"],
       "properties": {
         "short_name": {
-          "enum": ["ml100k", "ml1m", "ml10m", "ml20m"]
+          "enum": ["ml100k", "ml1m", "ml10m", "ml20m", "ml_latest_small"]
         },
         "source": {
           "type": "string"

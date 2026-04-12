@@ -49,7 +49,7 @@ Primare Quellen fuer dieses Repo:
 
 ### D-003: explizite Feedback-Residuals werden im SGD-Schritt detachiert
 
-- Status: proposed
+- Status: accepted
 - Scope: optimization contract for `asymmetric_svd` and `asvdpp`
 - Source: Koren 2008 under-specifies the exact optimizer details for practical
   SGD with bias-coupled residual terms
@@ -62,8 +62,9 @@ Primare Quellen fuer dieses Repo:
   Eine vollstaendige Ableitung durch die Bias-Abhaengigkeit bleibt moeglich,
   waere aber ein eigener Optimizer-Variant.
 - Claim impact:
-  Bis diese Entscheidung final angenommen oder ersetzt ist, duerfen diese
-  Modelle nicht als exakt optimizer-faithful bezeichnet werden.
+  Diese Modelle duerfen nicht als exakt optimizer-faithful oder exakt
+  paper-faithful bezeichnet werden. Zulaessig sind nur Claims, die den
+  detachierten Repo-Optimizer explizit benennen.
 
 ### D-004: CB-Optimierung ist im Poster unter-spezifiziert
 

@@ -1,5 +1,5 @@
 """Research-grade recommender system scaffold."""
 
-from recsys_lab.experiments.runner import run_experiment
+__version__ = "0.1.0"
 
-__all__ = ["run_experiment"]
+__all__ = ["__version__"]

@@ -253,6 +253,10 @@ Kanonische Kurzformen:
 - `ml10m`
 - `ml20m`
 
+Lokaler POC-Ausnahmefall:
+
+- `ml_latest_small`
+
 Keine Mischformen wie:
 
 - `movielens100k`

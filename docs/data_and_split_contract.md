@@ -17,6 +17,9 @@ Offizieller Scope:
 Andere Datasets duerfen spaeter ergaenzt werden, aber nicht still unter
 denselben Benchmark-Namen laufen.
 
+Lokale POC-Datensaetze duerfen zusaetzlich verwendet werden, muessen aber klar
+als nicht benchmark-eligibel markiert werden.
+
 ## Data Zones
 
 Die Datenzonen sind strikt getrennt:

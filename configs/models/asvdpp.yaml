@@ -17,6 +17,9 @@ training:
   lambda_q: 0.02
   lambda_x: 0.02
   lambda_y: 0.02
+  init_std: 0.1
+  dtype: float32
+  implicit_policy: ratings_as_implicit
   residual_weight_contract: detached
 
 notes:

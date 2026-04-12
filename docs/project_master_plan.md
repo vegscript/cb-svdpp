@@ -38,6 +38,11 @@ Offizieller Scope:
 - `MovieLens 10M`
 - `MovieLens 20M`
 
+Lokaler POC-Zusatz:
+
+- `MovieLens Latest Small` ist fuer fruehe Pipeline- und Integrationsarbeit
+  zulaessig, aber nicht Teil der offiziellen Benchmark-Leiter dieses Projekts.
+
 ### 2.2 Primare Zielhardware
 
 Default-Optimierung erfolgt fuer den aktuellen lokalen PC:

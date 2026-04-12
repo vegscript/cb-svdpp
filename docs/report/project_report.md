@@ -61,6 +61,12 @@ These datasets were selected because they provide a clean scaling ladder from
 small to medium-large explicit-feedback recommender benchmarks while remaining
 compatible with fair cross-model comparisons.
 
+In addition to the official benchmark ladder, the repository maintains a local
+proof-of-concept dataset contract for `ml_latest_small`. This local dataset is
+used only to validate the engineering pipeline, manifest flow, and first model
+implementations before moving to benchmark-eligible datasets. It is explicitly
+not treated as a substitute for MovieLens 100K.
+
 ### 3.1 Dataset Suitability
 
 This section should document:
@@ -74,22 +80,37 @@ This section should document:
 
 ### 3.2 Data Preparation
 
-This section should document:
+The current ingestion path validates raw MovieLens CSV structure, checks file
+presence, counts the core entities, and then produces a processed explicit
+feedback representation in Parquet. User and item identifiers are remapped
+deterministically to dense integer indices so that all downstream models can
+operate on compact arrays and consistent sparse layouts.
 
-- ingestion format
-- validation checks
-- ID remapping
-- split family
-- conversion to Parquet or other processed forms
-- dtype choices and their rationale
+The processed dataset manifest records:
+
+- dataset identity
+- preprocessing family
+- dtype
+- interaction and catalog counts
+- rating range
+- generated artifact paths
+
+The initial local proof-of-concept path converts `ml_latest_small` into
+`float32` Parquet artifacts under `data/processed/ml_latest_small/`.
 
 ### 3.3 Data Engineering Decisions
 
-This section should explain decisions such as:
+Parquet is used because it gives a compact columnar format with predictable
+schema handling, efficient typed reads, and a clean boundary between raw data
+and model-ready artifacts. The repository deliberately does not train directly
+from CSV files. This avoids repeated parsing costs and keeps preprocessing
+decisions explicit and inspectable.
 
-- why Parquet is used
-- how processed datasets are versioned
-- why a given split family is appropriate
+Processed artifacts are versioned indirectly through their manifest metadata,
+their dataset short name, their preprocessing family, and their dtype. Split
+construction is performed after loading the processed interaction table, so the
+raw-to-processed contract and the train-validation-test contract remain
+separate.
 
 ## 4. Methodology
 
@@ -110,6 +131,12 @@ This structure supports ablations that isolate the effect of:
 - explicit item-side feedback aggregation
 - clustering-based augmentation
 
+For `asymmetric_svd` and later `asvdpp`, the repository now uses an accepted
+repo-defined optimizer deviation: explicit residual weights are treated as
+detached within each SGD step. This makes the implementation stable and
+reproducible, but it also means these models must not be described as exact
+optimizer-faithful reproductions of the source formulation.
+
 ### 4.1 Mathematical Foundation
 
 This section should summarize:
@@ -121,6 +148,11 @@ This section should summarize:
 
 Full mathematical detail belongs in `docs/math/`, while the report should
 present the concise final narrative.
+
+For the current explicit-feedback implementation path, `svdpp` uses the
+training-only rated-item set of each user as the implicit neighborhood. This
+keeps the implicit term leakage-safe during validation and test evaluation while
+remaining consistent with the repo's current explicit-feedback contract.
 
 ### 4.2 Clustering-Based Extension
 
@@ -146,31 +178,48 @@ of notebooks or monolithic scripts.
 
 ### 5.1 Repository Structure
 
-This section should briefly summarize:
+The repository follows a strict separation between source code, governance, and
+generated artifacts:
 
-- `src/` for active code
-- `tests/` for verification
-- `configs/` for canonical configuration
-- `docs/` for governance and specifications
-- `artifacts/` for generated outputs
+- `src/` contains active implementation code
+- `tests/` contains unit and integration guards
+- `configs/` contains canonical runtime, dataset, model, and experiment configs
+- `docs/` contains governance, mathematical specifications, evidence, and the
+  continuously maintained project report
+- `artifacts/` contains generated run outputs, benchmark outputs, debug data,
+  and figures
+
+The current active implementation path covers dataset preparation, processed
+dataset loading, split generation with train coverage guarantees, `biased_mf`
+training, RMSE evaluation, and run-manifest generation.
 
 ### 5.2 Portability And Environment
 
-This section should document:
+The project is configured for portable single-command setup through the repo
+tooling and typed configuration files. Runtime defaults are encoded in
+`configs/runtime/base.yaml`, while device-specific settings are separated into
+dedicated device profiles such as `local_i5_2500k_24gb`.
 
-- the canonical setup path
-- device profiles
-- portability goals
-- dependency management
+This design avoids hidden machine-specific assumptions. A run artifact records
+the exact device profile, Python version, dtype, threading settings, git state,
+and configuration references that produced the result.
 
 ### 5.3 Performance Orientation
 
-This section should describe:
+The repository is currently CPU-first. The local default hardware profile is an
+Intel i5-2500K system with 24 GB RAM, so the initial engineering focus is on
+typed arrays, deterministic ID compaction, Parquet-based preprocessing, and
+moderate thread control rather than on GPU kernels or distributed execution.
 
-- CPU-first optimization strategy
-- data layout decisions
-- sparse and vectorized processing choices
-- why these choices are appropriate for the target hardware
+```mermaid
+flowchart LR
+    A["Raw MovieLens CSV"] --> B["Validation"]
+    B --> C["Deterministic ID Remapping"]
+    C --> D["Processed Parquet + Manifest"]
+    D --> E["Train/Validation/Test Split"]
+    E --> F["Biased MF Training"]
+    F --> G["Metrics + Run Manifest + Log"]
+```
 
 ## 6. Experimental Setup
 
@@ -178,13 +227,17 @@ This section should record the final experimental protocol.
 
 ### 6.1 Hardware And Software
 
-Document:
+The first implemented baseline was executed on the default local device profile:
 
-- hardware profile
-- Python version
-- dependency stack
-- thread configuration
-- dtype profile
+- CPU: Intel Core i5-2500K
+- logical threads: 4
+- RAM: 24 GB
+- Python: 3.10.7
+- dtype profile: `float32`
+- thread profile: `omp_num_threads=4`, `blas_threads=4`
+
+The current core stack is `NumPy`, `PyArrow`, `PyYAML`, `Typer`, `jsonschema`,
+and `threadpoolctl`, with `pytest` for verification.
 
 ### 6.2 Evaluation Protocol
 
@@ -210,6 +263,37 @@ Document:
 ## 7. Results
 
 This section should contain only stable and evidence-backed results.
+
+### 7.0 Initial Local POC Baseline
+
+The first stable end-to-end results are local proof-of-concept baselines for
+`biased_mf`, `svdpp`, and `asymmetric_svd` on `ml_latest_small`. These runs are
+evidence-backed and manifest-valid, but they are not part of the final benchmark
+ladder.
+
+| Dataset | Model | Split | Train RMSE | Validation RMSE | Test RMSE | Train Time (s) |
+| --- | --- | --- | ---: | ---: | ---: | ---: |
+| `ml_latest_small` | `biased_mf` | `benchmark_random_v1`, seed 1 | 0.4922 | 0.8706 | 0.8909 | 112.45 |
+| `ml_latest_small` | `svdpp` | `benchmark_random_v1`, seed 1 | 0.4609 | 0.8670 | 0.8859 | 1192.53 |
+| `ml_latest_small` | `asymmetric_svd` | `benchmark_random_v1`, seed 1 | 0.7729 | 0.8533 | 0.8730 | 460.52 |
+
+Associated evidence note:
+
+- `docs/evidence/models/biased_mf/2026-04-12_ml_latest_small_biased_mf_local_poc_baseline.md`
+- `docs/evidence/models/svdpp/2026-04-12_ml_latest_small_svdpp_local_poc_baseline.md`
+- `docs/evidence/models/asymmetric_svd/2026-04-12_ml_latest_small_asymmetric_svd_local_poc_baseline.md`
+
+The current local comparison suggests that the implicit-feedback extension of
+`svdpp` improves rating prediction quality slightly on `ml_latest_small`, but
+with a much larger training cost on the default local CPU profile. This is a
+directional engineering result, not yet a final benchmark conclusion.
+
+The current local `asymmetric_svd` baseline improves validation and test RMSE
+further while also training substantially faster than the current `svdpp`
+implementation on the default local device profile. Because `asymmetric_svd`
+uses the accepted detached-residual optimizer contract, this result is
+reportable as a repo-defined engineering baseline, not as an exact
+optimizer-faithful paper reproduction.
 
 ### 7.1 Main Model Comparisons
 
