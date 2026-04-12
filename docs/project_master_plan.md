@@ -365,6 +365,10 @@ final-project/
 |       |-- paper_reproduction.yaml
 |       `-- benchmark_matrix.yaml
 |-- docs/
+|   |-- repo_governance.md
+|   |-- environment_contract.md
+|   |-- data_and_split_contract.md
+|   |-- evaluation_protocol.md
 |   |-- project_master_plan.md
 |   |-- math/
 |   |   |-- notation.md
@@ -537,6 +541,6 @@ Vor weiterer Implementierung wird dieser Plan als Referenz verwendet.
 
 Die naechste inhaltliche Arbeit sollte sein:
 
-1. die finale Repo-Struktur gegen dieses Dokument abzugleichen
+1. die finale Repo-Struktur gegen dieses Dokument und die Governance-Docs abzugleichen
 2. die mathematischen Spezifikationen fuer `biased_mf`, `svdpp` und `asvdpp` als eigene Docs zu schreiben
-3. erst danach den Implementierungsstart freizugeben
+3. erst danach den Implementierungsstart fuer Modellcode freizugeben

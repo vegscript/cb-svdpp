@@ -1,100 +1,15 @@
-# Forschungs- und Integritaetsprotokoll
+# Research Integrity Note
 
-## Absolute Prioritaeten
+Diese Datei ist nicht mehr kanonisch.
 
-- mathematische Integritaet
-- methodische Integritaet
-- Reproduzierbarkeit
-- vergleichbare Ablationen
-- saubere Trennung zwischen Paper-Reproduktion und eigener Erweiterung
+Die kanonischen Quellen fuer methodische und operative Integritaet sind jetzt:
 
-## Was zusaetzlich extrem wichtig ist
+- [AGENTS.md](G:/Meine Ablage/docs/WU/Semester_4/5255 Applications of Data Science/group_ass/final-project/AGENTS.md)
+- [docs/project_master_plan.md](G:/Meine Ablage/docs/WU/Semester_4/5255 Applications of Data Science/group_ass/final-project/docs/project_master_plan.md)
+- [docs/repo_governance.md](G:/Meine Ablage/docs/WU/Semester_4/5255 Applications of Data Science/group_ass/final-project/docs/repo_governance.md)
+- [docs/environment_contract.md](G:/Meine Ablage/docs/WU/Semester_4/5255 Applications of Data Science/group_ass/final-project/docs/environment_contract.md)
+- [docs/data_and_split_contract.md](G:/Meine Ablage/docs/WU/Semester_4/5255 Applications of Data Science/group_ass/final-project/docs/data_and_split_contract.md)
+- [docs/evaluation_protocol.md](G:/Meine Ablage/docs/WU/Semester_4/5255 Applications of Data Science/group_ass/final-project/docs/evaluation_protocol.md)
 
-### 1. Klare Reproduktionsstufen
-
-Jedes Ergebnis muss exakt einer Stufe zuordenbar sein:
-
-- `paper-faithful`: so nah wie moeglich an Formeln, Datenprotokoll und Metrik
-- `paper-inspired`: gleiche Idee, aber moderne oder pragmatische Anpassungen
-- `extended`: neue Varianten, die explizit nicht mehr Reproduktion sind
-
-Wenn diese Trennung fehlt, werden Resultate wissenschaftlich schnell wertlos.
-
-### 2. Data leakage prevention
-
-- kein Clustering auf Testdaten
-- keine Normalisierung mit Teststatistiken
-- keine Hyperparameter-Wahl auf Test-RMSE
-- keine impliziten Signale aus unzulaessigen Splits
-
-### 3. Repeated runs und Unsicherheit
-
-- Ergebnisse nie aus nur einem Seed berichten
-- Mittelwert und Standardabweichung ueber mehrere Seeds
-- wenn moeglich Signifikanztest fuer Kernvergleiche
-
-### 4. Exakte Experiment-Spezifikation
-
-Pro Run muessen gespeichert werden:
-
-- Dataset-Version
-- Split-Strategie
-- Seed
-- Hyperparameter
-- Modellvariante
-- Laufzeit
-- Metriken
-
-### 5. Numerische Integritaet
-
-- explizite Regularisierungsterms dokumentieren
-- Update-Regeln versionieren
-- Lernraten und Initialisierung fixieren
-- harte Guards gegen NaN/Inf
-
-### 6. Invarianten- und Sanity-Tests
-
-Mindestens diese Tests sollten spaeter vorhanden sein:
-
-- RMSE-Berechnung gegen Handrechnung
-- Split-Disjunktheit
-- Reproduzierbarkeit bei gleichem Seed
-- keine unbekannten User-/Item-IDs im Train-Loop
-- Clustering nur auf trainierten Latents
-- `alpha = 0` reduziert CB-Modell auf Basismodell
-
-### 7. HPC und Skalierung ehrlich behandeln
-
-HPC am SOTA bedeutet hier nicht nur "schnell", sondern:
-
-- klare Komplexitaetsannahmen
-- messbare Laufzeiten
-- kontrollierter Speicherverbrauch
-- spaetere Optimierung der Hotspots statt frueher Premature Optimization
-
-Fuer die erste saubere Version sind Korrektheit und Reproduzierbarkeit wichtiger als aggressive Micro-Optimierung.
-
-### 8. Dokumentierte Abweichungen vom Paper
-
-Sobald ihr etwas aendert, muss es in einer Tabelle stehen:
-
-- was wurde geaendert
-- warum wurde es geaendert
-- welche Auswirkung auf Vergleichbarkeit ist zu erwarten
-
-## Empfohlene Arbeitsweise
-
-1. `BiasedMF` sauber und voll testen.
-2. Erst dann `SVD++`.
-3. Erst dann Clustering-Schritt auf trainierten Latents.
-4. Erst dann `CB-SVD++`.
-5. Erst danach `CB-ASVD++` oder weitere Erweiterungen.
-
-## Definition von "enterprise grade" in diesem Projekt
-
-- klare Modulgrenzen
-- konfigurationsgetrieben
-- testbar ohne UI/Notebook
-- keine versteckten Seiteneffekte
-- reproduzierbare CLI oder Runner
-- dokumentierte Artefakte und Ergebnisse
+Diese Datei bleibt nur als Uebergangsverweis bestehen, damit keine parallele
+zweite Wahrheit im Repo entsteht.

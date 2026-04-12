@@ -1,0 +1,117 @@
+# Environment Contract
+
+## Purpose
+
+Dieses Dokument definiert die kanonische Runtime-, Setup- und
+Portabilitaetsumgebung des Repos.
+
+## Canonical Toolchain
+
+- Python: `3.10.x`
+- Environment und Locking: `uv`
+- Build- und Dependency-Quelle: `pyproject.toml` und `uv.lock`
+
+Der lokale Referenzrechner laeuft aktuell mit `Python 3.10.7`.
+
+## Canonical Setup Path
+
+Ein neues Geraet soll ueber einen kanonischen Setup-Pfad einsatzbereit werden.
+
+Der Zielpfad ist:
+
+```bash
+uv sync --extra dev
+```
+
+Wrapper-Skripte duerfen spaeter denselben Pfad kapseln, aber keine zweite
+Dependency-Wahrheit einfuehren.
+
+## Forbidden Environment Practices
+
+- kein `pip install` als stiller lokaler Sonderpfad
+- kein zweites Environment-Management als paralleler Standard
+- keine lokal manuell gesetzten Hardcoded-Pfade im Produktionscode
+- keine implizite Thread-Konfiguration ohne dokumentiertes Device-Profil
+
+## Device Profiles
+
+Device-Profile sind die kanonische Stelle fuer:
+
+- Thread-Anzahl
+- BLAS-/OpenMP-Thread-Anzahl
+- Default-Dtype
+- Speicher- und Cache-Pfade
+- Benchmark-Schalter
+- spaetere GPU-Schalter
+
+Lokale Referenzhardware:
+
+- CPU: `Intel Core i5-2500K`
+- Threads: `4`
+- RAM: `24 GB`
+- GPU: `GT 1030 2 GB`
+- SSD: `Samsung SSD 850 EVO 500GB`
+- HDD: `TOSHIBA DT01ACA300 3TB`
+
+Default-Regeln fuer dieses Profil:
+
+- CPU-first
+- `float32` als Performance-Default
+- `float64` fuer Referenz- und Validierungslaufe
+- aktive Caches und Artefakte auf SSD
+- grosse Rohdaten oder Archive optional auf HDD
+
+## Environment Variables
+
+Wenn Pfade oder Device-Verhalten per Environment konfiguriert werden, dann nur
+ueber klar benannte Variablen, zum Beispiel:
+
+- `RECSYS_DATA_ROOT`
+- `RECSYS_ARTIFACT_ROOT`
+- `RECSYS_CACHE_ROOT`
+- `RECSYS_DEVICE_PROFILE`
+
+Keine undokumentierten lokalen Zusatzvariablen.
+
+## Threading Contract
+
+Benchmark-Laufe muessen ihre Thread-Konfiguration explizit dokumentieren.
+
+Mindestens relevant:
+
+- `OMP_NUM_THREADS`
+- `MKL_NUM_THREADS`
+- `OPENBLAS_NUM_THREADS`
+- `NUMEXPR_NUM_THREADS`
+
+Wenn Threading relevant fuer einen Claim ist, muss es im Benchmark-Readout
+stehen.
+
+## Portability Contract
+
+Jeder produktive Pfad muss:
+
+- auf einem neuen Geraet ohne manuelle Quellcodeaenderung laufen koennen
+- ohne absolute lokale Dateipfade auskommen
+- ohne `it runs on my machine`-Sonderbehandlung auskommen
+
+Wenn ein Schritt lokalspezifisch ist, muss er:
+
+- im Device-Profil abbildbar sein
+- dokumentiert sein
+- die Portabilitaet des Kernpfads nicht zerstoeren
+
+## Benchmark Mode
+
+Performance-Benchmarks duerfen nur unter explizit dokumentierten
+Rahmenbedingungen berichtet werden:
+
+- Device-Profil
+- Python-Version
+- Dtype
+- Thread-Konfiguration
+- Dataset und Split
+- Seed-Politik
+- Warmup oder kein Warmup
+
+Ohne diese Angaben ist ein Performance-Claim unvollstaendig.
