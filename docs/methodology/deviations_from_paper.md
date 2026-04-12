@@ -68,7 +68,7 @@ Primare Quellen fuer dieses Repo:
 
 ### D-004: CB-Optimierung ist im Poster unter-spezifiziert
 
-- Status: open
+- Status: accepted
 - Scope: `cb_svdpp`, `cb_asvdpp`
 - Source: Mirbakhsh and Ling 2013 Poster
 - Observation:
@@ -77,9 +77,26 @@ Primare Quellen fuer dieses Repo:
   - die exakte regularisierte Zielfunktion
   - die Rolle von `R*` in der Optimierung
   - die exakten Update-Regeln
-- Working contract:
-  Die erste Repo-Spezifikation darf diese Luecke nur schliessen, wenn die
-  Entscheidung hier explizit dokumentiert wird.
+- Decision:
+  Das Repo verwendet fuer die erste implementierbare CB-Familie einen
+  expliziten v1-Trainingsvertrag:
+  - Cluster-Zuweisungen werden aus train-only `biased_mf`-Latents abgeleitet.
+  - User- und Item-Cluster werden separat mit `KMeans` gelernt.
+  - Cluster-Zuweisungen bleiben waehrend des eigentlichen CB-Trainings fix.
+  - `R_star` wird ausschliesslich aus Trainingsratings als Cluster-Mean-Matrix
+    plus Cluster-Count-Matrix berechnet.
+  - `R_star` dient in v1 als Diagnose- und Nachweisartefakt, nicht als
+    zusaetzliche Optimierungsaufgabe.
+  - Cluster-Latents `p_C`, `q_C`, `y_C` und `x_C` werden direkt im
+    Hauptobjective mit den individuellen Parametern trainiert.
+  - `alpha` ist in v1 ein fester Hyperparameter und wird nicht mitoptimiert.
+- Rationale:
+  Diese Entscheidung erhaelt den publizierten Praediktor, vermeidet eine freie
+  Erfindung einer zweiten, im Poster nicht belegten Faktorierungsstufe fuer
+  `R_star`, und fuehrt zu einem klaren, reproduzierbaren und testbaren
+  Implementierungsvertrag.
 - Claim impact:
-  Vor finaler Entscheidung sind CB-Modelle nicht fuer Claims wie
-  `exact paper reproduction` freigegeben.
+  `cb_svdpp` und `cb_asvdpp` duerfen in diesem Repo als source-grounded
+  predictor mit repo-defined optimization bezeichnet werden. Sie sind nicht
+  fuer Claims wie `exact paper reproduction` oder `exact optimizer-faithful
+  reproduction` freigegeben.

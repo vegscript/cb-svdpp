@@ -137,6 +137,13 @@ detached within each SGD step. This makes the implementation stable and
 reproducible, but it also means these models must not be described as exact
 optimizer-faithful reproductions of the source formulation.
 
+For the clustering-based family, the repository now uses a separate accepted
+v1 contract. User and item clusters are induced from train-only `biased_mf`
+latents with separate `KMeans` models, the assignments remain fixed during CB
+training, and `R_star` is treated as a train-only diagnostic artifact rather
+than a second optimization target. This preserves the published predictor while
+avoiding an unsupported extra factorization stage.
+
 ### 4.1 Mathematical Foundation
 
 This section should summarize:

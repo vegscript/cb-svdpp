@@ -3,8 +3,8 @@
 ## Status
 
 - predictor status: source-grounded
-- optimization status: repo-defined due poster under-specification
-- claim status: not eligible for `exact paper reproduction` by default
+- optimization status: repo-defined v1 contract
+- claim status: not eligible for `exact paper reproduction`
 
 ## Canonical Name
 
@@ -38,14 +38,22 @@ mu + b_u + b_i
 
 ## CB Contract
 
-- Cluster-Assignments werden aus trainierten `biased_mf`-Latents und KMeans
-  abgeleitet.
-- `R_star` wird aus dem Trainingssatz berechnet.
-- Die erste implementierbare Optimierung trainiert Cluster-Parameter gemeinsam
-  mit den individuellen Parametern auf beobachteten Ratings.
+- Cluster-Assignments werden aus train-only `biased_mf`-Latents und separatem
+  `KMeans` fuer User und Items abgeleitet.
+- Cluster-Assignments bleiben waehrend des CB-Trainings fix.
+- `R_star` wird nur aus dem Trainingssatz als Cluster-Mean-Matrix plus
+  Cluster-Count-Matrix berechnet.
+- `R_star` ist in v1 ein Diagnoseartefakt und kein eigener Loss-Term.
+- Die Optimierung trainiert Cluster-Parameter gemeinsam mit den individuellen
+  Parametern direkt auf beobachteten Ratings.
+- `alpha` ist in v1 ein fester Hyperparameter pro Run.
+
+## Reduction Role
+
+- reduziert sich zu `svdpp`, wenn `alpha = 0`
 
 ## Claim Boundary
 
-- Solange die Rolle von `R_star` in der Optimierung nicht final beschlossen ist,
-  darf dieses Modell nur als paper-inspired implementation des publizierten
-  Praediktors bezeichnet werden.
+- Dieses Modell darf als source-grounded predictor mit repo-defined
+  optimization bezeichnet werden.
+- Dieses Modell darf nicht als exakte Paper-Reproduktion bezeichnet werden.
