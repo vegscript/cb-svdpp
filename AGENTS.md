@@ -35,6 +35,10 @@ Vor groesseren Aenderungen kurz lesen:
 - [docs/environment_contract.md](G:/Meine Ablage/docs/WU/Semester_4/5255 Applications of Data Science/group_ass/final-project/docs/environment_contract.md)
 - [docs/data_and_split_contract.md](G:/Meine Ablage/docs/WU/Semester_4/5255 Applications of Data Science/group_ass/final-project/docs/data_and_split_contract.md)
 - [docs/evaluation_protocol.md](G:/Meine Ablage/docs/WU/Semester_4/5255 Applications of Data Science/group_ass/final-project/docs/evaluation_protocol.md)
+- [docs/naming_conventions.md](G:/Meine Ablage/docs/WU/Semester_4/5255 Applications of Data Science/group_ass/final-project/docs/naming_conventions.md)
+- [docs/manifest_contract.md](G:/Meine Ablage/docs/WU/Semester_4/5255 Applications of Data Science/group_ass/final-project/docs/manifest_contract.md)
+- [docs/report/report_contract.md](G:/Meine Ablage/docs/WU/Semester_4/5255 Applications of Data Science/group_ass/final-project/docs/report/report_contract.md)
+- [docs/methodology/deviations_from_paper.md](G:/Meine Ablage/docs/WU/Semester_4/5255 Applications of Data Science/group_ass/final-project/docs/methodology/deviations_from_paper.md)
 
 Wenn ein Task Modellmathematik oder Update-Regeln betrifft, muessen vor
 Implementierung zusaetzlich die einschlaegigen mathematischen Spezifikationen in
@@ -61,6 +65,7 @@ Implementierung zusaetzlich die einschlaegigen mathematischen Spezifikationen in
 - `docs/data_and_split_contract.md` ist die kanonische Daten- und Split-Quelle.
 - `docs/evaluation_protocol.md` ist die kanonische Evaluations- und
   Claim-Quelle.
+- `docs/manifest_contract.md` ist die kanonische Manifest-Quelle.
 - Mathematik, Objectives und Update-Regeln duerfen nur an einem kanonischen Ort
   dokumentiert sein.
 - Wenn mehrere Dateien dieselbe Wahrheit zu beschreiben scheinen, muss die
@@ -116,6 +121,9 @@ disqualifizieren.
 - Benchmark-Artefakte gehoeren nach `artifacts/benchmarks/`.
 - Lauf-Artefakte gehoeren nach `artifacts/runs/`.
 - Abbildungen gehoeren nach `artifacts/figures/`.
+- Alle relevanten Artefakte folgen den kanonischen Namen aus
+  `docs/naming_conventions.md`.
+- Produktive Runs und Benchmarks ohne Manifest sind nicht claim-faehig.
 - Grosse rebuildbare Zwischenprodukte gehoeren nicht in den Repo-Root.
 - Wenn ein Task eine Entscheidung absichert, muss klar dokumentiert sein:
   - welches Kommando lief

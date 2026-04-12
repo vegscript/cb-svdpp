@@ -1,0 +1,31 @@
+metadata:
+  status: draft
+  owner: repo
+  purpose: model_profile
+
+model:
+  name: cb_svdpp
+  family: clustering_based_factorization
+  scope: paper_inspired
+
+training:
+  latent_dim: 50
+  epochs: 20
+  learning_rate: 0.01
+  lambda_b: 0.02
+  lambda_p: 0.02
+  lambda_q: 0.02
+  lambda_y: 0.02
+  lambda_pC: 0.02
+  lambda_qC: 0.02
+  lambda_yC: 0.02
+
+clustering:
+  n_user_clusters: 100
+  n_item_clusters: 100
+  alpha: 0.10
+  algorithm: kmeans
+
+notes:
+  - draft defaults only
+  - cb optimization not exact-paper-claim-ready

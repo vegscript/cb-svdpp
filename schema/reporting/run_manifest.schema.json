@@ -1,0 +1,216 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://recsys-lab.local/schema/reporting/run_manifest.schema.json",
+  "title": "Run Manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "manifest_version",
+    "kind",
+    "generated_at_utc",
+    "run_id",
+    "status",
+    "command",
+    "cwd",
+    "git",
+    "dataset",
+    "model",
+    "runtime",
+    "seeds",
+    "artifacts"
+  ],
+  "properties": {
+    "manifest_version": {
+      "type": "string",
+      "pattern": "^v[0-9]+$"
+    },
+    "kind": {
+      "const": "run_manifest"
+    },
+    "generated_at_utc": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{6}Z$"
+    },
+    "run_id": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{6}Z_[a-z0-9_\\-]+$"
+    },
+    "status": {
+      "enum": ["started", "completed", "failed", "cancelled"]
+    },
+    "command": {
+      "type": "string",
+      "minLength": 1
+    },
+    "cwd": {
+      "type": "string",
+      "minLength": 1
+    },
+    "git": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["commit", "dirty"],
+      "properties": {
+        "commit": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{7,40}$"
+        },
+        "dirty": {
+          "type": "boolean"
+        },
+        "branch": {
+          "type": "string"
+        }
+      }
+    },
+    "dataset": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["short_name", "split_family"],
+      "properties": {
+        "short_name": {
+          "enum": ["ml100k", "ml1m", "ml10m", "ml20m"]
+        },
+        "source": {
+          "type": "string"
+        },
+        "version": {
+          "type": "string"
+        },
+        "split_family": {
+          "type": "string",
+          "pattern": "^[a-z0-9_]+$"
+        },
+        "split_id": {
+          "type": "string"
+        },
+        "manifest_ref": {
+          "type": "string"
+        }
+      }
+    },
+    "model": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name"],
+      "properties": {
+        "name": {
+          "enum": [
+            "biased_mf",
+            "svdpp",
+            "asymmetric_svd",
+            "asvdpp",
+            "cb_svdpp",
+            "cb_asvdpp"
+          ]
+        },
+        "scope": {
+          "enum": ["paper_faithful", "paper_inspired", "extended"]
+        },
+        "config_ref": {
+          "type": "string"
+        }
+      }
+    },
+    "runtime": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["device_profile", "python_version", "dtype", "threading"],
+      "properties": {
+        "device_profile": {
+          "type": "string",
+          "pattern": "^[a-z0-9_\\-]+$"
+        },
+        "python_version": {
+          "type": "string"
+        },
+        "platform": {
+          "type": "string"
+        },
+        "hostname": {
+          "type": "string"
+        },
+        "dtype": {
+          "enum": ["float32", "float64"]
+        },
+        "threading": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["omp_num_threads", "blas_threads"],
+          "properties": {
+            "omp_num_threads": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "blas_threads": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        }
+      }
+    },
+    "seeds": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "integer",
+        "minimum": 0
+      }
+    },
+    "dependencies": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "lockfile": {
+          "type": "string"
+        },
+        "environment_hash": {
+          "type": "string"
+        }
+      }
+    },
+    "timing": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "started_at_utc": {
+          "type": "string",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{6}Z$"
+        },
+        "finished_at_utc": {
+          "type": "string",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{6}Z$"
+        }
+      }
+    },
+    "artifacts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["config_snapshot", "metrics", "stdout_log"],
+      "properties": {
+        "config_snapshot": {
+          "type": "string"
+        },
+        "metrics": {
+          "type": "string"
+        },
+        "stdout_log": {
+          "type": "string"
+        },
+        "weights": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "figures": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  }
+}

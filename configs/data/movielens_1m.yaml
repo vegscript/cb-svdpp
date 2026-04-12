@@ -1,0 +1,15 @@
+metadata:
+  status: draft
+  owner: repo
+  purpose: dataset_contract
+
+dataset:
+  name: MovieLens 1M
+  short_name: ml1m
+  source_family: movielens
+  raw_relpath: data/raw/ml1m
+  interim_relpath: data/interim/ml1m
+  processed_relpath: data/processed/ml1m
+  default_split_family: benchmark_random_v1
+  explicit_feedback_only: true
+  default_implicit_policy: ratings_as_implicit

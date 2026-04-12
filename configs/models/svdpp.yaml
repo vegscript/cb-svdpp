@@ -1,0 +1,23 @@
+metadata:
+  status: draft
+  owner: repo
+  purpose: model_profile
+
+model:
+  name: svdpp
+  family: implicit_factorization
+  scope: paper_inspired
+
+training:
+  latent_dim: 50
+  epochs: 20
+  learning_rate: 0.01
+  lambda_b: 0.02
+  lambda_p: 0.02
+  lambda_q: 0.02
+  lambda_y: 0.02
+  implicit_policy: ratings_as_implicit
+
+notes:
+  - draft defaults only
+  - not benchmark-final

@@ -3,8 +3,10 @@
 Dieses Repository ist als modularer Forschungs- und Engineering-Stack fuer eine
 konzeptionell integre Reproduktion von:
 
-- `SVD` / biased matrix factorization
+- `biased matrix factorization`
 - `SVD++`
+- `Asymmetric-SVD`
+- `ASVD++` im Sinne der Poster-Familie
 - clustering-based Erweiterungen aus dem Paper
 
 geplant.
@@ -20,8 +22,10 @@ Ziele:
 
 1. `BiasedMF`: baseline factorization mit Bias-Terms.
 2. `SVD++`: implicit feedback ueber Item-History.
-3. `CB-SVD++`: Cluster-Level Erweiterung des Papers.
-4. `CB-ASVD++`: spaetere Erweiterung mit explicit neighborhood term.
+3. `Asymmetric-SVD`: Koren 2008, item-seitige Nutzerreprasentation ohne freien User-Vektor.
+4. `ASVD++`: `SVD++` plus expliziter item-seitiger Feedback-Block gemaess Poster.
+5. `CB-SVD++`: Cluster-Level Erweiterung des Posters.
+6. `CB-ASVD++`: Cluster-Level Erweiterung des Posters fuer die `ASVD++`-Familie.
 
 ## Struktur
 
@@ -42,5 +46,6 @@ Neue Modelle werden nur aufgenommen, wenn sie:
 1. Datensatz-Adapter fuer `MovieLens100k` und weitere Benchmarks bauen.
 2. `BiasedMF` voll implementieren.
 3. `SVD++` voll implementieren.
-4. Clustering-Pipeline auf gelernten Latent-Vektoren aufsetzen.
-5. Paper-Tabellen und Abbildungen so weit wie moeglich reproduzieren.
+4. `Asymmetric-SVD` und `ASVD++` mathematisch und implementatorisch absichern.
+5. Clustering-Pipeline auf gelernten Latent-Vektoren aufsetzen.
+6. Paper-Tabellen und Abbildungen so weit wie moeglich reproduzieren.

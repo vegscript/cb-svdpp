@@ -1,0 +1,23 @@
+metadata:
+  status: draft
+  owner: repo
+  purpose: model_profile
+
+model:
+  name: asymmetric_svd
+  family: asymmetric_factorization
+  scope: paper_inspired
+
+training:
+  latent_dim: 50
+  epochs: 20
+  learning_rate: 0.01
+  lambda_b: 0.04
+  lambda_q: 0.04
+  lambda_x: 0.04
+  lambda_y: 0.04
+  residual_weight_contract: detached
+
+notes:
+  - draft defaults only
+  - optimizer-faithful claim restricted by deviations register

@@ -1,0 +1,35 @@
+metadata:
+  status: draft
+  owner: repo
+  purpose: experiment_profile
+
+experiment:
+  name: benchmark_matrix
+  scope: benchmark
+  reportable: true
+
+datasets:
+  - ml100k
+  - ml1m
+  - ml10m
+  - ml20m
+
+models:
+  - biased_mf
+  - svdpp
+  - asymmetric_svd
+  - asvdpp
+  - cb_svdpp
+  - cb_asvdpp
+
+evaluation:
+  split_family: benchmark_random_v1
+  seeds:
+    - 1
+    - 2
+    - 3
+  primary_metric: rmse
+  secondary_metrics:
+    - train_time_per_epoch
+    - ratings_per_second_train
+    - peak_memory_mb

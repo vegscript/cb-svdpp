@@ -1,0 +1,27 @@
+metadata:
+  status: draft
+  owner: repo
+  purpose: canonical_base_runtime_profile
+
+runtime:
+  project_slug: recsys_paper_lab
+  default_device_profile: local_i5_2500k_24gb
+  default_precision_profile: performance_float32
+  setup_tool: uv
+  data_root: data
+  artifact_root: artifacts
+  cache_root: artifacts/local
+  naming_contract: docs/naming_conventions.md
+  manifest_contract: docs/manifest_contract.md
+
+threading_defaults:
+  omp_num_threads: 4
+  blas_threads: 4
+
+precision_profiles:
+  performance_float32:
+    dtype: float32
+    purpose: default_local_training
+  reference_float64:
+    dtype: float64
+    purpose: numerical_validation

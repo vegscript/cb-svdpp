@@ -37,6 +37,9 @@ Die folgenden Dateien sind kanonisch:
 - `docs/environment_contract.md`: Runtime-, Setup- und Portabilitaetsregeln
 - `docs/data_and_split_contract.md`: Datenschema, Datenfluss und Split-Regeln
 - `docs/evaluation_protocol.md`: Metriken, Claims, Benchmark-Regeln
+- `docs/naming_conventions.md`: Benennungsregeln fuer Artefakte, Evidence und Outputs
+- `docs/manifest_contract.md`: maschinenlesbare Nachweisregeln fuer Runs und Benchmarks
+- `docs/report/report_contract.md`: Regeln fuer den kontinuierlich gepflegten Einreichungs-Report
 
 Kein anderes Dokument darf dieselben Regeln parallel und widerspruechlich
 definieren.
@@ -96,6 +99,8 @@ Ohne Nachweis ist die korrekte Formulierung:
   reduziert werden.
 - Abweichungen vom Paper werden nicht in Commit-Messages versteckt, sondern an
   einem kanonischen Ort dokumentiert.
+- Benennungsregeln werden nicht pro Unterordner neu erfunden, sondern folgen
+  `docs/naming_conventions.md`.
 
 ## Structure Discipline
 

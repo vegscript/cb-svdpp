@@ -13,9 +13,10 @@ Benchmarking-Plattform fuer die folgende Modellleiter:
 
 1. `BiasedMF`
 2. `SVD++`
-3. `ASVD++`
-4. `CB-SVD++`
-5. `CB-ASVD++`
+3. `Asymmetric-SVD`
+4. `ASVD++`
+5. `CB-SVD++`
+6. `CB-ASVD++`
 
 Die Plattform muss:
 
@@ -91,6 +92,7 @@ Um Unklarheiten zu vermeiden, verwenden wir intern nur diese kanonischen Namen:
 
 - `biased_mf`
 - `svdpp`
+- `asymmetric_svd`
 - `asvdpp`
 - `cb_svdpp`
 - `cb_asvdpp`
@@ -98,6 +100,12 @@ Um Unklarheiten zu vermeiden, verwenden wir intern nur diese kanonischen Namen:
 Hinweis:
 
 Das `CB` im Paper bedeutet hier `clustering-based`, nicht `content-based`.
+
+`asymmetric_svd` meint das Modell aus Koren 2008 ohne freien User-Vektor.
+
+`asvdpp` meint in diesem Repo die Poster-Familie `SVD++` plus expliziten
+item-seitigen Feedback-Block. Dieser Name ist nicht identisch mit Koren 2008
+`Asymmetric-SVD`.
 
 ## 4. Architekturprinzipien
 
@@ -275,6 +283,11 @@ in mehreren Modellen wiederverwendet werden und keine Formel still dupliziert od
 - `biased_mf`
 - implizite Rueckmeldungen ueber `y_j`
 
+### `asymmetric_svd`
+
+- keine freien User-Latents
+- Nutzerreprasentation ueber explizite und implizite item-seitige Faktoren
+
 ### `asvdpp`
 
 - `svdpp`
@@ -358,6 +371,7 @@ final-project/
 |   |-- models/
 |   |   |-- biased_mf.yaml
 |   |   |-- svdpp.yaml
+|   |   |-- asymmetric_svd.yaml
 |   |   |-- asvdpp.yaml
 |   |   |-- cb_svdpp.yaml
 |   |   `-- cb_asvdpp.yaml
@@ -369,11 +383,27 @@ final-project/
 |   |-- environment_contract.md
 |   |-- data_and_split_contract.md
 |   |-- evaluation_protocol.md
+|   |-- naming_conventions.md
+|   |-- manifest_contract.md
 |   |-- project_master_plan.md
+|   |-- evidence/
+|   |   `-- README.md
+|   |-- report/
+|   |   |-- report_contract.md
+|   |   `-- project_report.md
+|   |-- templates/
+|   |   `-- evidence_note_template.md
 |   |-- math/
 |   |   |-- notation.md
 |   |   |-- objective_functions.md
-|   |   `-- update_rules.md
+|   |   |-- update_rules.md
+|   |   `-- models/
+|   |       |-- biased_mf.md
+|   |       |-- svdpp.md
+|   |       |-- asymmetric_svd.md
+|   |       |-- asvdpp.md
+|   |       |-- cb_svdpp.md
+|   |       `-- cb_asvdpp.md
 |   |-- methodology/
 |   |   |-- splits_and_leakage.md
 |   |   |-- evaluation_protocol.md
@@ -400,6 +430,10 @@ final-project/
 |   |-- integration/
 |   |-- property/
 |   `-- regression/
+|-- schema/
+|   `-- reporting/
+|       |-- run_manifest.schema.json
+|       `-- benchmark_manifest.schema.json
 |-- scripts/
 |   |-- bootstrap.ps1
 |   |-- bootstrap.sh
@@ -498,6 +532,7 @@ Default-Profil fuer den aktuellen PC:
 ### Phase 3: Feedback-Modelle
 
 - `svdpp`
+- `asymmetric_svd`
 - `asvdpp`
 - Performance-Benchmarks
 
@@ -542,5 +577,6 @@ Vor weiterer Implementierung wird dieser Plan als Referenz verwendet.
 Die naechste inhaltliche Arbeit sollte sein:
 
 1. die finale Repo-Struktur gegen dieses Dokument und die Governance-Docs abzugleichen
-2. die mathematischen Spezifikationen fuer `biased_mf`, `svdpp` und `asvdpp` als eigene Docs zu schreiben
+2. die mathematischen Spezifikationen fuer `biased_mf`, `svdpp`,
+   `asymmetric_svd`, `asvdpp` und die CB-Varianten als eigene Docs zu schreiben
 3. erst danach den Implementierungsstart fuer Modellcode freizugeben
