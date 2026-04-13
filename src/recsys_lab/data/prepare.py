@@ -30,6 +30,7 @@ def prepare_dataset_from_config(
         dataset_short_name=dataset["short_name"],
         split_family=dataset["default_split_family"],
         dtype=dtype,
+        format_family=str(dataset.get("format_family", "auto")),
         source_manifest_path=source_manifest,
         overwrite=overwrite,
     )

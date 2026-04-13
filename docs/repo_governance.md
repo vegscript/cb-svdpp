@@ -110,6 +110,21 @@ Ohne Nachweis ist die korrekte Formulierung:
 - Keine Imports aus provisorischen oder lokalen Helper-Dateien, wenn dafuer ein
   kanonischer Modulort vorgesehen ist.
 
+## Benchmark Reuse Discipline
+
+- Benchmark-Reuse ist nur erlaubt, wenn ein bestehender Run inhaltlich mit dem
+  aktuellen Benchmark-Auftrag identisch ist.
+- Mindestbedingungen fuer Reuse sind:
+  - gleicher Git-Commit
+  - cleanes Repo
+  - gleiche effektiv geladene Config-Inhalte
+  - gleiches Dataset-Manifest
+  - gleiche Split-Familie und gleicher Fold
+  - gleicher Seed
+  - gleiches Dtype- und Device-Profil
+- In einem dirty Workspace werden keine frueheren Runs fuer Benchmarks
+  wiederverwendet.
+
 ## Review Questions
 
 Vor dem Mergen oder vor dem Abschliessen eines groesseren Schritts muessen diese

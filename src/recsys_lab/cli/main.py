@@ -9,7 +9,11 @@ from recsys_lab.data.prepare import prepare_dataset_from_config
 from recsys_lab.experiments.asymmetric_svd import run_asymmetric_svd_experiment
 from recsys_lab.experiments.asvdpp import run_asvdpp_experiment
 from recsys_lab.experiments.biased_mf import run_biased_mf_experiment
+from recsys_lab.experiments.cb_svdpp import run_cb_svdpp_experiment
 from recsys_lab.experiments.common import SplitConfig
+from recsys_lab.experiments.ml100k_inner_tuning import run_ml100k_inner_tuning
+from recsys_lab.experiments.ml100k_paper_benchmark import run_ml100k_paper_benchmark
+from recsys_lab.experiments.ml100k_paper_multiseed_benchmark import run_ml100k_paper_multiseed_benchmark
 from recsys_lab.experiments.svdpp import run_svdpp_experiment
 from recsys_lab.experiments.runner import build_dry_run_plan
 from recsys_lab.utils.manifests import validate_manifest_file
@@ -116,6 +120,7 @@ def train_biased_mf(
     model_config: str = "configs/models/biased_mf.yaml",
     runtime_config: str = "configs/runtime/base.yaml",
     device_config: str = "configs/runtime/devices/local_i5_2500k_24gb.yaml",
+    split_family: str = "benchmark_random_v1",
     train_ratio: float = 0.8,
     validation_ratio: float = 0.1,
     split_seed: int = 1,
@@ -144,6 +149,7 @@ def train_biased_mf(
         ),
         model_seed=model_seed,
         repo_root=root,
+        split_family=split_family,
     )
     typer.echo(json.dumps(payload, indent=2, sort_keys=True))
 
@@ -154,6 +160,7 @@ def train_svdpp(
     model_config: str = "configs/models/svdpp.yaml",
     runtime_config: str = "configs/runtime/base.yaml",
     device_config: str = "configs/runtime/devices/local_i5_2500k_24gb.yaml",
+    split_family: str = "benchmark_random_v1",
     train_ratio: float = 0.8,
     validation_ratio: float = 0.1,
     split_seed: int = 1,
@@ -182,6 +189,7 @@ def train_svdpp(
         ),
         model_seed=model_seed,
         repo_root=root,
+        split_family=split_family,
     )
     typer.echo(json.dumps(payload, indent=2, sort_keys=True))
 
@@ -257,6 +265,143 @@ def train_asvdpp(
             seed=split_seed,
         ),
         model_seed=model_seed,
+        repo_root=root,
+    )
+    typer.echo(json.dumps(payload, indent=2, sort_keys=True))
+
+
+@app.command("train-cb-svdpp")
+def train_cb_svdpp(
+    processed_manifest: str,
+    model_config: str = "configs/models/cb_svdpp.yaml",
+    runtime_config: str = "configs/runtime/base.yaml",
+    device_config: str = "configs/runtime/devices/local_i5_2500k_24gb.yaml",
+    train_ratio: float = 0.8,
+    validation_ratio: float = 0.1,
+    split_seed: int = 1,
+    model_seed: int = 1,
+) -> None:
+    root = discover_repo_root()
+    processed_manifest_path = _resolve_path(processed_manifest, repo_root=root)
+    model_config_path = _resolve_path(model_config, repo_root=root)
+    runtime_config_path = _resolve_path(runtime_config, repo_root=root)
+    device_config_path = _resolve_path(device_config, repo_root=root)
+
+    if processed_manifest_path is None:
+        raise typer.BadParameter("processed_manifest is required")
+    if model_config_path is None or runtime_config_path is None or device_config_path is None:
+        raise typer.BadParameter("model_config, runtime_config, and device_config are required")
+
+    payload = run_cb_svdpp_experiment(
+        processed_manifest_path=processed_manifest_path,
+        model_config_path=model_config_path,
+        runtime_config_path=runtime_config_path,
+        device_config_path=device_config_path,
+        split_config=SplitConfig(
+            train_ratio=train_ratio,
+            validation_ratio=validation_ratio,
+            seed=split_seed,
+        ),
+        model_seed=model_seed,
+        repo_root=root,
+    )
+    typer.echo(json.dumps(payload, indent=2, sort_keys=True))
+
+
+@app.command("benchmark-ml100k-paper")
+def benchmark_ml100k_paper(
+    model: str,
+    processed_manifest: str,
+    model_config: str,
+    runtime_config: str = "configs/runtime/base.yaml",
+    device_config: str = "configs/runtime/devices/local_i5_2500k_24gb.yaml",
+    model_seed: int = 1,
+) -> None:
+    root = discover_repo_root()
+    processed_manifest_path = _resolve_path(processed_manifest, repo_root=root)
+    model_config_path = _resolve_path(model_config, repo_root=root)
+    runtime_config_path = _resolve_path(runtime_config, repo_root=root)
+    device_config_path = _resolve_path(device_config, repo_root=root)
+
+    if processed_manifest_path is None or model_config_path is None:
+        raise typer.BadParameter("processed_manifest and model_config are required")
+    if runtime_config_path is None or device_config_path is None:
+        raise typer.BadParameter("runtime_config and device_config are required")
+
+    payload = run_ml100k_paper_benchmark(
+        model_name=model,
+        processed_manifest_path=processed_manifest_path,
+        model_config_path=model_config_path,
+        runtime_config_path=runtime_config_path,
+        device_config_path=device_config_path,
+        model_seed=model_seed,
+        repo_root=root,
+    )
+    typer.echo(json.dumps(payload, indent=2, sort_keys=True))
+
+
+@app.command("benchmark-ml100k-paper-multiseed")
+def benchmark_ml100k_paper_multiseed(
+    model: str,
+    processed_manifest: str,
+    model_config: str,
+    runtime_config: str = "configs/runtime/base.yaml",
+    device_config: str = "configs/runtime/devices/local_i5_2500k_24gb.yaml",
+    model_seeds: str = "1,2,3",
+) -> None:
+    root = discover_repo_root()
+    processed_manifest_path = _resolve_path(processed_manifest, repo_root=root)
+    model_config_path = _resolve_path(model_config, repo_root=root)
+    runtime_config_path = _resolve_path(runtime_config, repo_root=root)
+    device_config_path = _resolve_path(device_config, repo_root=root)
+
+    if processed_manifest_path is None or model_config_path is None:
+        raise typer.BadParameter("processed_manifest and model_config are required")
+    if runtime_config_path is None or device_config_path is None:
+        raise typer.BadParameter("runtime_config and device_config are required")
+
+    try:
+        seed_values = [int(value.strip()) for value in model_seeds.split(",") if value.strip()]
+    except ValueError as exc:
+        raise typer.BadParameter("model_seeds must be a comma-separated list of integers") from exc
+    if not seed_values:
+        raise typer.BadParameter("model_seeds must contain at least one integer")
+
+    payload = run_ml100k_paper_multiseed_benchmark(
+        model_name=model,
+        processed_manifest_path=processed_manifest_path,
+        model_config_path=model_config_path,
+        runtime_config_path=runtime_config_path,
+        device_config_path=device_config_path,
+        model_seeds=seed_values,
+        repo_root=root,
+    )
+    typer.echo(json.dumps(payload, indent=2, sort_keys=True))
+
+
+@app.command("tune-ml100k-inner")
+def tune_ml100k_inner(
+    tuning_config: str,
+    processed_manifest: str,
+    runtime_config: str = "configs/runtime/base.yaml",
+    device_config: str = "configs/runtime/devices/local_i5_2500k_24gb.yaml",
+) -> None:
+    root = discover_repo_root()
+    tuning_config_path = _resolve_path(tuning_config, repo_root=root)
+    processed_manifest_path = _resolve_path(processed_manifest, repo_root=root)
+    runtime_config_path = _resolve_path(runtime_config, repo_root=root)
+    device_config_path = _resolve_path(device_config, repo_root=root)
+
+    if tuning_config_path is None or processed_manifest_path is None:
+        raise typer.BadParameter("tuning_config and processed_manifest are required")
+    if runtime_config_path is None or device_config_path is None:
+        raise typer.BadParameter("runtime_config and device_config are required")
+
+    payload = run_ml100k_inner_tuning(
+        tuning_config_path=tuning_config_path,
+        processed_manifest_path=processed_manifest_path,
+        runtime_config_path=runtime_config_path,
+        device_config_path=device_config_path,
         repo_root=root,
     )
     typer.echo(json.dumps(payload, indent=2, sort_keys=True))

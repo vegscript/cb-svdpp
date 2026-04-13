@@ -222,10 +222,160 @@ if njit is not None:
                         error * implicit_norm * q_old[factor_idx] - lambda_y * y_old
                     )
 
+    @njit(cache=True)
+    def train_cb_svdpp_epoch_numba(
+        order: np.ndarray,
+        user_ids: np.ndarray,
+        item_ids: np.ndarray,
+        ratings: np.ndarray,
+        implicit_indptr: np.ndarray,
+        implicit_items: np.ndarray,
+        implicit_norms: np.ndarray,
+        cluster_indptr: np.ndarray,
+        cluster_ids: np.ndarray,
+        cluster_counts: np.ndarray,
+        user_clusters: np.ndarray,
+        item_clusters: np.ndarray,
+        alpha: float,
+        global_mean: float,
+        learning_rate: float,
+        lambda_b: float,
+        lambda_p: float,
+        lambda_q: float,
+        lambda_y: float,
+        lambda_pC: float,
+        lambda_qC: float,
+        lambda_yC: float,
+        user_bias: np.ndarray,
+        item_bias: np.ndarray,
+        user_factors: np.ndarray,
+        item_factors: np.ndarray,
+        implicit_factors: np.ndarray,
+        user_cluster_factors: np.ndarray,
+        item_cluster_factors: np.ndarray,
+        implicit_cluster_factors: np.ndarray,
+    ) -> None:
+        latent_dim = item_factors.shape[1]
+        one_minus_alpha = 1.0 - alpha
+
+        for position in range(order.shape[0]):
+            idx = order[position]
+            user_id = int(user_ids[idx])
+            item_id = int(item_ids[idx])
+            rating = ratings[idx]
+
+            user_cluster_id = int(user_clusters[user_id])
+            item_cluster_id = int(item_clusters[item_id])
+            user_bias_old = user_bias[user_id]
+            item_bias_old = item_bias[item_id]
+
+            p_old = np.empty(latent_dim, dtype=user_factors.dtype)
+            p_cluster_old = np.empty(latent_dim, dtype=user_cluster_factors.dtype)
+            q_old = np.empty(latent_dim, dtype=item_factors.dtype)
+            q_cluster_old = np.empty(latent_dim, dtype=item_cluster_factors.dtype)
+            q_mix_old = np.empty(latent_dim, dtype=item_factors.dtype)
+            context = np.empty(latent_dim, dtype=item_factors.dtype)
+
+            for factor_idx in range(latent_dim):
+                p_old[factor_idx] = user_factors[user_id, factor_idx]
+                p_cluster_old[factor_idx] = user_cluster_factors[user_cluster_id, factor_idx]
+                q_old[factor_idx] = item_factors[item_id, factor_idx]
+                q_cluster_old[factor_idx] = item_cluster_factors[item_cluster_id, factor_idx]
+                q_mix_old[factor_idx] = (
+                    one_minus_alpha * q_old[factor_idx] + alpha * q_cluster_old[factor_idx]
+                )
+                context[factor_idx] = (
+                    one_minus_alpha * p_old[factor_idx] + alpha * p_cluster_old[factor_idx]
+                )
+
+            implicit_start = implicit_indptr[user_id]
+            implicit_end = implicit_indptr[user_id + 1]
+            implicit_norm = implicit_norms[user_id]
+            for history_pos in range(implicit_start, implicit_end):
+                history_item = implicit_items[history_pos]
+                for factor_idx in range(latent_dim):
+                    context[factor_idx] += (
+                        implicit_norm
+                        * one_minus_alpha
+                        * implicit_factors[history_item, factor_idx]
+                    )
+
+            cluster_start = cluster_indptr[user_id]
+            cluster_end = cluster_indptr[user_id + 1]
+            for cluster_pos in range(cluster_start, cluster_end):
+                history_cluster = int(cluster_ids[cluster_pos])
+                history_cluster_count = float(cluster_counts[cluster_pos])
+                for factor_idx in range(latent_dim):
+                    context[factor_idx] += (
+                        implicit_norm
+                        * alpha
+                        * history_cluster_count
+                        * implicit_cluster_factors[history_cluster, factor_idx]
+                    )
+
+            prediction = global_mean + user_bias_old + item_bias_old
+            for factor_idx in range(latent_dim):
+                prediction += q_mix_old[factor_idx] * context[factor_idx]
+            error = rating - prediction
+
+            user_bias[user_id] = user_bias_old + learning_rate * (
+                error - lambda_b * user_bias_old
+            )
+            item_bias[item_id] = item_bias_old + learning_rate * (
+                error - lambda_b * item_bias_old
+            )
+            for factor_idx in range(latent_dim):
+                user_factors[user_id, factor_idx] = p_old[factor_idx] + learning_rate * (
+                    error * one_minus_alpha * q_mix_old[factor_idx] - lambda_p * p_old[factor_idx]
+                )
+                user_cluster_factors[user_cluster_id, factor_idx] = p_cluster_old[
+                    factor_idx
+                ] + learning_rate * (
+                    error * alpha * q_mix_old[factor_idx] - lambda_pC * p_cluster_old[factor_idx]
+                )
+                item_factors[item_id, factor_idx] = q_old[factor_idx] + learning_rate * (
+                    error * one_minus_alpha * context[factor_idx] - lambda_q * q_old[factor_idx]
+                )
+                item_cluster_factors[item_cluster_id, factor_idx] = q_cluster_old[
+                    factor_idx
+                ] + learning_rate * (
+                    error * alpha * context[factor_idx] - lambda_qC * q_cluster_old[factor_idx]
+                )
+
+            for history_pos in range(implicit_start, implicit_end):
+                history_item = implicit_items[history_pos]
+                for factor_idx in range(latent_dim):
+                    y_old = implicit_factors[history_item, factor_idx]
+                    implicit_factors[history_item, factor_idx] = y_old + learning_rate * (
+                        error * implicit_norm * one_minus_alpha * q_mix_old[factor_idx]
+                        - lambda_y * y_old
+                    )
+
+            for cluster_pos in range(cluster_start, cluster_end):
+                history_cluster = int(cluster_ids[cluster_pos])
+                history_cluster_count = float(cluster_counts[cluster_pos])
+                for factor_idx in range(latent_dim):
+                    y_cluster_old = implicit_cluster_factors[history_cluster, factor_idx]
+                    implicit_cluster_factors[history_cluster, factor_idx] = (
+                        y_cluster_old
+                        + learning_rate
+                        * (
+                            error
+                            * implicit_norm
+                            * alpha
+                            * history_cluster_count
+                            * q_mix_old[factor_idx]
+                            - lambda_yC * y_cluster_old
+                        )
+                    )
+
 else:
 
     def train_asymmetric_svd_epoch_numba(*args: object, **kwargs: object) -> None:
         raise RuntimeError("numba is not available")
 
     def train_asvdpp_epoch_numba(*args: object, **kwargs: object) -> None:
+        raise RuntimeError("numba is not available")
+
+    def train_cb_svdpp_epoch_numba(*args: object, **kwargs: object) -> None:
         raise RuntimeError("numba is not available")

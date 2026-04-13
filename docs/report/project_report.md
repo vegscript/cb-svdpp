@@ -98,6 +98,11 @@ The processed dataset manifest records:
 The initial local proof-of-concept path converts `ml_latest_small` into
 `float32` Parquet artifacts under `data/processed/ml_latest_small/`.
 
+As of April 13, 2026, the first benchmark-eligible official dataset path is
+also active: `MovieLens 100K` is now ingested from the original GroupLens
+archive under `data/raw/ml100k/` and converted into the canonical processed
+Parquet contract under `data/processed/ml100k/`.
+
 ### 3.3 Data Engineering Decisions
 
 Parquet is used because it gives a compact columnar format with predictable
@@ -111,6 +116,12 @@ their dataset short name, their preprocessing family, and their dtype. Split
 construction is performed after loading the processed interaction table, so the
 raw-to-processed contract and the train-validation-test contract remain
 separate.
+
+For `MovieLens 100K`, the repository now supports the legacy raw layout
+(`u.data`, `u.item`, `u.genre`) explicitly. The official package also contains
+the provided benchmark split files `u1` to `u5`, `ua`, and `ub`. These are now
+available in the raw zone and should be used to implement the canonical
+`paper_faithful` split family in the next benchmark-correction step.
 
 ## 4. Methodology
 
@@ -267,6 +278,14 @@ Document:
 - cluster counts
 - `alpha` sweep design
 
+The first real tuning step now exists for `ml100k` as a leakagesafe inner
+selection path. The repository uses `paper_faithful_ml100k_inner_v1` to derive
+inner `train/validation` splits only from the official outer `uX.base`
+partitions, while keeping `uX.test` untouched for final reporting. The first
+implemented search is explicitly labeled `stage1` and uses only outer folds
+`u1/u2` plus one model seed. This is sufficient for controlled correction of
+weak defaults, but not yet sufficient for final benchmark claims.
+
 ## 7. Results
 
 This section should contain only stable and evidence-backed results.
@@ -274,16 +293,17 @@ This section should contain only stable and evidence-backed results.
 ### 7.0 Initial Local POC Baseline
 
 The first stable end-to-end results are local proof-of-concept baselines for
-`biased_mf`, `svdpp`, `asymmetric_svd`, and `asvdpp` on `ml_latest_small`. These runs are
-evidence-backed and manifest-valid, but they are not part of the final benchmark
-ladder.
+`biased_mf`, `svdpp`, `asymmetric_svd`, `asvdpp`, and `cb_svdpp` on
+`ml_latest_small`. These runs are evidence-backed and manifest-valid, but they
+are not part of the final benchmark ladder.
 
-| Dataset | Model | Split | Train RMSE | Validation RMSE | Test RMSE | Train Time (s) |
-| --- | --- | --- | ---: | ---: | ---: | ---: |
-| `ml_latest_small` | `biased_mf` | `benchmark_random_v1`, seed 1 | 0.4922 | 0.8706 | 0.8909 | 112.45 |
-| `ml_latest_small` | `svdpp` | `benchmark_random_v1`, seed 1 | 0.4609 | 0.8670 | 0.8859 | 1192.53 |
-| `ml_latest_small` | `asymmetric_svd` | `benchmark_random_v1`, seed 1 | 0.7729 | 0.8533 | 0.8730 | 460.52 |
-| `ml_latest_small` | `asvdpp` | `benchmark_random_v1`, seed 1 | 0.4386 | 0.8708 | 0.8881 | 1478.63 |
+| Dataset | Model | Split | Train RMSE | Validation RMSE | Test RMSE | Auxiliary Fit Time (s) | Main Train Time (s) | End-to-End Fit Time (s) |
+| --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| `ml_latest_small` | `biased_mf` | `benchmark_random_v1`, seed 1 | 0.4922 | 0.8706 | 0.8909 | 0.00 | 112.45 | 112.45 |
+| `ml_latest_small` | `svdpp` | `benchmark_random_v1`, seed 1 | 0.4609 | 0.8670 | 0.8859 | 0.00 | 1192.53 | 1192.53 |
+| `ml_latest_small` | `asymmetric_svd` | `benchmark_random_v1`, seed 1 | 0.7729 | 0.8533 | 0.8730 | 0.00 | 460.52 | 460.52 |
+| `ml_latest_small` | `asvdpp` | `benchmark_random_v1`, seed 1 | 0.4386 | 0.8708 | 0.8881 | 0.00 | 1478.63 | 1478.63 |
+| `ml_latest_small` | `cb_svdpp` | `benchmark_random_v1`, seed 1 | 0.5548 | 0.8549 | 0.8724 | 123.23 | 478.51 | 601.74 |
 
 Associated evidence note:
 
@@ -291,6 +311,7 @@ Associated evidence note:
 - `docs/evidence/models/svdpp/2026-04-12_ml_latest_small_svdpp_local_poc_baseline.md`
 - `docs/evidence/models/asymmetric_svd/2026-04-12_ml_latest_small_asymmetric_svd_local_poc_baseline.md`
 - `docs/evidence/models/asvdpp/2026-04-13_ml_latest_small_asvdpp_local_poc_baseline.md`
+- `docs/evidence/models/cb_svdpp/2026-04-13_ml_latest_small_cb_svdpp_local_poc_baseline.md`
 
 The current local comparison suggests that the implicit-feedback extension of
 `svdpp` improves rating prediction quality slightly on `ml_latest_small`, but
@@ -309,6 +330,123 @@ The current local `asvdpp` baseline does not improve over `svdpp` or
 is kept explicitly in the report. It suggests that the additional free-user
 factor block is not automatically beneficial under the present draft
 hyperparameters and local POC dataset scale.
+
+The first local `cb_svdpp` baseline materially improves over the current
+`biased_mf`, `svdpp`, and `asvdpp` runs and achieves the best test RMSE seen so
+far on the local POC dataset. It does not, however, produce the best
+validation RMSE; that remains with `asymmetric_svd`. The CB result is therefore
+strong but not conclusive, and it must be reported together with its two-stage
+fit cost: `123.23` seconds of cluster induction plus `478.51` seconds of main
+training.
+
+### 7.0.1 First Official `ml100k` Fold Readout
+
+The repository now also has its first official `MovieLens 100K` readouts on the
+implemented `paper_faithful_ml100k_v1` split family. This path uses the raw
+package split files directly and therefore does not report a synthetic
+validation metric.
+
+| Dataset | Model | Split | Train RMSE | Test RMSE | Train Time (s) |
+| --- | --- | --- | ---: | ---: | ---: |
+| `ml100k` | `biased_mf` | `paper_faithful_ml100k_v1`, `u1` | 0.5589 | 0.9600 | 276.50 |
+| `ml100k` | `svdpp` | `paper_faithful_ml100k_v1`, `u1` | 0.5461 | 0.9524 | 850.94 |
+
+Associated evidence note:
+
+- `docs/evidence/models/biased_mf/2026-04-13_ml100k_biased_mf_paper_faithful_u1_baseline.md`
+- `docs/evidence/models/svdpp/2026-04-13_ml100k_svdpp_paper_faithful_u1_baseline.md`
+
+The first official fold confirms the expected local direction: `svdpp`
+outperforms `biased_mf` on identical official `ml100k` train/test splits.
+However, this is still not a final benchmark conclusion because the result is
+currently only based on fold `u1`, one seed, and draft hyperparameters.
+
+### 7.0.2 First Official `ml100k` Five-Fold Benchmark
+
+The repository now also has its first full `u1` to `u5` official
+`MovieLens 100K` benchmark for both `biased_mf` and `svdpp` on the canonical
+`paper_faithful_ml100k_v1` split family. Because the workspace was dirty during
+benchmark execution, fold reuse was disabled deliberately and all five folds
+were recomputed in homogeneous benchmark sessions.
+
+| Dataset | Model | Splits | Train RMSE Mean | Train RMSE Std | Test RMSE Mean | Test RMSE Std | Train Time Mean (s) | Train Time Std (s) |
+| --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| `ml100k` | `biased_mf` | `u1` to `u5` | 0.5567 | 0.0024 | 0.9524 | 0.0051 | 105.93 | 5.73 |
+| `ml100k` | `svdpp` | `u1` to `u5` | 0.5446 | 0.0024 | 0.9445 | 0.0053 | 606.91 | 101.90 |
+
+Associated evidence note:
+
+- `docs/evidence/models/biased_mf/2026-04-13_ml100k_biased_mf_paper_faithful_u1_u5_benchmark.md`
+- `docs/evidence/models/svdpp/2026-04-13_ml100k_svdpp_paper_faithful_u1_u5_benchmark.md`
+
+These five-fold results matter more than the earlier single-fold readout for
+two reasons. First, they show that the `svdpp` gain is not an artifact of one
+favorable split: the mean test RMSE improves from `0.952430` to `0.944529`,
+an absolute gain of `0.007901`. Second, the cost side is now quantified on the
+same target hardware: `svdpp` takes about `5.73x` the mean training time of
+`biased_mf` under the present draft settings.
+
+The result closes the earlier concern that all implemented models were behaving
+like near-baselines. On the official `ml100k` split family, `svdpp` now shows
+the expected directional improvement over `biased_mf`. What remains open is not
+whether the direction exists, but how much of the remaining gap to stronger
+published numbers is due to untuned hyperparameters versus deeper implementation
+or methodological debt.
+
+### 7.0.3 First Leakagesafe `ml100k` Inner Tuning Studies
+
+The repository now also has its first explicit tuning layer on top of the
+official `ml100k` benchmark path. These studies do not use the official outer
+test folds for model selection. Instead, they derive inner validation splits
+only from `u1.base` and `u2.base` and rank candidates by mean validation RMSE.
+
+| Model | Selection Stage | Outer Folds | Winning Candidate | Validation RMSE Mean | Validation RMSE Std |
+| --- | --- | --- | --- | ---: | ---: |
+| `biased_mf` | `stage1` | `u1`, `u2` | `rank064_lr0075_reg0030_e025` | 0.9334 | 0.0047 |
+| `svdpp` | `stage1` | `u1`, `u2` | `rank080_lr0050_reg0030_e020` | 0.9207 | 0.0029 |
+
+Associated evidence note:
+
+- `docs/evidence/models/biased_mf/2026-04-13_ml100k_biased_mf_inner_tuning_stage1.md`
+- `docs/evidence/models/svdpp/2026-04-13_ml100k_svdpp_inner_tuning_stage1.md`
+
+These tuning studies establish two important points. First, the original draft
+defaults were in fact weak enough to suppress the model family's potential.
+Second, the no-leakage tuning path is now operational, so future improvements
+can be made without compromising the benchmark contract.
+
+### 7.0.4 First `stage1_tuned` Official `ml100k` Benchmarks
+
+The winning `stage1` candidates were promoted into versioned repo configs and
+re-benchmarked on the official outer `u1` to `u5` test folds. These are still
+not final benchmark claims because the tuning stage used only `u1/u2` plus one
+seed, but they are now the strongest current `ml100k` anchors in the repo.
+
+| Dataset | Model | Config | Test RMSE Mean | Test RMSE Std | Absolute Gain vs. Draft | Train Time Mean (s) |
+| --- | --- | --- | ---: | ---: | ---: | ---: |
+| `ml100k` | `biased_mf` | `stage1_tuned` | 0.9375 | 0.0077 | 0.0150 | 115.91 |
+| `ml100k` | `svdpp` | `stage1_tuned` | 0.9235 | 0.0081 | 0.0210 | 658.87 |
+
+Associated evidence note:
+
+- `docs/evidence/models/biased_mf/2026-04-13_ml100k_biased_mf_stage1_tuned_benchmark.md`
+- `docs/evidence/models/svdpp/2026-04-13_ml100k_svdpp_stage1_tuned_benchmark.md`
+
+The tuned results materially change the current interpretation of the repo. The
+earlier weak numbers were not just a matter of model family choice; they were
+also a matter of under-tuned defaults. After the first leakagesafe tuning
+correction:
+
+- tuned `biased_mf` improves from `0.952430` to `0.937461`
+- tuned `svdpp` improves from `0.944529` to `0.923483`
+- tuned `svdpp` remains better than tuned `biased_mf` by `0.013978` RMSE on the
+  current official five-fold mean
+
+The price side remains important. The tuned `svdpp` profile is still much more
+expensive than tuned `biased_mf`, with about `5.68x` the mean training time on
+the default CPU target. So the current repo state now supports a much stronger
+and more realistic statement: the model family does improve after tuning, but
+the quality gain must be read together with a significant compute premium.
 
 ### 7.1 Main Model Comparisons
 

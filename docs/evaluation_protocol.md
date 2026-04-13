@@ -59,6 +59,18 @@ Es gelten drei Stufen:
 
 Die Zahl der Seeds muss immer im Readout genannt werden.
 
+## Tuning Protocol
+
+- Hyperparameter-Tuning auf `ml100k` erfolgt nicht auf `paper_faithful_ml100k_v1`
+  direkt, sondern nur auf `paper_faithful_ml100k_inner_v1`.
+- Die offiziellen aeusseren Test-Folds `u1.test` bis `u5.test` bleiben fuer die
+  finale Bewertung reserviert.
+- Tuning-Runs duerfen keine Test-RMSE aus den aeusseren offiziellen Folds
+  berichten oder fuer Kandidatenwahl verwenden.
+- Wenn aus Laufzeitgruenden nur eine Teilmenge der aeusseren Folds fuer Tuning
+  genutzt wird, muss dies explizit als `stage` oder `development` gekennzeichnet
+  werden.
+
 ## Reporting Rules
 
 Ein Ergebnisbericht muss mindestens enthalten:
@@ -125,6 +137,16 @@ Ein reproduzierbarer Benchmark muss explizit nennen:
 - Seeds
 - Warmup-Regel
 - exaktes Kommando oder Run-Profil
+
+Wenn ein Benchmark bestehende Run-Artefakte wiederverwendet, muss zusaetzlich
+klar sein:
+
+- dass das Repo clean war
+- dass Git-Commit und effektiv geladene Config-Inhalte identisch waren
+- welche Folds neu gerechnet und welche wiederverwendet wurden
+
+In einem dirty Workspace sind wiederverwendete Benchmark-Folds nicht
+benchmark-final.
 
 ## Negative Results
 

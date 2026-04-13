@@ -105,7 +105,6 @@
       "properties": {
         "run_ids": {
           "type": "array",
-          "minItems": 1,
           "items": {
             "type": "string",
             "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{6}Z_[a-z0-9_\\-]+$"
@@ -115,6 +114,26 @@
           "type": "array",
           "items": {
             "type": "string"
+          }
+        },
+        "benchmark_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{6}Z_[a-z0-9_\\-]+$"
+          }
+        },
+        "benchmark_manifest_paths": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "model_seeds": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 0
           }
         }
       }

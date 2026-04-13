@@ -78,6 +78,27 @@ def split_id(split_family: str, split_config: SplitConfig) -> str:
     )
 
 
+def paper_faithful_ml100k_split_id(fold_index: int) -> str:
+    if fold_index not in {1, 2, 3, 4, 5}:
+        raise ValueError("paper-faithful ml100k fold_index must be one of 1, 2, 3, 4, 5")
+    return f"paper_faithful_ml100k_v1_u{fold_index}"
+
+
+def paper_faithful_ml100k_inner_split_id(
+    *,
+    fold_index: int,
+    validation_ratio: float,
+    inner_seed: int,
+) -> str:
+    if fold_index not in {1, 2, 3, 4, 5}:
+        raise ValueError("paper-faithful ml100k fold_index must be one of 1, 2, 3, 4, 5")
+    validation_pct = int(round(validation_ratio * 100))
+    return (
+        f"paper_faithful_ml100k_inner_v1_u{fold_index}_"
+        f"va{validation_pct:03d}_{seed_slug(inner_seed)}"
+    )
+
+
 def ratings_summary(data: RatingsData) -> dict[str, Any]:
     return {
         "rows": len(data),
@@ -89,10 +110,12 @@ def ratings_summary(data: RatingsData) -> dict[str, Any]:
 
 
 def split_summary(split: RatingsSplit) -> dict[str, Any]:
+    validation_rows = 0 if split.validation is None else len(split.validation)
     return {
         "train_rows": len(split.train),
-        "validation_rows": len(split.validation),
+        "validation_rows": validation_rows,
         "test_rows": len(split.test),
+        "has_validation": split.validation is not None,
     }
 
 
@@ -152,7 +175,11 @@ def build_base_run_manifest(
     config_snapshot_path: Path,
     metrics_path: Path,
     stdout_log_path: Path,
+    split_family_name: str | None = None,
+    split_id_value: str | None = None,
 ) -> dict[str, Any]:
+    resolved_split_family = split_family_name or str(processed_manifest["split_family"])
+    resolved_split_id = split_id_value or split_id(resolved_split_family, split_config)
     return {
         "manifest_version": "v1",
         "kind": "run_manifest",
@@ -166,8 +193,8 @@ def build_base_run_manifest(
             "short_name": str(processed_manifest["dataset_short_name"]),
             "source": str(processed_manifest.get("dataset_name", processed_manifest["dataset_short_name"])),
             "version": str(processed_manifest.get("preprocessing_family", "unknown")),
-            "split_family": str(processed_manifest["split_family"]),
-            "split_id": split_id(str(processed_manifest["split_family"]), split_config),
+            "split_family": resolved_split_family,
+            "split_id": resolved_split_id,
             "manifest_ref": repo_path_string(processed_manifest_path, repo_root=repo_root),
         },
         "model": {

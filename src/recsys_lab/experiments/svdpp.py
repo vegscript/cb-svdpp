@@ -11,12 +11,18 @@ from threadpoolctl import threadpool_limits
 from recsys_lab.config.loader import dump_yaml_file, load_yaml_file
 from recsys_lab.data.histories import build_user_history_index
 from recsys_lab.data.processed import load_processed_dataset_manifest, load_ratings_data_from_manifest
-from recsys_lab.data.splitters import random_split_with_train_coverage
+from recsys_lab.data.splitters import (
+    official_ml100k_inner_validation_split,
+    official_ml100k_paper_faithful_split,
+    random_split_with_train_coverage,
+)
 from recsys_lab.experiments.common import (
     SplitConfig,
     build_base_run_manifest,
     build_run_id,
     git_snapshot,
+    paper_faithful_ml100k_inner_split_id,
+    paper_faithful_ml100k_split_id,
     ratings_summary,
     resolve_runtime_dtype,
     split_summary,
@@ -62,6 +68,9 @@ def run_svdpp_experiment(
     model_seed: int,
     repo_root: Path | None = None,
     command: str | None = None,
+    split_family: str | None = None,
+    inner_validation_seed: int | None = None,
+    evaluate_test: bool = True,
 ) -> dict[str, Any]:
     root = (repo_root or discover_repo_root()).resolve()
 
@@ -72,6 +81,7 @@ def run_svdpp_experiment(
 
     processed_manifest = load_processed_dataset_manifest(processed_manifest_path)
     dataset_short_name = str(processed_manifest["dataset_short_name"])
+    requested_split_family = split_family or str(processed_manifest["split_family"])
 
     runtime_config_payload = load_yaml_file(runtime_config_path)
     device_config_payload = load_yaml_file(device_config_path)
@@ -107,8 +117,25 @@ def run_svdpp_experiment(
         f"--model-config {repo_path_string(model_config_path, repo_root=root)} "
         f"--runtime-config {repo_path_string(runtime_config_path, repo_root=root)} "
         f"--device-config {repo_path_string(device_config_path, repo_root=root)} "
-        f"--split-seed {split_config.seed} --model-seed {model_seed}"
+        f"--split-family {requested_split_family} "
+        f"--split-seed {split_config.seed} "
+        f"{'' if inner_validation_seed is None else f'--inner-validation-seed {inner_validation_seed} '}"
+        f"{'' if evaluate_test else '--skip-test-eval '}"
+        f"--model-seed {model_seed}"
     )
+
+    if requested_split_family == "paper_faithful_ml100k_v1":
+        split_id_value = paper_faithful_ml100k_split_id(split_config.seed)
+    elif requested_split_family == "paper_faithful_ml100k_inner_v1":
+        if inner_validation_seed is None:
+            raise ValueError("inner_validation_seed is required for paper_faithful_ml100k_inner_v1")
+        split_id_value = paper_faithful_ml100k_inner_split_id(
+            fold_index=split_config.seed,
+            validation_ratio=split_config.validation_ratio,
+            inner_seed=inner_validation_seed,
+        )
+    else:
+        split_id_value = None
 
     base_manifest = build_base_run_manifest(
         timestamp=timestamp,
@@ -129,6 +156,8 @@ def run_svdpp_experiment(
         config_snapshot_path=config_snapshot_path,
         metrics_path=metrics_path,
         stdout_log_path=stdout_log_path,
+        split_family_name=requested_split_family,
+        split_id_value=split_id_value,
     )
 
     dump_yaml_file(
@@ -165,12 +194,31 @@ def run_svdpp_experiment(
 
     try:
         ratings_data = load_ratings_data_from_manifest(processed_manifest_path)
-        split = random_split_with_train_coverage(
-            ratings_data,
-            train_ratio=split_config.train_ratio,
-            validation_ratio=split_config.validation_ratio,
-            seed=split_config.seed,
-        )
+        if requested_split_family == "benchmark_random_v1":
+            split = random_split_with_train_coverage(
+                ratings_data,
+                train_ratio=split_config.train_ratio,
+                validation_ratio=split_config.validation_ratio,
+                seed=split_config.seed,
+            )
+        elif requested_split_family == "paper_faithful_ml100k_v1":
+            split = official_ml100k_paper_faithful_split(
+                ratings_data,
+                processed_manifest_path=processed_manifest_path,
+                fold_index=split_config.seed,
+            )
+        elif requested_split_family == "paper_faithful_ml100k_inner_v1":
+            if inner_validation_seed is None:
+                raise ValueError("inner_validation_seed is required for paper_faithful_ml100k_inner_v1")
+            split = official_ml100k_inner_validation_split(
+                ratings_data,
+                processed_manifest_path=processed_manifest_path,
+                fold_index=split_config.seed,
+                validation_ratio=split_config.validation_ratio,
+                inner_seed=inner_validation_seed,
+            )
+        else:
+            raise ValueError(f"unsupported split family for svdpp: {requested_split_family}")
         history_index = build_user_history_index(split.train, dtype=runtime_dtype)
 
         model = SVDppRecommender(
@@ -188,15 +236,20 @@ def run_svdpp_experiment(
         training_seconds = perf_counter() - training_started
 
         train_predictions = model.predict_dataset(split.train)
-        validation_predictions = model.predict_dataset(split.validation)
-        test_predictions = model.predict_dataset(split.test)
+        test_predictions = None if not evaluate_test else model.predict_dataset(split.test)
+        validation_predictions = (
+            None if split.validation is None else model.predict_dataset(split.validation)
+        )
 
         history_counts = history_index.counts.astype("int64", copy=False)
         metrics_payload = {
             "run_id": run_id,
             "dataset": ratings_summary(ratings_data),
             "split": {
+                "family": requested_split_family,
                 **asdict(split_config),
+                "inner_validation_seed": inner_validation_seed,
+                "test_metrics_available": evaluate_test,
                 **split_summary(split),
             },
             "model": {
@@ -213,8 +266,16 @@ def run_svdpp_experiment(
             },
             "metrics": {
                 "train_rmse": rmse(split.train.ratings, train_predictions),
-                "validation_rmse": rmse(split.validation.ratings, validation_predictions),
-                "test_rmse": rmse(split.test.ratings, test_predictions),
+                "validation_rmse": (
+                    None
+                    if split.validation is None or validation_predictions is None
+                    else rmse(split.validation.ratings, validation_predictions)
+                ),
+                "test_rmse": (
+                    None
+                    if not evaluate_test or test_predictions is None
+                    else rmse(split.test.ratings, test_predictions)
+                ),
             },
         }
         write_json(metrics_path, metrics_payload)
@@ -226,12 +287,16 @@ def run_svdpp_experiment(
                 f"[{timestamp}] run_id={run_id}",
                 f"command={command_string}",
                 f"processed_manifest={repo_path_string(processed_manifest_path, repo_root=root)}",
-                f"train_rows={len(split.train)} validation_rows={len(split.validation)} test_rows={len(split.test)}",
+                (
+                    f"train_rows={len(split.train)} "
+                    f"validation_rows={0 if split.validation is None else len(split.validation)} "
+                    f"test_rows={len(split.test)}"
+                ),
                 (
                     "rmse "
                     f"train={metrics_payload['metrics']['train_rmse']:.6f} "
-                    f"validation={metrics_payload['metrics']['validation_rmse']:.6f} "
-                    f"test={metrics_payload['metrics']['test_rmse']:.6f}"
+                    f"validation={'NA' if metrics_payload['metrics']['validation_rmse'] is None else format(metrics_payload['metrics']['validation_rmse'], '.6f')} "
+                    f"test={'NA' if metrics_payload['metrics']['test_rmse'] is None else format(metrics_payload['metrics']['test_rmse'], '.6f')}"
                 ),
                 (
                     "implicit_summary "

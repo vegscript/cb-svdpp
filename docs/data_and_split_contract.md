@@ -80,6 +80,33 @@ Anwendung:
 
 - primaer fuer `MovieLens 100K`
 
+Aktueller Repo-Vertrag:
+
+- `paper_faithful_ml100k_v1` verwendet die offiziellen im GroupLens-Paket
+  enthaltenen Split-Dateien `u1.base/u1.test` bis `u5.base/u5.test`
+- diese Splits liefern nur `train` und `test`
+- es wird in diesem Pfad keine stille zusaetzliche Validation aus dem Training
+  herausgeschnitten
+- wenn Hyperparameter-Tuning benoetigt wird, muss dafuer ein eigener,
+  explizit dokumentierter Tuning-Pfad verwendet werden
+
+### `paper_faithful_ml100k_inner_v1`
+
+Ziel:
+
+- leakagesicheres Hyperparameter-Tuning auf Basis der offiziellen `ml100k`
+  Trainingssplits
+
+Repo-Vertrag:
+
+- der aeussere Testpfad bleibt der offizielle `u1.test` bis `u5.test`-Pfad
+- fuer Tuning wird nur der jeweilige offizielle `uX.base`-Pfad verwendet
+- aus `uX.base` wird ein innerer `train/validation`-Split mit
+  Train-Coverage-Regel erzeugt
+- die offizielle aeussere Testpartition wird in Tuning-Runs nicht ausgewertet
+- Tuning-Ergebnisse aus diesem Pfad duerfen nur zur Kandidatenauswahl dienen,
+  nicht als finale Benchmark-Claims
+
 ### `benchmark_random_v1`
 
 Ziel:

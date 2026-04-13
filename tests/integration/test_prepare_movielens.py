@@ -44,6 +44,7 @@ def test_prepare_movielens_explicit_dataset_writes_expected_artifacts(tmp_path: 
     )
 
     summary = validate_movielens_directory(raw_dir)
+    assert summary["format_family"] == "modern_csv"
     assert summary["counts"]["ratings"] == 3
     assert summary["counts"]["movies"] == 3
 
@@ -77,3 +78,78 @@ def test_prepare_movielens_explicit_dataset_writes_expected_artifacts(tmp_path: 
 
     tags = pq.read_table(artifacts.tags_path).to_pydict()
     assert tags["user_idx"] == [0, None]
+
+
+def test_prepare_legacy_movielens_100k_layout_writes_expected_artifacts(tmp_path: Path) -> None:
+    raw_dir = tmp_path / "raw_ml100k"
+    output_dir = tmp_path / "processed_ml100k"
+
+    _write_text(
+        raw_dir / "u.data",
+        "1\t10\t4\t874965758\n"
+        "1\t20\t5\t874965759\n"
+        "2\t10\t3\t874965760\n",
+    )
+    _write_text(
+        raw_dir / "u.genre",
+        "unknown|0\n"
+        "Action|1\n"
+        "Adventure|2\n"
+        "Animation|3\n"
+        "Children's|4\n"
+        "Comedy|5\n"
+        "Crime|6\n"
+        "Documentary|7\n"
+        "Drama|8\n"
+        "Fantasy|9\n"
+        "Film-Noir|10\n"
+        "Horror|11\n"
+        "Musical|12\n"
+        "Mystery|13\n"
+        "Romance|14\n"
+        "Sci-Fi|15\n"
+        "Thriller|16\n"
+        "War|17\n"
+        "Western|18\n",
+    )
+    _write_text(
+        raw_dir / "u.item",
+        "10|Toy Movie (1995)|01-Jan-1995||http://example.com/10|0|1|0|0|0|0|0|0|1|0|0|0|0|0|0|0|0|0|0\n"
+        "20|Serious Movie (1994)|01-Jan-1994||http://example.com/20|0|0|0|0|0|1|0|0|1|0|0|0|0|0|0|0|0|0|0\n"
+        "30|Unrated Movie (1993)|01-Jan-1993||http://example.com/30|1|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0\n",
+    )
+
+    summary = validate_movielens_directory(raw_dir)
+    assert summary["format_family"] == "legacy_100k"
+    assert summary["counts"]["ratings"] == 3
+    assert summary["counts"]["movies"] == 3
+    assert summary["counts"]["tags"] == 0
+
+    artifacts = prepare_movielens_explicit_dataset(
+        raw_dir=raw_dir,
+        output_dir=output_dir,
+        dataset_name="MovieLens 100K",
+        dataset_short_name="ml100k",
+        split_family="benchmark_random_v1",
+        format_family="legacy_100k",
+        dtype="float32",
+    )
+
+    manifest = json.loads(artifacts.manifest_path.read_text(encoding="utf-8"))
+    assert manifest["source"]["format_family"] == "legacy_100k"
+    assert manifest["counts"]["interactions"] == 3
+    assert manifest["counts"]["users"] == 2
+    assert manifest["counts"]["rated_items"] == 2
+    assert manifest["counts"]["links"] == 0
+    assert manifest["counts"]["tags"] == 0
+
+    movies = pq.read_table(artifacts.movies_path).to_pydict()
+    assert movies["item_idx"] == [0, 1, None]
+    assert movies["genres"][0] == "Action|Drama"
+    assert movies["genres"][1] == "Comedy|Drama"
+
+    links = pq.read_table(artifacts.links_path).to_pydict()
+    assert links["raw_item_id"] == []
+
+    tags = pq.read_table(artifacts.tags_path).to_pydict()
+    assert tags["raw_user_id"] == []

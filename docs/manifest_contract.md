@@ -120,11 +120,21 @@ Ein Benchmark-Manifest muss mindestens enthalten:
 Optional, aber dringend empfohlen:
 
 - `inputs.run_manifest_paths`
+- `inputs.benchmark_ids`
+- `inputs.benchmark_manifest_paths`
+- `inputs.model_seeds`
 - `artifacts.tables`
 - `artifacts.figures`
 - `artifacts.stdout_log`
 - `timing.started_at_utc`
 - `timing.finished_at_utc`
+
+Hinweis:
+
+- Fuer `completed` Benchmarks muessen `inputs.run_ids` und idealerweise auch
+  `inputs.run_manifest_paths` vollstaendig befuellt sein.
+- Fuer `started`, `failed` oder `cancelled` Benchmarks duerfen diese Listen leer
+  sein, wenn der Prozess vor dem ersten gueltigen Run endet.
 
 ## Identity Rules
 

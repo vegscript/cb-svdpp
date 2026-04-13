@@ -1,17 +1,188 @@
 from __future__ import annotations
 
+import csv
 from dataclasses import dataclass
+from pathlib import Path
 
 import numpy as np
+import pyarrow.parquet as pq
 
-from recsys_lab.data.processed import RatingsData
+from recsys_lab.data.processed import RatingsData, load_processed_dataset_manifest
 
 
 @dataclass(frozen=True, slots=True)
 class RatingsSplit:
     train: RatingsData
-    validation: RatingsData
+    validation: RatingsData | None
     test: RatingsData
+
+
+def _read_legacy_ml100k_split(path: Path) -> list[tuple[int, int, float, int]]:
+    records: list[tuple[int, int, float, int]] = []
+    with path.open("r", encoding="latin-1", newline="") as handle:
+        reader = csv.reader(handle, delimiter="\t")
+        for row in reader:
+            if not row:
+                continue
+            if len(row) != 4:
+                raise ValueError(f"unexpected row width in ml100k split file: {path}")
+            records.append((int(row[0]), int(row[1]), float(row[2]), int(row[3])))
+    return records
+
+
+def _paper_faithful_ml100k_split_indices(
+    *,
+    processed_manifest_path: Path,
+    fold_index: int,
+) -> tuple[np.ndarray, np.ndarray]:
+    if fold_index not in {1, 2, 3, 4, 5}:
+        raise ValueError("paper-faithful ml100k fold_index must be one of 1, 2, 3, 4, 5")
+
+    processed_manifest = load_processed_dataset_manifest(processed_manifest_path)
+    if str(processed_manifest["dataset_short_name"]) != "ml100k":
+        raise ValueError("paper-faithful ml100k splits are only valid for dataset_short_name='ml100k'")
+
+    source = processed_manifest.get("source", {})
+    if str(source.get("format_family")) != "legacy_100k":
+        raise ValueError("paper-faithful ml100k splits require source.format_family='legacy_100k'")
+
+    raw_dir = Path(str(source["raw_dir"])).resolve()
+    train_split_path = raw_dir / f"u{fold_index}.base"
+    test_split_path = raw_dir / f"u{fold_index}.test"
+    if not train_split_path.exists() or not test_split_path.exists():
+        raise FileNotFoundError(
+            f"missing official ml100k split files for fold {fold_index}: "
+            f"{train_split_path} / {test_split_path}"
+        )
+
+    interactions_path = Path(str(processed_manifest["artifacts"]["interactions"])).resolve()
+    table = pq.read_table(
+        interactions_path,
+        columns=["raw_user_id", "raw_item_id", "rating", "timestamp"],
+    )
+    raw_user_ids = table["raw_user_id"].to_numpy().astype(np.int32, copy=False)
+    raw_item_ids = table["raw_item_id"].to_numpy().astype(np.int32, copy=False)
+    ratings = table["rating"].to_numpy().astype(np.float64, copy=False)
+    timestamps = table["timestamp"].to_numpy().astype(np.int64, copy=False)
+
+    row_lookup: dict[tuple[int, int, float, int], int] = {}
+    for idx in range(raw_user_ids.shape[0]):
+        key = (
+            int(raw_user_ids[idx]),
+            int(raw_item_ids[idx]),
+            float(ratings[idx]),
+            int(timestamps[idx]),
+        )
+        if key in row_lookup:
+            raise ValueError("duplicate interaction key encountered while building ml100k split lookup")
+        row_lookup[key] = idx
+
+    def resolve_indices(split_records: list[tuple[int, int, float, int]]) -> np.ndarray:
+        indices: list[int] = []
+        for record in split_records:
+            if record not in row_lookup:
+                raise KeyError(f"split record not found in processed interactions: {record}")
+            indices.append(int(row_lookup[record]))
+        return np.asarray(indices, dtype=np.int64)
+
+    train_idx = resolve_indices(_read_legacy_ml100k_split(train_split_path))
+    test_idx = resolve_indices(_read_legacy_ml100k_split(test_split_path))
+
+    train_set = set(train_idx.tolist())
+    test_set = set(test_idx.tolist())
+    if train_set & test_set:
+        raise ValueError("official ml100k train/test splits are not disjoint")
+    if len(train_set) + len(test_set) != raw_user_ids.shape[0]:
+        raise ValueError("official ml100k split files do not cover the full processed interaction table")
+
+    return train_idx, test_idx
+
+
+def official_ml100k_paper_faithful_split(
+    data: RatingsData,
+    *,
+    processed_manifest_path: Path,
+    fold_index: int,
+) -> RatingsSplit:
+    train_idx, test_idx = _paper_faithful_ml100k_split_indices(
+        processed_manifest_path=processed_manifest_path,
+        fold_index=fold_index,
+    )
+    return RatingsSplit(
+        train=data.subset(train_idx, name=f"{data.name}:paper_train_u{fold_index}"),
+        validation=None,
+        test=data.subset(test_idx, name=f"{data.name}:paper_test_u{fold_index}"),
+    )
+
+
+def train_validation_split_with_train_coverage(
+    data: RatingsData,
+    *,
+    validation_ratio: float,
+    seed: int,
+) -> tuple[RatingsData, RatingsData]:
+    if not 0.0 < validation_ratio < 1.0:
+        raise ValueError("validation_ratio must be in (0, 1)")
+
+    rng = np.random.default_rng(seed)
+    n_rows = len(data)
+    permutation = rng.permutation(n_rows)
+
+    validation_target = int(n_rows * validation_ratio)
+    if validation_target <= 0 or validation_target >= n_rows:
+        raise ValueError("validation_ratio must leave at least one row in train and validation")
+
+    train_idx = list(permutation[:-validation_target])
+    validation_idx = list(permutation[-validation_target:])
+
+    train_user_set = set(int(data.user_ids[idx]) for idx in train_idx)
+    train_item_set = set(int(data.item_ids[idx]) for idx in train_idx)
+
+    kept_validation: list[int] = []
+    for idx in validation_idx:
+        user_id = int(data.user_ids[idx])
+        item_id = int(data.item_ids[idx])
+        if user_id not in train_user_set or item_id not in train_item_set:
+            train_idx.append(int(idx))
+            train_user_set.add(user_id)
+            train_item_set.add(item_id)
+        else:
+            kept_validation.append(int(idx))
+
+    if not kept_validation:
+        raise ValueError("validation split became empty after enforcing train coverage")
+
+    train_array = np.asarray(train_idx, dtype=np.int64)
+    validation_array = np.asarray(kept_validation, dtype=np.int64)
+    return (
+        data.subset(train_array, name=f"{data.name}:train"),
+        data.subset(validation_array, name=f"{data.name}:validation"),
+    )
+
+
+def official_ml100k_inner_validation_split(
+    data: RatingsData,
+    *,
+    processed_manifest_path: Path,
+    fold_index: int,
+    validation_ratio: float,
+    inner_seed: int,
+) -> RatingsSplit:
+    train_idx, test_idx = _paper_faithful_ml100k_split_indices(
+        processed_manifest_path=processed_manifest_path,
+        fold_index=fold_index,
+    )
+    outer_train = data.subset(train_idx, name=f"{data.name}:paper_outer_train_u{fold_index}")
+    inner_train, inner_validation = train_validation_split_with_train_coverage(
+        outer_train,
+        validation_ratio=validation_ratio,
+        seed=inner_seed,
+    )
+    return RatingsSplit(
+        train=inner_train,
+        validation=inner_validation,
+        test=data.subset(test_idx, name=f"{data.name}:paper_outer_test_u{fold_index}"),
+    )
 
 
 def random_split_with_train_coverage(

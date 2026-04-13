@@ -1,0 +1,50 @@
+metadata:
+  status: draft
+  owner: repo
+  purpose: tuning_experiment
+
+tuning:
+  name: ml100k_biased_mf_stage1
+  dataset_short_name: ml100k
+  split_family: paper_faithful_ml100k_inner_v1
+  selection_stage: stage1
+  objective: validation_rmse_mean
+  folds:
+    - 1
+    - 2
+  validation_ratio: 0.1
+  inner_seed: 17
+  model_seed: 1
+
+base_model_config: configs/models/biased_mf.yaml
+
+candidates:
+  - candidate_id: baseline_k050_lr0100_reg0020_e020
+    overrides:
+      training:
+        latent_dim: 50
+        epochs: 20
+        learning_rate: 0.01
+        lambda_b: 0.02
+        lambda_p: 0.02
+        lambda_q: 0.02
+
+  - candidate_id: rank064_lr0075_reg0030_e025
+    overrides:
+      training:
+        latent_dim: 64
+        epochs: 25
+        learning_rate: 0.0075
+        lambda_b: 0.03
+        lambda_p: 0.03
+        lambda_q: 0.03
+
+  - candidate_id: rank080_lr0050_reg0015_e030
+    overrides:
+      training:
+        latent_dim: 80
+        epochs: 30
+        learning_rate: 0.005
+        lambda_b: 0.015
+        lambda_p: 0.015
+        lambda_q: 0.015

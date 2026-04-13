@@ -131,6 +131,13 @@ disqualifizieren.
   - mit welchem Dataset und Split
   - mit welchen Seeds
   - welche Kennzahlen entstanden
+- Bestehende Run-Artefakte duerfen fuer einen neuen Benchmark nur dann
+  wiederverwendet werden, wenn:
+  - das Repo nicht dirty ist
+  - der Git-Commit uebereinstimmt
+  - die effektiv geladenen Config-Inhalte uebereinstimmen
+  - Dataset-, Split-, Seed- und Dtype-Kontrakt uebereinstimmen
+- In einem dirty Workspace ist Benchmark-Reuse unzulaessig.
 
 ## Testing Discipline
 

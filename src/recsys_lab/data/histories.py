@@ -39,6 +39,23 @@ class UserExplicitFeedbackIndex:
         return self.ratings[start:end]
 
 
+@dataclass(frozen=True, slots=True)
+class UserClusterCountIndex:
+    indptr: np.ndarray
+    cluster_ids: np.ndarray
+    counts: np.ndarray
+
+    def clusters_for_user(self, user_id: int) -> np.ndarray:
+        start = int(self.indptr[user_id])
+        end = int(self.indptr[user_id + 1])
+        return self.cluster_ids[start:end]
+
+    def counts_for_user(self, user_id: int) -> np.ndarray:
+        start = int(self.indptr[user_id])
+        end = int(self.indptr[user_id + 1])
+        return self.counts[start:end]
+
+
 def build_user_history_index(
     data: RatingsData,
     *,
@@ -117,4 +134,57 @@ def build_user_explicit_feedback_index(
         ratings=unique_ratings,
         counts=counts,
         norms=norms,
+    )
+
+
+def build_user_cluster_count_index(
+    history_index: UserHistoryIndex,
+    item_clusters: np.ndarray,
+    *,
+    n_clusters: int,
+) -> UserClusterCountIndex:
+    if n_clusters <= 0:
+        raise ValueError("n_clusters must be positive")
+
+    item_cluster_ids = np.asarray(item_clusters, dtype=np.int32)
+    if item_cluster_ids.ndim != 1:
+        raise ValueError("item_clusters must be a 1D array")
+
+    n_users = history_index.counts.shape[0]
+    user_cluster_lists: list[np.ndarray] = []
+    user_count_lists: list[np.ndarray] = []
+    indptr = np.zeros(n_users + 1, dtype=np.int64)
+    running_total = 0
+
+    for user_id in range(n_users):
+        items = history_index.items_for_user(user_id)
+        if items.size == 0:
+            user_cluster_lists.append(np.empty(0, dtype=np.int32))
+            user_count_lists.append(np.empty(0, dtype=np.int32))
+            indptr[user_id + 1] = running_total
+            continue
+
+        cluster_counts = np.bincount(
+            item_cluster_ids[items].astype(np.int64, copy=False),
+            minlength=n_clusters,
+        ).astype(np.int32, copy=False)
+        active_clusters = np.flatnonzero(cluster_counts).astype(np.int32, copy=False)
+        active_counts = cluster_counts[active_clusters].astype(np.int32, copy=False)
+
+        user_cluster_lists.append(active_clusters)
+        user_count_lists.append(active_counts)
+        running_total += int(active_clusters.shape[0])
+        indptr[user_id + 1] = running_total
+
+    if running_total == 0:
+        cluster_ids = np.empty(0, dtype=np.int32)
+        counts = np.empty(0, dtype=np.int32)
+    else:
+        cluster_ids = np.concatenate(user_cluster_lists).astype(np.int32, copy=False)
+        counts = np.concatenate(user_count_lists).astype(np.int32, copy=False)
+
+    return UserClusterCountIndex(
+        indptr=indptr,
+        cluster_ids=cluster_ids,
+        counts=counts,
     )
