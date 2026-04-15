@@ -121,6 +121,8 @@ def test_run_svdpp_experiment_writes_valid_run_artifacts(tmp_path: Path, monkeyp
     assert manifest["status"] == "completed"
     assert manifest["model"]["name"] == "svdpp"
     assert metrics["metrics"]["validation_rmse"] >= 0.0
+    assert metrics["model"]["config"]["training_backend"] == "auto"
+    assert metrics["model"]["training_backend_effective"] in {"python", "numba"}
     assert metrics["model"]["implicit_summary"]["users_with_history"] == 4
     assert metrics["system_metrics"]["train_time_total"] > 0.0
     assert metrics["system_metrics"]["train_time_per_epoch"] > 0.0

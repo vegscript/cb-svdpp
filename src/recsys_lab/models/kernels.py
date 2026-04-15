@@ -67,6 +67,88 @@ if njit is not None:
                 )
 
     @njit(cache=True)
+    def train_svdpp_epoch_numba(
+        order: np.ndarray,
+        user_ids: np.ndarray,
+        item_ids: np.ndarray,
+        ratings: np.ndarray,
+        history_indptr: np.ndarray,
+        history_items: np.ndarray,
+        history_norms: np.ndarray,
+        global_mean: float,
+        learning_rate: float,
+        lambda_b: float,
+        lambda_p: float,
+        lambda_q: float,
+        lambda_y: float,
+        user_bias: np.ndarray,
+        item_bias: np.ndarray,
+        user_factors: np.ndarray,
+        item_factors: np.ndarray,
+        implicit_factors: np.ndarray,
+    ) -> None:
+        latent_dim = user_factors.shape[1]
+
+        for position in range(order.shape[0]):
+            idx = order[position]
+            user_id = int(user_ids[idx])
+            item_id = int(item_ids[idx])
+            rating = float(ratings[idx])
+
+            history_start = history_indptr[user_id]
+            history_end = history_indptr[user_id + 1]
+            norm = float(history_norms[user_id])
+
+            user_bias_old = user_bias[user_id]
+            item_bias_old = item_bias[item_id]
+            user_vector_old = np.empty(latent_dim, dtype=user_factors.dtype)
+            item_vector_old = np.empty(latent_dim, dtype=item_factors.dtype)
+            z_user = np.empty(latent_dim, dtype=user_factors.dtype)
+
+            for factor_idx in range(latent_dim):
+                user_value = user_factors[user_id, factor_idx]
+                item_value = item_factors[item_id, factor_idx]
+                user_vector_old[factor_idx] = user_value
+                item_vector_old[factor_idx] = item_value
+                z_user[factor_idx] = user_value
+
+            for history_pos in range(history_start, history_end):
+                history_item = int(history_items[history_pos])
+                for factor_idx in range(latent_dim):
+                    z_user[factor_idx] += norm * implicit_factors[history_item, factor_idx]
+
+            prediction = global_mean + user_bias_old + item_bias_old
+            for factor_idx in range(latent_dim):
+                prediction += item_vector_old[factor_idx] * z_user[factor_idx]
+            error = rating - prediction
+
+            user_bias[user_id] = user_bias_old + learning_rate * (
+                error - lambda_b * user_bias_old
+            )
+            item_bias[item_id] = item_bias_old + learning_rate * (
+                error - lambda_b * item_bias_old
+            )
+            for factor_idx in range(latent_dim):
+                user_factors[user_id, factor_idx] = user_vector_old[
+                    factor_idx
+                ] + learning_rate * (
+                    error * item_vector_old[factor_idx] - lambda_p * user_vector_old[factor_idx]
+                )
+                item_factors[item_id, factor_idx] = item_vector_old[
+                    factor_idx
+                ] + learning_rate * (
+                    error * z_user[factor_idx] - lambda_q * item_vector_old[factor_idx]
+                )
+
+            for history_pos in range(history_start, history_end):
+                history_item = int(history_items[history_pos])
+                for factor_idx in range(latent_dim):
+                    y_old = implicit_factors[history_item, factor_idx]
+                    implicit_factors[history_item, factor_idx] = y_old + learning_rate * (
+                        error * norm * item_vector_old[factor_idx] - lambda_y * y_old
+                    )
+
+    @njit(cache=True)
     def train_asymmetric_svd_epoch_numba(
         order: np.ndarray,
         user_ids: np.ndarray,
@@ -428,6 +510,9 @@ if njit is not None:
 else:
 
     def train_biased_mf_epoch_numba(*args: object, **kwargs: object) -> None:
+        raise RuntimeError("numba is not available")
+
+    def train_svdpp_epoch_numba(*args: object, **kwargs: object) -> None:
         raise RuntimeError("numba is not available")
 
     def train_asymmetric_svd_epoch_numba(*args: object, **kwargs: object) -> None:

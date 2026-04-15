@@ -7,6 +7,7 @@ import numpy as np
 
 from recsys_lab.data.histories import UserHistoryIndex, build_user_history_index
 from recsys_lab.data.processed import RatingsData
+from recsys_lab.models.kernels import train_svdpp_epoch_numba
 
 
 @dataclass(frozen=True, slots=True)
@@ -22,6 +23,7 @@ class SVDppConfig:
     init_std: float = 0.1
     dtype: str = "float32"
     implicit_policy: str = "ratings_as_implicit"
+    training_backend: str = "auto"
 
 
 class SVDppRecommender:
@@ -38,6 +40,7 @@ class SVDppRecommender:
         self.rating_min = 0.0
         self.rating_max = 0.0
         self.epoch_durations_seconds: list[float] = []
+        self.training_backend_effective: str | None = None
 
     def _parameter_dtype(self) -> np.dtype:
         if self.config.dtype not in {"float32", "float64"}:
@@ -48,8 +51,78 @@ class SVDppRecommender:
         if self.config.implicit_policy != "ratings_as_implicit":
             raise ValueError("only implicit_policy='ratings_as_implicit' is currently supported")
 
+    def _validate_training_backend(self) -> str:
+        backend = str(self.config.training_backend)
+        if backend not in {"auto", "python", "numba"}:
+            raise ValueError("svdpp training_backend must be 'auto', 'python', or 'numba'")
+        return backend
+
+    def _train_epoch_python(
+        self,
+        order: np.ndarray,
+        user_ids: np.ndarray,
+        item_ids: np.ndarray,
+        ratings: np.ndarray,
+        *,
+        zero_vector: np.ndarray,
+    ) -> None:
+        if (
+            self.user_bias is None
+            or self.item_bias is None
+            or self.user_factors is None
+            or self.item_factors is None
+            or self.implicit_factors is None
+            or self.user_histories is None
+        ):
+            raise RuntimeError("model parameters are not initialized")
+
+        for idx in order:
+            user_id = int(user_ids[idx])
+            item_id = int(item_ids[idx])
+            rating = float(ratings[idx])
+
+            history = self.user_histories.items_for_user(user_id)
+            norm = float(self.user_histories.norms[user_id])
+            implicit_sum = zero_vector
+            if history.size > 0:
+                implicit_sum = norm * np.sum(self.implicit_factors[history], axis=0)
+
+            user_vector_old = self.user_factors[user_id].copy()
+            item_vector_old = self.item_factors[item_id].copy()
+            z_user = user_vector_old + implicit_sum
+            prediction = float(
+                self.global_mean
+                + self.user_bias[user_id]
+                + self.item_bias[item_id]
+                + np.dot(item_vector_old, z_user)
+            )
+            error = rating - prediction
+
+            user_bias_old = self.user_bias[user_id]
+            item_bias_old = self.item_bias[item_id]
+            self.user_bias[user_id] = user_bias_old + self.config.learning_rate * (
+                error - self.config.lambda_b * user_bias_old
+            )
+            self.item_bias[item_id] = item_bias_old + self.config.learning_rate * (
+                error - self.config.lambda_b * item_bias_old
+            )
+            self.user_factors[user_id] = user_vector_old + self.config.learning_rate * (
+                error * item_vector_old - self.config.lambda_p * user_vector_old
+            )
+            self.item_factors[item_id] = item_vector_old + self.config.learning_rate * (
+                error * z_user - self.config.lambda_q * item_vector_old
+            )
+
+            if history.size > 0:
+                implicit_update = self.config.learning_rate * error * norm * item_vector_old
+                implicit_old = self.implicit_factors[history].copy()
+                self.implicit_factors[history] = implicit_old + implicit_update - (
+                    self.config.learning_rate * self.config.lambda_y * implicit_old
+                )
+
     def fit(self, data: RatingsData) -> "SVDppRecommender":
         self._validate_policy()
+        requested_backend = self._validate_training_backend()
         rng = np.random.default_rng(self.config.seed)
         parameter_dtype = self._parameter_dtype()
 
@@ -75,53 +148,54 @@ class SVDppRecommender:
         ratings = data.ratings.astype(parameter_dtype, copy=False)
         zero_vector = np.zeros(self.config.latent_dim, dtype=parameter_dtype)
         self.epoch_durations_seconds = []
+        self.training_backend_effective = None
 
         for _ in range(self.config.epochs):
             epoch_started = perf_counter()
             rng.shuffle(order)
-            for idx in order:
-                user_id = int(user_ids[idx])
-                item_id = int(item_ids[idx])
-                rating = float(ratings[idx])
-
-                history = self.user_histories.items_for_user(user_id)
-                norm = float(self.user_histories.norms[user_id])
-                implicit_sum = zero_vector
-                if history.size > 0:
-                    implicit_sum = norm * np.sum(self.implicit_factors[history], axis=0)
-
-                user_vector_old = self.user_factors[user_id].copy()
-                item_vector_old = self.item_factors[item_id].copy()
-                z_user = user_vector_old + implicit_sum
-                prediction = float(
-                    self.global_mean
-                    + self.user_bias[user_id]
-                    + self.item_bias[item_id]
-                    + np.dot(item_vector_old, z_user)
+            if requested_backend == "python":
+                self._train_epoch_python(
+                    order,
+                    user_ids,
+                    item_ids,
+                    ratings,
+                    zero_vector=zero_vector,
                 )
-                error = rating - prediction
-
-                user_bias_old = self.user_bias[user_id]
-                item_bias_old = self.item_bias[item_id]
-                self.user_bias[user_id] = user_bias_old + self.config.learning_rate * (
-                    error - self.config.lambda_b * user_bias_old
-                )
-                self.item_bias[item_id] = item_bias_old + self.config.learning_rate * (
-                    error - self.config.lambda_b * item_bias_old
-                )
-                self.user_factors[user_id] = user_vector_old + self.config.learning_rate * (
-                    error * item_vector_old - self.config.lambda_p * user_vector_old
-                )
-                self.item_factors[item_id] = item_vector_old + self.config.learning_rate * (
-                    error * z_user - self.config.lambda_q * item_vector_old
-                )
-
-                if history.size > 0:
-                    implicit_update = self.config.learning_rate * error * norm * item_vector_old
-                    implicit_old = self.implicit_factors[history].copy()
-                    self.implicit_factors[history] = implicit_old + implicit_update - (
-                        self.config.learning_rate * self.config.lambda_y * implicit_old
+                self.training_backend_effective = "python"
+            else:
+                try:
+                    train_svdpp_epoch_numba(
+                        order,
+                        user_ids,
+                        item_ids,
+                        ratings,
+                        self.user_histories.indptr,
+                        self.user_histories.item_indices,
+                        self.user_histories.norms,
+                        self.global_mean,
+                        self.config.learning_rate,
+                        self.config.lambda_b,
+                        self.config.lambda_p,
+                        self.config.lambda_q,
+                        self.config.lambda_y,
+                        self.user_bias,
+                        self.item_bias,
+                        self.user_factors,
+                        self.item_factors,
+                        self.implicit_factors,
                     )
+                    self.training_backend_effective = "numba"
+                except RuntimeError:
+                    if requested_backend == "numba":
+                        raise
+                    self._train_epoch_python(
+                        order,
+                        user_ids,
+                        item_ids,
+                        ratings,
+                        zero_vector=zero_vector,
+                    )
+                    self.training_backend_effective = "python"
             self.epoch_durations_seconds.append(perf_counter() - epoch_started)
 
         self.is_fitted = True

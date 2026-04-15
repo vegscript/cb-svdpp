@@ -58,6 +58,7 @@ def _build_svdpp_config(
         init_std=float(training.get("init_std", 0.1)),
         dtype=runtime_dtype,
         implicit_policy=str(training.get("implicit_policy", "ratings_as_implicit")),
+        training_backend=str(training.get("training_backend", "auto")),
     )
 
 
@@ -278,6 +279,7 @@ def run_svdpp_experiment(
                 "model": {
                     "name": "svdpp",
                     "config": asdict(model.config),
+                    "training_backend_effective": model.training_backend_effective,
                     "implicit_summary": {
                         "users_with_history": int((history_counts > 0).sum()),
                         "mean_history_size": float(history_counts.mean()),
