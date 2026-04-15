@@ -133,8 +133,16 @@ Hinweis:
 
 - Fuer `completed` Benchmarks muessen `inputs.run_ids` und idealerweise auch
   `inputs.run_manifest_paths` vollstaendig befuellt sein.
+- Fuer Multi-Seed-Benchmarks muessen `inputs.benchmark_ids`,
+  `inputs.benchmark_manifest_paths` und `inputs.model_seeds` vollstaendig
+  befuellt sein.
 - Fuer `started`, `failed` oder `cancelled` Benchmarks duerfen diese Listen leer
   sein, wenn der Prozess vor dem ersten gueltigen Run endet.
+- Seed-Benchmarks, die in einem Multi-Seed-Readout aggregiert werden, muessen
+  einen identischen `git.commit`- und `git.dirty`-Zustand teilen.
+- Wenn Benchmark-Zusammenfassungen Zeitmetriken enthalten, muessen deren
+  Semantiken dokumentiert sein; bei clustering-basierten Modellen duerfen
+  notwendige train-only Vorstufen nicht still ausgeblendet werden.
 
 ## Identity Rules
 

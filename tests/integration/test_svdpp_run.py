@@ -122,4 +122,13 @@ def test_run_svdpp_experiment_writes_valid_run_artifacts(tmp_path: Path, monkeyp
     assert manifest["model"]["name"] == "svdpp"
     assert metrics["metrics"]["validation_rmse"] >= 0.0
     assert metrics["model"]["implicit_summary"]["users_with_history"] == 4
+    assert metrics["system_metrics"]["train_time_total"] > 0.0
+    assert metrics["system_metrics"]["train_time_per_epoch"] > 0.0
+    assert metrics["system_metrics"]["ratings_per_second_train"] > 0.0
+    assert metrics["system_metrics"]["ratings_per_second_inference"] > 0.0
+    assert metrics["system_metrics"]["peak_memory_mb"] > 0.0
+    assert metrics["system_metrics"]["peak_memory_delta_mb"] >= 0.0
+    assert metrics["system_metrics"]["model_size_mb"] > 0.0
+    assert len(metrics["system_metrics"]["epoch_durations_seconds"]) == 8
+    assert metrics["timing"]["inference_wall_clock_seconds"] >= 0.0
     assert stdout_log_path.exists()

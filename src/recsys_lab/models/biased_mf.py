@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from time import perf_counter
 
 import numpy as np
 
@@ -31,6 +32,7 @@ class BiasedMFRecommender:
         self.item_factors: np.ndarray | None = None
         self.rating_min = 0.0
         self.rating_max = 0.0
+        self.epoch_durations_seconds: list[float] = []
 
     def _parameter_dtype(self) -> np.dtype:
         if self.config.dtype not in {"float32", "float64"}:
@@ -56,8 +58,10 @@ class BiasedMFRecommender:
         user_ids = data.user_ids
         item_ids = data.item_ids
         ratings = data.ratings.astype(parameter_dtype, copy=False)
+        self.epoch_durations_seconds = []
 
         for _ in range(self.config.epochs):
+            epoch_started = perf_counter()
             rng.shuffle(order)
             for idx in order:
                 user_id = int(user_ids[idx])
@@ -84,6 +88,7 @@ class BiasedMFRecommender:
                 self.item_factors[item_id] = item_vector_old + self.config.learning_rate * (
                     error * user_vector_old - self.config.lambda_q * item_vector_old
                 )
+            self.epoch_durations_seconds.append(perf_counter() - epoch_started)
 
         self.is_fitted = True
         return self

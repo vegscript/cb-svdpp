@@ -78,8 +78,36 @@
         "python_version": {
           "type": "string"
         },
+        "platform": {
+          "type": "string"
+        },
+        "hostname": {
+          "type": "string"
+        },
+        "processor": {
+          "type": "string"
+        },
         "dtype": {
           "enum": ["float32", "float64"]
+        },
+        "cpu_logical_count": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "cpu_physical_count": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "cpu_affinity_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "cpu_affinity": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 0
+          }
         },
         "threading": {
           "type": "object",
@@ -93,6 +121,46 @@
             "blas_threads": {
               "type": "integer",
               "minimum": 1
+            },
+            "env_omp_num_threads": {
+              "type": ["string", "null"]
+            },
+            "env_mkl_num_threads": {
+              "type": ["string", "null"]
+            },
+            "env_openblas_num_threads": {
+              "type": ["string", "null"]
+            },
+            "env_numexpr_num_threads": {
+              "type": ["string", "null"]
+            }
+          }
+        },
+        "threadpools": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "user_api": {
+                "type": "string"
+              },
+              "internal_api": {
+                "type": "string"
+              },
+              "prefix": {
+                "type": "string"
+              },
+              "threading_layer": {
+                "type": "string"
+              },
+              "num_threads": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "version": {
+                "type": "string"
+              }
             }
           }
         }

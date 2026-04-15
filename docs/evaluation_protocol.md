@@ -137,6 +137,18 @@ Ein reproduzierbarer Benchmark muss explizit nennen:
 - Seeds
 - Warmup-Regel
 - exaktes Kommando oder Run-Profil
+- welche Zeitmetrik verglichen wird
+
+Fuer vergleichbare Fit-Zeit-Claims gilt:
+
+- bei Standard-MF-Modellen ist `training_wall_clock_seconds` die kanonische
+  Fit-Zeit
+- bei clustering-basierten Modellen muss die vergleichbare Fit-Zeit alle
+  train-only Vorstufen enthalten, die fuer das finale Modell notwendig sind
+- wenn Clusterinduktion separat gemessen wird, ist die Benchmark-Fit-Zeit die
+  Summe aus Clusterinduktion und Haupttraining
+- eine Zeitangabe, die Clusterinduktion bei `cb_*`-Modellen ausblendet, ist
+  nicht fair vergleichbar mit nicht-clustering-basierten Modellen
 
 Wenn ein Benchmark bestehende Run-Artefakte wiederverwendet, muss zusaetzlich
 klar sein:
@@ -144,6 +156,9 @@ klar sein:
 - dass das Repo clean war
 - dass Git-Commit und effektiv geladene Config-Inhalte identisch waren
 - welche Folds neu gerechnet und welche wiederverwendet wurden
+- welche Quell-Benchmark-Manifeste in einen Multi-Seed-Readout eingeflossen sind
+- dass alle aggregierten Seed-Benchmarks denselben Git-Commit und denselben
+  Dirty-Status teilen
 
 In einem dirty Workspace sind wiederverwendete Benchmark-Folds nicht
 benchmark-final.

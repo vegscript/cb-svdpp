@@ -1,13 +1,18 @@
 from __future__ import annotations
 
-import platform
 import statistics
 import traceback
 from pathlib import Path
 from typing import Any
 
 from recsys_lab.config.loader import dump_yaml_file, load_yaml_file
-from recsys_lab.experiments.common import git_snapshot, utc_timestamp, write_json, write_log
+from recsys_lab.experiments.common import (
+    build_runtime_metadata,
+    git_snapshot,
+    utc_timestamp,
+    write_json,
+    write_log,
+)
 from recsys_lab.utils.manifests import load_json_file, validate_manifest_file
 from recsys_lab.utils.paths import discover_repo_root, repo_path_string
 
@@ -100,8 +105,134 @@ def _discover_seed_benchmark(
     if not candidates:
         raise FileNotFoundError(f"no matching seed benchmark found for model_seed={model_seed}")
     if len(candidates) > 1:
-        raise ValueError(f"multiple matching seed benchmarks found for model_seed={model_seed}")
+        raise ValueError(
+            "multiple matching seed benchmarks found for "
+            f"model_seed={model_seed}; use explicit benchmark_manifest_paths"
+        )
     return candidates[0]
+
+
+def _validate_selected_seed_benchmark(
+    *,
+    seed_benchmark: dict[str, Any],
+    model_name: str,
+    processed_manifest_ref: str,
+    model_config_ref: str,
+    runtime_config_ref: str,
+    device_config_ref: str,
+    model_seed: int,
+) -> None:
+    summary_payload = seed_benchmark["summary"]
+    config_snapshot = seed_benchmark["config_snapshot"]
+
+    if str(summary_payload.get("model")) != model_name:
+        raise ValueError(f"seed benchmark model mismatch for model_seed={model_seed}")
+    if list(summary_payload.get("folds", [])) and len(summary_payload["folds"]) != 5:
+        raise ValueError(f"seed benchmark must contain 5 folds for model_seed={model_seed}")
+    if str(config_snapshot.get("processed_manifest")) != processed_manifest_ref:
+        raise ValueError(f"processed_manifest mismatch for model_seed={model_seed}")
+    if str(config_snapshot.get("model_config")) != model_config_ref:
+        raise ValueError(f"model_config mismatch for model_seed={model_seed}")
+    if str(config_snapshot.get("runtime_config")) != runtime_config_ref:
+        raise ValueError(f"runtime_config mismatch for model_seed={model_seed}")
+    if str(config_snapshot.get("device_config")) != device_config_ref:
+        raise ValueError(f"device_config mismatch for model_seed={model_seed}")
+    if int(config_snapshot.get("model_seed", -1)) != int(model_seed):
+        raise ValueError(f"model_seed mismatch for selected benchmark: expected {model_seed}")
+
+
+def _validate_seed_benchmark_bundle(
+    *,
+    seed_benchmarks: list[dict[str, Any]],
+    model_name: str,
+    processed_manifest_ref: str,
+    model_config_ref: str,
+    runtime_config_ref: str,
+    device_config_ref: str,
+    model_seeds: list[int],
+) -> None:
+    if len(seed_benchmarks) != len(model_seeds):
+        raise ValueError("seed_benchmarks and model_seeds must have the same length")
+
+    reference_git: dict[str, Any] | None = None
+    for model_seed, seed_benchmark in zip(model_seeds, seed_benchmarks, strict=True):
+        _validate_selected_seed_benchmark(
+            seed_benchmark=seed_benchmark,
+            model_name=model_name,
+            processed_manifest_ref=processed_manifest_ref,
+            model_config_ref=model_config_ref,
+            runtime_config_ref=runtime_config_ref,
+            device_config_ref=device_config_ref,
+            model_seed=model_seed,
+        )
+
+        benchmark_git = dict(seed_benchmark["manifest"].get("git", {}))
+        benchmark_identity = (
+            str(benchmark_git.get("commit", "")),
+            bool(benchmark_git.get("dirty", False)),
+            str(benchmark_git.get("branch", "")),
+        )
+        if reference_git is None:
+            reference_git = {
+                "commit": benchmark_identity[0],
+                "dirty": benchmark_identity[1],
+                "branch": benchmark_identity[2],
+            }
+            continue
+
+        reference_identity = (
+            str(reference_git.get("commit", "")),
+            bool(reference_git.get("dirty", False)),
+            str(reference_git.get("branch", "")),
+        )
+        if benchmark_identity != reference_identity:
+            raise ValueError(
+                "selected seed benchmarks must share identical git commit, branch, and dirty state"
+            )
+
+
+def _resolve_seed_benchmarks(
+    *,
+    repo_root: Path,
+    model_name: str,
+    processed_manifest_ref: str,
+    model_config_ref: str,
+    runtime_config_ref: str,
+    device_config_ref: str,
+    model_seeds: list[int],
+    benchmark_manifest_paths: list[Path] | None,
+) -> list[dict[str, Any]]:
+    if benchmark_manifest_paths is not None:
+        if len(benchmark_manifest_paths) != len(model_seeds):
+            raise ValueError("benchmark_manifest_paths must match model_seeds length")
+        seed_benchmarks = [
+            _read_seed_benchmark(benchmark_manifest_path=manifest_path.resolve(), repo_root=repo_root)
+            for manifest_path in benchmark_manifest_paths
+        ]
+    else:
+        seed_benchmarks = [
+            _discover_seed_benchmark(
+                repo_root=repo_root,
+                model_name=model_name,
+                processed_manifest_ref=processed_manifest_ref,
+                model_config_ref=model_config_ref,
+                runtime_config_ref=runtime_config_ref,
+                device_config_ref=device_config_ref,
+                model_seed=seed,
+            )
+            for seed in model_seeds
+        ]
+
+    _validate_seed_benchmark_bundle(
+        seed_benchmarks=seed_benchmarks,
+        model_name=model_name,
+        processed_manifest_ref=processed_manifest_ref,
+        model_config_ref=model_config_ref,
+        runtime_config_ref=runtime_config_ref,
+        device_config_ref=device_config_ref,
+        model_seeds=model_seeds,
+    )
+    return seed_benchmarks
 
 
 def run_ml100k_paper_multiseed_benchmark(
@@ -112,6 +243,7 @@ def run_ml100k_paper_multiseed_benchmark(
     runtime_config_path: Path,
     device_config_path: Path,
     model_seeds: list[int],
+    benchmark_manifest_paths: list[Path] | None = None,
     repo_root: Path | None = None,
     command: str | None = None,
 ) -> dict[str, Any]:
@@ -128,6 +260,11 @@ def run_ml100k_paper_multiseed_benchmark(
     model_config_ref = repo_path_string(model_config_path, repo_root=root)
     runtime_config_ref = repo_path_string(runtime_config_path, repo_root=root)
     device_config_ref = repo_path_string(device_config_path, repo_root=root)
+    benchmark_manifest_path_refs = (
+        [repo_path_string(path.resolve(), repo_root=root) for path in benchmark_manifest_paths]
+        if benchmark_manifest_paths is not None
+        else None
+    )
     device_config_payload = load_yaml_file(device_config_path)
     device_profile_name = str(device_config_payload["device_profile"]["name"])
 
@@ -162,6 +299,11 @@ def run_ml100k_paper_multiseed_benchmark(
         f"--runtime-config {runtime_config_ref} "
         f"--device-config {device_config_ref} "
         f"--model-seeds {','.join(str(seed) for seed in model_seeds)}"
+        + (
+            f" --benchmark-manifest-paths {','.join(benchmark_manifest_path_refs)}"
+            if benchmark_manifest_path_refs is not None
+            else ""
+        )
     )
 
     git = git_snapshot(root)
@@ -175,20 +317,16 @@ def run_ml100k_paper_multiseed_benchmark(
         "command": command_string,
         "cwd": repo_path_string(root, repo_root=root),
         "git": git,
-        "runtime": {
-            "device_profile": device_profile_name,
-            "python_version": platform.python_version(),
-            "dtype": str(device_config_payload["precision"]["default_dtype"]),
-            "threading": {
-                "omp_num_threads": int(device_config_payload["threading"]["omp_num_threads"]),
-                "blas_threads": int(device_config_payload["threading"]["blas_threads"]),
-            },
-        },
+        "runtime": build_runtime_metadata(
+            device_profile_name=device_profile_name,
+            runtime_dtype=str(device_config_payload["precision"]["default_dtype"]),
+            device_config_payload=device_config_payload,
+        ),
         "inputs": {
             "run_ids": [],
             "run_manifest_paths": [],
             "benchmark_ids": [],
-            "benchmark_manifest_paths": [],
+            "benchmark_manifest_paths": benchmark_manifest_path_refs or [],
             "model_seeds": [int(seed) for seed in model_seeds],
         },
         "artifacts": {
@@ -225,18 +363,16 @@ def run_ml100k_paper_multiseed_benchmark(
     write_json(benchmark_manifest_path, benchmark_manifest)
 
     try:
-        seed_benchmarks = [
-            _discover_seed_benchmark(
-                repo_root=root,
-                model_name=model_name,
-                processed_manifest_ref=processed_manifest_ref,
-                model_config_ref=model_config_ref,
-                runtime_config_ref=runtime_config_ref,
-                device_config_ref=device_config_ref,
-                model_seed=seed,
-            )
-            for seed in model_seeds
-        ]
+        seed_benchmarks = _resolve_seed_benchmarks(
+            repo_root=root,
+            model_name=model_name,
+            processed_manifest_ref=processed_manifest_ref,
+            model_config_ref=model_config_ref,
+            runtime_config_ref=runtime_config_ref,
+            device_config_ref=device_config_ref,
+            model_seeds=model_seeds,
+            benchmark_manifest_paths=benchmark_manifest_paths,
+        )
 
         run_ids: list[str] = []
         run_manifest_paths: list[str] = []

@@ -276,6 +276,7 @@ def train_cb_svdpp(
     model_config: str = "configs/models/cb_svdpp.yaml",
     runtime_config: str = "configs/runtime/base.yaml",
     device_config: str = "configs/runtime/devices/local_i5_2500k_24gb.yaml",
+    split_family: str = "benchmark_random_v1",
     train_ratio: float = 0.8,
     validation_ratio: float = 0.1,
     split_seed: int = 1,
@@ -304,6 +305,7 @@ def train_cb_svdpp(
         ),
         model_seed=model_seed,
         repo_root=root,
+        split_family=split_family,
     )
     typer.echo(json.dumps(payload, indent=2, sort_keys=True))
 
@@ -348,6 +350,7 @@ def benchmark_ml100k_paper_multiseed(
     runtime_config: str = "configs/runtime/base.yaml",
     device_config: str = "configs/runtime/devices/local_i5_2500k_24gb.yaml",
     model_seeds: str = "1,2,3",
+    benchmark_manifest_paths: str | None = None,
 ) -> None:
     root = discover_repo_root()
     processed_manifest_path = _resolve_path(processed_manifest, repo_root=root)
@@ -367,6 +370,20 @@ def benchmark_ml100k_paper_multiseed(
     if not seed_values:
         raise typer.BadParameter("model_seeds must contain at least one integer")
 
+    benchmark_manifest_path_values = None
+    if benchmark_manifest_paths is not None:
+        benchmark_manifest_path_values = [
+            _resolve_path(value.strip(), repo_root=root)
+            for value in benchmark_manifest_paths.split(",")
+            if value.strip()
+        ]
+        if not benchmark_manifest_path_values:
+            raise typer.BadParameter(
+                "benchmark_manifest_paths must contain at least one comma-separated path"
+            )
+        if any(path is None for path in benchmark_manifest_path_values):
+            raise typer.BadParameter("benchmark_manifest_paths contains an invalid path")
+
     payload = run_ml100k_paper_multiseed_benchmark(
         model_name=model,
         processed_manifest_path=processed_manifest_path,
@@ -374,6 +391,7 @@ def benchmark_ml100k_paper_multiseed(
         runtime_config_path=runtime_config_path,
         device_config_path=device_config_path,
         model_seeds=seed_values,
+        benchmark_manifest_paths=benchmark_manifest_path_values,
         repo_root=root,
     )
     typer.echo(json.dumps(payload, indent=2, sort_keys=True))

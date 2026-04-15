@@ -7,7 +7,8 @@ param(
   [string]$ModelConfig,
   [string]$RuntimeConfig = "configs/runtime/base.yaml",
   [string]$DeviceConfig = "configs/runtime/devices/local_i5_2500k_24gb.yaml",
-  [string]$ModelSeeds = "1,2,3"
+  [string]$ModelSeeds = "1,2,3",
+  [string]$BenchmarkManifestPaths = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -27,5 +28,12 @@ $args = @(
   "--model-seeds",
   $ModelSeeds
 )
+
+if ($BenchmarkManifestPaths -ne "") {
+  $args += @(
+    "--benchmark-manifest-paths",
+    $BenchmarkManifestPaths
+  )
+}
 
 python @args

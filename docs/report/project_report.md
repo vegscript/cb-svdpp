@@ -448,6 +448,89 @@ the default CPU target. So the current repo state now supports a much stronger
 and more realistic statement: the model family does improve after tuning, but
 the quality gain must be read together with a significant compute premium.
 
+### 7.0.5 Clean Multi-Seed Anchors And Benchmark Contract Hardening
+
+After the first tuned official benchmarks, the repository exposed a benchmark
+governance gap: once multiple seed-level artifacts existed for the same config
+family, heuristic multi-seed selection was no longer strict enough. That issue
+was corrected by hardening the multi-seed aggregator so that it can accept
+explicit source benchmark manifests and rejects mixed Git states across selected
+seed benchmarks.
+
+Both tuned anchor families were then recomputed on the clean commit
+`fb1fcbc` by using frozen config snapshots under `artifacts/local/`.
+
+| Dataset | Model | Scope | Test RMSE Mean | Seed-Level Std | Train Time Mean (s) | Git State |
+| --- | --- | --- | ---: | ---: | ---: | --- |
+| `ml100k` | `biased_mf` | `stage1_tuned`, seeds `1,2,3` | 0.9371 | 0.0015 | 277.24 | `fb1fcbc`, clean |
+| `ml100k` | `svdpp` | `stage1_tuned`, seeds `1,2,3` | 0.9240 | 0.0005 | 1386.62 | `fb1fcbc`, clean |
+
+Associated evidence notes:
+
+- `docs/evidence/models/biased_mf/2026-04-15_ml100k_biased_mf_stage1_tuned_clean_multiseed.md`
+- `docs/evidence/models/svdpp/2026-04-15_ml100k_svdpp_stage1_tuned_clean_multiseed.md`
+- `docs/evidence/benchmarking/2026-04-15_ml100k_multiseed_contract_hardening.md`
+
+At this point the repository supports a materially stronger statement than
+before:
+
+- `biased_mf` now has a clean three-seed tuned benchmark anchor on `ml100k`
+- `svdpp` now also has a clean three-seed tuned benchmark anchor on `ml100k`
+- clean multi-seed `svdpp` remains better than clean multi-seed `biased_mf` by
+  `0.013096` RMSE
+- the compute premium remains substantial, with `svdpp` taking about `5.00x`
+  the mean training time of `biased_mf` on the default CPU target
+
+### 7.0.6 Official `cb_svdpp` Benchmark Wiring
+
+The official `ml100k` benchmark path was then extended to `cb_svdpp`. Two
+methodological constraints had to be enforced before any official CB result can
+be trusted. First, the benchmark dispatcher now supports `cb_svdpp` on the same
+`paper_faithful_ml100k_v1` folds as the MF baselines. Second, benchmark fit
+time for clustering-based models is now defined as the sum of train-only
+cluster induction and main training, rather than silently reporting only the
+second stage.
+
+Associated evidence note:
+
+- `docs/evidence/benchmarking/2026-04-15_cb_svdpp_fit_time_contract.md`
+
+This closes the technical benchmark gap for `cb_svdpp`, but it does not yet add
+an official result row to the report. That result should only be inserted after
+the `u1` to `u5` benchmark is run on a controlled workspace state and recorded
+with the same manifest discipline as the existing clean anchors.
+
+### 7.0.7 First Official `ml100k` `cb_svdpp` Readout
+
+The repository now also has its first official `cb_svdpp` five-fold benchmark on
+the canonical `paper_faithful_ml100k_v1` split family. This result is
+methodologically useful, but it is not yet a clean anchor because the benchmark
+was executed from a dirty workspace and still uses the current draft
+`cb_svdpp` profile.
+
+| Dataset | Model | Scope | Git State | Test RMSE Mean | Test RMSE Std | Fit Time Mean (s) |
+| --- | --- | --- | --- | ---: | ---: | ---: |
+| `ml100k` | `cb_svdpp` | `draft`, seed `1`, folds `u1` to `u5` | `fb1fcbc`, dirty | 0.9259 | 0.0062 | 431.17 |
+
+Associated evidence note:
+
+- `docs/evidence/models/cb_svdpp/2026-04-15_ml100k_cb_svdpp_official_dirty_baseline.md`
+
+This readout matters for two reasons. First, it shows that the official
+`cb_svdpp` path is now fully executable on `ml100k` under the repo's benchmark
+contract. Second, it gives the first real signal on quality/cost tradeoff:
+
+- it is materially better than the clean tuned `biased_mf` anchor by `0.011210`
+  RMSE
+- it remains slightly worse than the clean tuned `svdpp` anchor by `0.001886`
+  RMSE
+- its fit cost sits between those anchors at about `1.56x` clean tuned
+  `biased_mf` and `0.31x` clean tuned `svdpp`
+
+This is therefore a promising but still provisional result. The next correct
+step is not immediate promotion, but controlled tuning of the `cb_svdpp`
+profile before any clean benchmark anchor is claimed.
+
 ### 7.1 Main Model Comparisons
 
 This subsection should compare models on identical datasets and split settings.

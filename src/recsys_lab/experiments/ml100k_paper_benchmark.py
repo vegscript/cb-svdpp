@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import platform
 import statistics
 import traceback
 from pathlib import Path
@@ -8,20 +7,26 @@ from typing import Any, Callable
 
 from recsys_lab.config.loader import dump_yaml_file, load_yaml_file
 from recsys_lab.experiments.biased_mf import run_biased_mf_experiment
+from recsys_lab.experiments.cb_svdpp import run_cb_svdpp_experiment
 from recsys_lab.experiments.common import (
     SplitConfig,
+    build_runtime_metadata,
     git_snapshot,
     resolve_runtime_dtype,
     utc_timestamp,
     write_json,
     write_log,
 )
+from recsys_lab.experiments.runtime import (
+    resolve_runtime_threading_config,
+    runtime_execution_context,
+)
 from recsys_lab.experiments.svdpp import run_svdpp_experiment
 from recsys_lab.utils.manifests import load_json_file, validate_manifest_file
 from recsys_lab.utils.paths import discover_repo_root, repo_path_string
 
 
-SUPPORTED_MODELS = {"biased_mf", "svdpp"}
+SUPPORTED_MODELS = {"biased_mf", "svdpp", "cb_svdpp"}
 
 
 def _read_run_manifest(run_manifest_path: Path) -> dict[str, Any]:
@@ -122,6 +127,8 @@ def _runner_for_model(model_name: str) -> Callable[..., dict[str, Any]]:
         return run_biased_mf_experiment
     if model_name == "svdpp":
         return run_svdpp_experiment
+    if model_name == "cb_svdpp":
+        return run_cb_svdpp_experiment
     raise ValueError(f"unsupported benchmark model: {model_name}")
 
 
@@ -134,6 +141,15 @@ def _float_summary(values: list[float]) -> dict[str, float]:
         "min": float(min(values)),
         "max": float(max(values)),
     }
+
+
+def _benchmark_fit_seconds(metrics: dict[str, Any]) -> float:
+    timing = metrics["timing"]
+    fit_seconds = float(timing["training_wall_clock_seconds"])
+    cluster_seconds = timing.get("cluster_induction_wall_clock_seconds")
+    if cluster_seconds is not None:
+        fit_seconds += float(cluster_seconds)
+    return fit_seconds
 
 
 def run_ml100k_paper_benchmark(
@@ -171,6 +187,7 @@ def run_ml100k_paper_benchmark(
         device_config_payload=device_config_payload,
         model_config_payload=model_config_payload,
     )
+    threading_config = resolve_runtime_threading_config(device_config_payload=device_config_payload)
     device_profile_name = str(device_config_payload["device_profile"]["name"])
 
     timestamp = utc_timestamp()
@@ -205,236 +222,235 @@ def run_ml100k_paper_benchmark(
 
     git = git_snapshot(root)
     allow_existing_run_reuse = not bool(git["dirty"])
-    benchmark_manifest = {
-        "manifest_version": "v1",
-        "kind": "benchmark_manifest",
-        "generated_at_utc": timestamp,
-        "benchmark_id": benchmark_id,
-        "status": "started",
-        "benchmark_scope": benchmark_scope,
-        "command": command_string,
-        "cwd": repo_path_string(root, repo_root=root),
-        "git": git,
-        "runtime": {
-            "device_profile": device_profile_name,
-            "python_version": platform.python_version(),
-            "dtype": runtime_dtype,
-            "threading": {
-                "omp_num_threads": int(device_config_payload["threading"]["omp_num_threads"]),
-                "blas_threads": int(device_config_payload["threading"]["blas_threads"]),
-            },
-        },
-        "inputs": {
-            "run_ids": [],
-            "run_manifest_paths": [],
-        },
-        "artifacts": {
-            "summary": repo_path_string(summary_path, repo_root=root),
-            "tables": [repo_path_string(summary_md_path, repo_root=root)],
-            "stdout_log": repo_path_string(stdout_log_path, repo_root=root),
-        },
-        "timing": {
-            "started_at_utc": timestamp,
-        },
-    }
-
-    dump_yaml_file(
-        config_snapshot_path,
-        {
+    with runtime_execution_context(threading_config=threading_config):
+        benchmark_manifest = {
+            "manifest_version": "v1",
+            "kind": "benchmark_manifest",
+            "generated_at_utc": timestamp,
             "benchmark_id": benchmark_id,
+            "status": "started",
             "benchmark_scope": benchmark_scope,
-            "model_name": model_name,
-            "model_seed": model_seed,
-            "processed_manifest": repo_path_string(processed_manifest_path, repo_root=root),
-            "model_config": repo_path_string(model_config_path, repo_root=root),
-            "runtime_config": repo_path_string(runtime_config_path, repo_root=root),
-            "device_config": repo_path_string(device_config_path, repo_root=root),
-            "folds": [1, 2, 3, 4, 5],
-        },
-    )
-    write_log(
-        stdout_log_path,
-        [
-            f"[{timestamp}] benchmark_id={benchmark_id}",
-            f"command={command_string}",
-            f"allow_existing_run_reuse={str(allow_existing_run_reuse).lower()}",
-        ],
-    )
-    write_json(benchmark_manifest_path, benchmark_manifest)
+            "command": command_string,
+            "cwd": repo_path_string(root, repo_root=root),
+            "git": git,
+            "runtime": build_runtime_metadata(
+                device_profile_name=device_profile_name,
+                runtime_dtype=runtime_dtype,
+                device_config_payload=device_config_payload,
+            ),
+            "inputs": {
+                "run_ids": [],
+                "run_manifest_paths": [],
+            },
+            "artifacts": {
+                "summary": repo_path_string(summary_path, repo_root=root),
+                "tables": [repo_path_string(summary_md_path, repo_root=root)],
+                "stdout_log": repo_path_string(stdout_log_path, repo_root=root),
+            },
+            "timing": {
+                "started_at_utc": timestamp,
+            },
+        }
 
-    run_manifest_paths: list[Path] = []
-    try:
-        processed_manifest_ref = repo_path_string(processed_manifest_path, repo_root=root)
-        model_config_ref = repo_path_string(model_config_path, repo_root=root)
-        runner = _runner_for_model(model_name)
+        dump_yaml_file(
+            config_snapshot_path,
+            {
+                "benchmark_id": benchmark_id,
+                "benchmark_scope": benchmark_scope,
+                "model_name": model_name,
+                "model_seed": model_seed,
+                "processed_manifest": repo_path_string(processed_manifest_path, repo_root=root),
+                "model_config": repo_path_string(model_config_path, repo_root=root),
+                "runtime_config": repo_path_string(runtime_config_path, repo_root=root),
+                "device_config": repo_path_string(device_config_path, repo_root=root),
+                "folds": [1, 2, 3, 4, 5],
+            },
+        )
+        write_log(
+            stdout_log_path,
+            [
+                f"[{timestamp}] benchmark_id={benchmark_id}",
+                f"command={command_string}",
+                f"allow_existing_run_reuse={str(allow_existing_run_reuse).lower()}",
+            ],
+        )
+        write_json(benchmark_manifest_path, benchmark_manifest)
 
-        for fold_index in range(1, 6):
-            existing_manifest_path = None
-            if allow_existing_run_reuse:
-                existing_manifest_path = _existing_matching_run(
-                    repo_root=root,
-                    processed_manifest_ref=processed_manifest_ref,
-                    processed_manifest_payload=processed_manifest,
-                    model_name=model_name,
-                    model_config_ref=model_config_ref,
-                    model_config_payload=model_config_payload,
-                    runtime_config_payload=runtime_config_payload,
-                    device_config_payload=device_config_payload,
-                    device_profile_name=device_profile_name,
-                    runtime_dtype=runtime_dtype,
-                    split_family="paper_faithful_ml100k_v1",
-                    fold_index=fold_index,
+        run_manifest_paths: list[Path] = []
+        try:
+            processed_manifest_ref = repo_path_string(processed_manifest_path, repo_root=root)
+            model_config_ref = repo_path_string(model_config_path, repo_root=root)
+            runner = _runner_for_model(model_name)
+
+            for fold_index in range(1, 6):
+                existing_manifest_path = None
+                if allow_existing_run_reuse:
+                    existing_manifest_path = _existing_matching_run(
+                        repo_root=root,
+                        processed_manifest_ref=processed_manifest_ref,
+                        processed_manifest_payload=processed_manifest,
+                        model_name=model_name,
+                        model_config_ref=model_config_ref,
+                        model_config_payload=model_config_payload,
+                        runtime_config_payload=runtime_config_payload,
+                        device_config_payload=device_config_payload,
+                        device_profile_name=device_profile_name,
+                        runtime_dtype=runtime_dtype,
+                        split_family="paper_faithful_ml100k_v1",
+                        fold_index=fold_index,
+                        model_seed=model_seed,
+                        git_commit=str(git["commit"]),
+                    )
+                if existing_manifest_path is not None:
+                    run_manifest_paths.append(existing_manifest_path)
+                    continue
+
+                payload = runner(
+                    processed_manifest_path=processed_manifest_path,
+                    model_config_path=model_config_path,
+                    runtime_config_path=runtime_config_path,
+                    device_config_path=device_config_path,
+                    split_config=SplitConfig(train_ratio=0.8, validation_ratio=0.1, seed=fold_index),
                     model_seed=model_seed,
-                    git_commit=str(git["commit"]),
+                    repo_root=root,
+                    split_family="paper_faithful_ml100k_v1",
                 )
-            if existing_manifest_path is not None:
-                run_manifest_paths.append(existing_manifest_path)
-                continue
+                run_manifest_paths.append(Path(str(payload["run_manifest"])).resolve())
 
-            payload = runner(
-                processed_manifest_path=processed_manifest_path,
-                model_config_path=model_config_path,
-                runtime_config_path=runtime_config_path,
-                device_config_path=device_config_path,
-                split_config=SplitConfig(train_ratio=0.8, validation_ratio=0.1, seed=fold_index),
-                model_seed=model_seed,
-                repo_root=root,
-                split_family="paper_faithful_ml100k_v1",
-            )
-            run_manifest_paths.append(Path(str(payload["run_manifest"])).resolve())
+            run_manifests = [_read_run_manifest(path) for path in run_manifest_paths]
+            run_metrics = [_read_run_metrics(manifest, repo_root=root) for manifest in run_manifests]
 
-        run_manifests = [_read_run_manifest(path) for path in run_manifest_paths]
-        run_metrics = [_read_run_metrics(manifest, repo_root=root) for manifest in run_manifests]
+            test_rmses = [float(metrics["metrics"]["test_rmse"]) for metrics in run_metrics]
+            train_rmses = [float(metrics["metrics"]["train_rmse"]) for metrics in run_metrics]
+            training_seconds = [_benchmark_fit_seconds(metrics) for metrics in run_metrics]
 
-        test_rmses = [float(metrics["metrics"]["test_rmse"]) for metrics in run_metrics]
-        train_rmses = [float(metrics["metrics"]["train_rmse"]) for metrics in run_metrics]
-        training_seconds = [float(metrics["timing"]["training_wall_clock_seconds"]) for metrics in run_metrics]
+            per_fold = []
+            for fold_index, manifest, metrics in zip(range(1, 6), run_manifests, run_metrics, strict=True):
+                per_fold.append(
+                    {
+                        "fold": f"u{fold_index}",
+                        "run_id": str(manifest["run_id"]),
+                        "train_rmse": float(metrics["metrics"]["train_rmse"]),
+                        "test_rmse": float(metrics["metrics"]["test_rmse"]),
+                        "training_wall_clock_seconds": _benchmark_fit_seconds(metrics),
+                    }
+                )
 
-        per_fold = []
-        for fold_index, manifest, metrics in zip(range(1, 6), run_manifests, run_metrics, strict=True):
-            per_fold.append(
-                {
-                    "fold": f"u{fold_index}",
-                    "run_id": str(manifest["run_id"]),
-                    "train_rmse": float(metrics["metrics"]["train_rmse"]),
-                    "test_rmse": float(metrics["metrics"]["test_rmse"]),
-                    "training_wall_clock_seconds": float(metrics["timing"]["training_wall_clock_seconds"]),
-                }
-            )
+            summary_payload = {
+                "benchmark_id": benchmark_id,
+                "benchmark_scope": benchmark_scope,
+                "dataset": "ml100k",
+                "split_family": "paper_faithful_ml100k_v1",
+                "model": model_name,
+                "folds": per_fold,
+                "aggregate": {
+                    "train_rmse": _float_summary(train_rmses),
+                    "test_rmse": _float_summary(test_rmses),
+                    "training_wall_clock_seconds": _float_summary(training_seconds),
+                },
+            }
+            write_json(summary_path, summary_payload)
 
-        summary_payload = {
-            "benchmark_id": benchmark_id,
-            "benchmark_scope": benchmark_scope,
-            "dataset": "ml100k",
-            "split_family": "paper_faithful_ml100k_v1",
-            "model": model_name,
-            "folds": per_fold,
-            "aggregate": {
-                "train_rmse": _float_summary(train_rmses),
-                "test_rmse": _float_summary(test_rmses),
-                "training_wall_clock_seconds": _float_summary(training_seconds),
-            },
-        }
-        write_json(summary_path, summary_payload)
-
-        markdown_lines = [
-            "# Benchmark Summary",
-            "",
-            f"- benchmark_id: `{benchmark_id}`",
-            f"- benchmark_scope: `{benchmark_scope}`",
-            f"- dataset: `ml100k`",
-            f"- split_family: `paper_faithful_ml100k_v1`",
-            f"- model: `{model_name}`",
-            "",
-            "| Fold | Run ID | Train RMSE | Test RMSE | Train Time (s) |",
-            "| --- | --- | ---: | ---: | ---: |",
-        ]
-        for item in per_fold:
-            markdown_lines.append(
-                f"| `{item['fold']}` | `{item['run_id']}` | "
-                f"{item['train_rmse']:.6f} | {item['test_rmse']:.6f} | "
-                f"{item['training_wall_clock_seconds']:.2f} |"
-            )
-        markdown_lines.extend(
-            [
+            markdown_lines = [
+                "# Benchmark Summary",
                 "",
-                "## Aggregate",
+                f"- benchmark_id: `{benchmark_id}`",
+                f"- benchmark_scope: `{benchmark_scope}`",
+                f"- dataset: `ml100k`",
+                f"- split_family: `paper_faithful_ml100k_v1`",
+                f"- model: `{model_name}`",
                 "",
-                f"- test_rmse mean: `{summary_payload['aggregate']['test_rmse']['mean']:.6f}`",
-                f"- test_rmse std: `{summary_payload['aggregate']['test_rmse']['std']:.6f}`",
-                f"- train_rmse mean: `{summary_payload['aggregate']['train_rmse']['mean']:.6f}`",
-                f"- training_wall_clock_seconds mean: `{summary_payload['aggregate']['training_wall_clock_seconds']['mean']:.2f}`",
+                "| Fold | Run ID | Train RMSE | Test RMSE | Train Time (s) |",
+                "| --- | --- | ---: | ---: | ---: |",
             ]
-        )
-        summary_md_path.write_text("\n".join(markdown_lines).strip() + "\n", encoding="utf-8", newline="\n")
+            for item in per_fold:
+                markdown_lines.append(
+                    f"| `{item['fold']}` | `{item['run_id']}` | "
+                    f"{item['train_rmse']:.6f} | {item['test_rmse']:.6f} | "
+                    f"{item['training_wall_clock_seconds']:.2f} |"
+                )
+            markdown_lines.extend(
+                [
+                    "",
+                    "## Aggregate",
+                    "",
+                    f"- test_rmse mean: `{summary_payload['aggregate']['test_rmse']['mean']:.6f}`",
+                    f"- test_rmse std: `{summary_payload['aggregate']['test_rmse']['std']:.6f}`",
+                    f"- train_rmse mean: `{summary_payload['aggregate']['train_rmse']['mean']:.6f}`",
+                    f"- training_wall_clock_seconds mean: `{summary_payload['aggregate']['training_wall_clock_seconds']['mean']:.2f}`",
+                ]
+            )
+            summary_md_path.write_text("\n".join(markdown_lines).strip() + "\n", encoding="utf-8", newline="\n")
 
-        finished_at = utc_timestamp()
-        write_log(
-            stdout_log_path,
-            [
-                f"[{timestamp}] benchmark_id={benchmark_id}",
-                f"command={command_string}",
-                f"allow_existing_run_reuse={str(allow_existing_run_reuse).lower()}",
-                f"run_count={len(run_manifests)}",
-                f"test_rmse_mean={summary_payload['aggregate']['test_rmse']['mean']:.6f}",
-                f"test_rmse_std={summary_payload['aggregate']['test_rmse']['std']:.6f}",
-                f"[{finished_at}] status=completed",
-            ],
-        )
-        completed_manifest = {
-            **benchmark_manifest,
-            "status": "completed",
-            "generated_at_utc": finished_at,
-            "inputs": {
-                "run_ids": [str(manifest["run_id"]) for manifest in run_manifests],
-                "run_manifest_paths": [
-                    repo_path_string(path, repo_root=root) for path in run_manifest_paths
+            finished_at = utc_timestamp()
+            write_log(
+                stdout_log_path,
+                [
+                    f"[{timestamp}] benchmark_id={benchmark_id}",
+                    f"command={command_string}",
+                    f"allow_existing_run_reuse={str(allow_existing_run_reuse).lower()}",
+                    f"run_count={len(run_manifests)}",
+                    f"test_rmse_mean={summary_payload['aggregate']['test_rmse']['mean']:.6f}",
+                    f"test_rmse_std={summary_payload['aggregate']['test_rmse']['std']:.6f}",
+                    f"[{finished_at}] status=completed",
                 ],
-            },
-            "timing": {
-                **benchmark_manifest["timing"],
-                "finished_at_utc": finished_at,
-            },
-        }
-        write_json(benchmark_manifest_path, completed_manifest)
-        validate_manifest_file(benchmark_manifest_path, repo_root=root)
-        return {
-            "benchmark_id": benchmark_id,
-            "benchmark_dir": str(benchmark_dir),
-            "benchmark_manifest": str(benchmark_manifest_path),
-            "summary": summary_payload["aggregate"],
-        }
-    except Exception:
-        finished_at = utc_timestamp()
-        write_log(
-            stdout_log_path,
-            [
-                f"[{timestamp}] benchmark_id={benchmark_id}",
-                f"command={command_string}",
-                f"allow_existing_run_reuse={str(allow_existing_run_reuse).lower()}",
-                f"[{finished_at}] status=failed",
-                traceback.format_exc().strip(),
-            ],
-        )
-        failed_manifest = {
-            **benchmark_manifest,
-            "status": "failed",
-            "generated_at_utc": finished_at,
-            "inputs": {
-                "run_ids": [
-                    str(_read_run_manifest(path)["run_id"])
-                    for path in run_manifest_paths
-                    if path.exists()
+            )
+            completed_manifest = {
+                **benchmark_manifest,
+                "status": "completed",
+                "generated_at_utc": finished_at,
+                "inputs": {
+                    "run_ids": [str(manifest["run_id"]) for manifest in run_manifests],
+                    "run_manifest_paths": [
+                        repo_path_string(path, repo_root=root) for path in run_manifest_paths
+                    ],
+                },
+                "timing": {
+                    **benchmark_manifest["timing"],
+                    "finished_at_utc": finished_at,
+                },
+            }
+            write_json(benchmark_manifest_path, completed_manifest)
+            validate_manifest_file(benchmark_manifest_path, repo_root=root)
+            return {
+                "benchmark_id": benchmark_id,
+                "benchmark_dir": str(benchmark_dir),
+                "benchmark_manifest": str(benchmark_manifest_path),
+                "summary": summary_payload["aggregate"],
+            }
+        except Exception:
+            finished_at = utc_timestamp()
+            write_log(
+                stdout_log_path,
+                [
+                    f"[{timestamp}] benchmark_id={benchmark_id}",
+                    f"command={command_string}",
+                    f"allow_existing_run_reuse={str(allow_existing_run_reuse).lower()}",
+                    f"[{finished_at}] status=failed",
+                    traceback.format_exc().strip(),
                 ],
-                "run_manifest_paths": [
-                    repo_path_string(path, repo_root=root) for path in run_manifest_paths if path.exists()
-                ],
-            },
-            "timing": {
-                **benchmark_manifest["timing"],
-                "finished_at_utc": finished_at,
-            },
-        }
-        write_json(benchmark_manifest_path, failed_manifest)
-        validate_manifest_file(benchmark_manifest_path, repo_root=root)
-        raise
+            )
+            failed_manifest = {
+                **benchmark_manifest,
+                "status": "failed",
+                "generated_at_utc": finished_at,
+                "inputs": {
+                    "run_ids": [
+                        str(_read_run_manifest(path)["run_id"])
+                        for path in run_manifest_paths
+                        if path.exists()
+                    ],
+                    "run_manifest_paths": [
+                        repo_path_string(path, repo_root=root)
+                        for path in run_manifest_paths
+                        if path.exists()
+                    ],
+                },
+                "timing": {
+                    **benchmark_manifest["timing"],
+                    "finished_at_utc": finished_at,
+                },
+            }
+            write_json(benchmark_manifest_path, failed_manifest)
+            validate_manifest_file(benchmark_manifest_path, repo_root=root)
+            raise

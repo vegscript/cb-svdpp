@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from time import perf_counter
 
 import numpy as np
 
@@ -62,6 +63,7 @@ class CBSVDppRecommender:
         self.user_cluster_histories: UserClusterCountIndex | None = None
         self.rating_min = 0.0
         self.rating_max = 0.0
+        self.epoch_durations_seconds: list[float] = []
 
     def _parameter_dtype(self) -> np.dtype:
         if self.config.dtype not in {"float32", "float64"}:
@@ -246,8 +248,10 @@ class CBSVDppRecommender:
         user_ids = data.user_ids
         item_ids = data.item_ids
         ratings = data.ratings.astype(parameter_dtype, copy=False)
+        self.epoch_durations_seconds = []
 
         for _ in range(self.config.epochs):
+            epoch_started = perf_counter()
             rng.shuffle(order)
             try:
                 train_cb_svdpp_epoch_numba(
@@ -290,6 +294,7 @@ class CBSVDppRecommender:
                     ratings,
                     parameter_dtype=parameter_dtype,
                 )
+            self.epoch_durations_seconds.append(perf_counter() - epoch_started)
 
         self.is_fitted = True
         return self

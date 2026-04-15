@@ -124,5 +124,21 @@ def test_run_biased_mf_experiment_writes_valid_run_artifacts(
 
     assert manifest["status"] == "completed"
     assert manifest["dataset"]["short_name"] == "ml_latest_small"
+    assert manifest["runtime"]["cpu_logical_count"] >= 1
+    assert manifest["runtime"]["threading"]["omp_num_threads"] == 1
+    assert manifest["runtime"]["threading"]["blas_threads"] == 1
+    assert manifest["runtime"]["threading"]["env_omp_num_threads"] == "1"
+    assert manifest["runtime"]["threading"]["env_mkl_num_threads"] == "1"
+    assert manifest["runtime"]["threading"]["env_openblas_num_threads"] == "1"
+    assert manifest["runtime"]["threading"]["env_numexpr_num_threads"] == "1"
     assert metrics["metrics"]["validation_rmse"] >= 0.0
+    assert metrics["system_metrics"]["train_time_total"] > 0.0
+    assert metrics["system_metrics"]["train_time_per_epoch"] > 0.0
+    assert metrics["system_metrics"]["ratings_per_second_train"] > 0.0
+    assert metrics["system_metrics"]["ratings_per_second_inference"] > 0.0
+    assert metrics["system_metrics"]["peak_memory_mb"] > 0.0
+    assert metrics["system_metrics"]["peak_memory_delta_mb"] >= 0.0
+    assert metrics["system_metrics"]["model_size_mb"] > 0.0
+    assert len(metrics["system_metrics"]["epoch_durations_seconds"]) == 10
+    assert metrics["timing"]["inference_wall_clock_seconds"] >= 0.0
     assert stdout_log_path.exists()

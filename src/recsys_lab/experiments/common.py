@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import platform
 import subprocess
 from dataclasses import dataclass
@@ -8,8 +9,12 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+import psutil
+from threadpoolctl import threadpool_info
+
 from recsys_lab.data.processed import RatingsData
 from recsys_lab.data.splitters import RatingsSplit
+from recsys_lab.experiments.runtime import resolve_runtime_threading_config
 from recsys_lab.utils.paths import repo_path_string
 
 
@@ -155,6 +160,86 @@ def write_log(path: Path, lines: list[str]) -> None:
     path.write_text(text, encoding="utf-8", newline="\n")
 
 
+def _threading_environment_snapshot() -> dict[str, str | None]:
+    return {
+        "env_omp_num_threads": os.environ.get("OMP_NUM_THREADS"),
+        "env_mkl_num_threads": os.environ.get("MKL_NUM_THREADS"),
+        "env_openblas_num_threads": os.environ.get("OPENBLAS_NUM_THREADS"),
+        "env_numexpr_num_threads": os.environ.get("NUMEXPR_NUM_THREADS"),
+    }
+
+
+def _cpu_affinity_snapshot() -> list[int] | None:
+    try:
+        affinity = psutil.Process().cpu_affinity()
+    except (AttributeError, NotImplementedError, psutil.Error):
+        return None
+    return [int(cpu_index) for cpu_index in affinity]
+
+
+def _threadpool_snapshot() -> list[dict[str, Any]]:
+    snapshot: list[dict[str, Any]] = []
+    for pool in threadpool_info():
+        entry: dict[str, Any] = {}
+        for key in (
+            "user_api",
+            "internal_api",
+            "prefix",
+            "threading_layer",
+            "num_threads",
+            "version",
+        ):
+            value = pool.get(key)
+            if value is None:
+                continue
+            entry[key] = int(value) if key == "num_threads" else str(value)
+        if entry:
+            snapshot.append(entry)
+    return snapshot
+
+
+def build_runtime_metadata(
+    *,
+    device_profile_name: str,
+    runtime_dtype: str,
+    device_config_payload: dict[str, Any],
+) -> dict[str, Any]:
+    threading_config = resolve_runtime_threading_config(device_config_payload=device_config_payload)
+    logical_cpu_count = psutil.cpu_count(logical=True) or os.cpu_count() or 1
+    runtime: dict[str, Any] = {
+        "device_profile": device_profile_name,
+        "python_version": platform.python_version(),
+        "platform": platform.platform(),
+        "hostname": platform.node(),
+        "dtype": runtime_dtype,
+        "cpu_logical_count": int(logical_cpu_count),
+        "threading": {
+            "omp_num_threads": threading_config.omp_num_threads,
+            "blas_threads": threading_config.blas_threads,
+            **_threading_environment_snapshot(),
+        },
+    }
+
+    processor_name = platform.processor().strip()
+    if processor_name:
+        runtime["processor"] = processor_name
+
+    physical_cpu_count = psutil.cpu_count(logical=False)
+    if physical_cpu_count is not None:
+        runtime["cpu_physical_count"] = int(physical_cpu_count)
+
+    cpu_affinity = _cpu_affinity_snapshot()
+    if cpu_affinity is not None:
+        runtime["cpu_affinity"] = cpu_affinity
+        runtime["cpu_affinity_count"] = len(cpu_affinity)
+
+    threadpools = _threadpool_snapshot()
+    if threadpools:
+        runtime["threadpools"] = threadpools
+
+    return runtime
+
+
 def build_base_run_manifest(
     *,
     timestamp: str,
@@ -202,17 +287,11 @@ def build_base_run_manifest(
             "scope": model_scope,
             "config_ref": repo_path_string(model_config_path, repo_root=repo_root),
         },
-        "runtime": {
-            "device_profile": device_profile_name,
-            "python_version": platform.python_version(),
-            "platform": platform.platform(),
-            "hostname": platform.node(),
-            "dtype": runtime_dtype,
-            "threading": {
-                "omp_num_threads": int(device_config_payload["threading"]["omp_num_threads"]),
-                "blas_threads": int(device_config_payload["threading"]["blas_threads"]),
-            },
-        },
+        "runtime": build_runtime_metadata(
+            device_profile_name=device_profile_name,
+            runtime_dtype=runtime_dtype,
+            device_config_payload=device_config_payload,
+        ),
         "seeds": [int(model_seed)],
         "artifacts": {
             "config_snapshot": repo_path_string(config_snapshot_path, repo_root=repo_root),

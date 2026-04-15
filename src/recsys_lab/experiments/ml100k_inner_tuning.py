@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import copy
-import platform
 import statistics
 import traceback
 from pathlib import Path
@@ -9,13 +8,21 @@ from typing import Any, Callable
 
 from recsys_lab.config.loader import dump_yaml_file, load_yaml_file
 from recsys_lab.experiments.biased_mf import run_biased_mf_experiment
-from recsys_lab.experiments.common import SplitConfig, git_snapshot, utc_timestamp, write_json, write_log
+from recsys_lab.experiments.cb_svdpp import run_cb_svdpp_experiment
+from recsys_lab.experiments.common import (
+    SplitConfig,
+    build_runtime_metadata,
+    git_snapshot,
+    utc_timestamp,
+    write_json,
+    write_log,
+)
 from recsys_lab.experiments.svdpp import run_svdpp_experiment
 from recsys_lab.utils.manifests import load_json_file, validate_manifest_file
 from recsys_lab.utils.paths import discover_repo_root, repo_path_string
 
 
-SUPPORTED_MODELS = {"biased_mf", "svdpp"}
+SUPPORTED_MODELS = {"biased_mf", "svdpp", "cb_svdpp"}
 
 
 def _runner_for_model(model_name: str) -> Callable[..., dict[str, Any]]:
@@ -23,6 +30,8 @@ def _runner_for_model(model_name: str) -> Callable[..., dict[str, Any]]:
         return run_biased_mf_experiment
     if model_name == "svdpp":
         return run_svdpp_experiment
+    if model_name == "cb_svdpp":
+        return run_cb_svdpp_experiment
     raise ValueError(f"unsupported tuning model: {model_name}")
 
 
@@ -45,6 +54,15 @@ def _float_summary(values: list[float]) -> dict[str, float]:
         "min": float(min(values)),
         "max": float(max(values)),
     }
+
+
+def _fit_seconds(metrics: dict[str, Any]) -> float:
+    timing = metrics["timing"]
+    fit_seconds = float(timing["training_wall_clock_seconds"])
+    cluster_seconds = timing.get("cluster_induction_wall_clock_seconds")
+    if cluster_seconds is not None:
+        fit_seconds += float(cluster_seconds)
+    return fit_seconds
 
 
 def _candidate_sort_key(candidate_summary: dict[str, Any]) -> tuple[float, float, float]:
@@ -146,15 +164,11 @@ def run_ml100k_inner_tuning(
         "command": command_string,
         "cwd": repo_path_string(root, repo_root=root),
         "git": git,
-        "runtime": {
-            "device_profile": device_profile_name,
-            "python_version": platform.python_version(),
-            "dtype": str(device_config_payload["precision"]["default_dtype"]),
-            "threading": {
-                "omp_num_threads": int(device_config_payload["threading"]["omp_num_threads"]),
-                "blas_threads": int(device_config_payload["threading"]["blas_threads"]),
-            },
-        },
+        "runtime": build_runtime_metadata(
+            device_profile_name=device_profile_name,
+            runtime_dtype=str(device_config_payload["precision"]["default_dtype"]),
+            device_config_payload=device_config_payload,
+        ),
         "inputs": {
             "run_ids": [],
             "run_manifest_paths": [],
@@ -248,7 +262,7 @@ def run_ml100k_inner_tuning(
                         "run_id": str(metrics["run_id"]),
                         "train_rmse": float(metrics["metrics"]["train_rmse"]),
                         "validation_rmse": float(metrics["metrics"]["validation_rmse"]),
-                        "training_wall_clock_seconds": float(metrics["timing"]["training_wall_clock_seconds"]),
+                        "training_wall_clock_seconds": _fit_seconds(metrics),
                     }
                 )
 

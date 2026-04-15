@@ -1,6 +1,8 @@
 import json
 from pathlib import Path
 
+import pytest
+
 from recsys_lab.experiments.ml100k_paper_multiseed_benchmark import run_ml100k_paper_multiseed_benchmark
 
 
@@ -65,8 +67,11 @@ def _write_seed_benchmark(
     seed: int,
     test_rmse_mean: float,
     train_time_mean: float,
+    benchmark_tag: str = "a",
+    git_commit: str = "abcdef1234567",
+    git_dirty: bool = False,
 ) -> None:
-    benchmark_id = f"2026-04-13T12000{seed}Z_ml100k_paper_faithful_biased_mf_local_test"
+    benchmark_id = f"2026-04-13T12000{seed}Z_ml100k_paper_faithful_biased_mf_local_test_{benchmark_tag}"
     benchmark_dir = repo_root / "artifacts" / "benchmarks" / benchmark_id
     benchmark_dir.mkdir(parents=True, exist_ok=True)
 
@@ -147,9 +152,9 @@ def _write_seed_benchmark(
                 "command": "recsys-lab benchmark-ml100k-paper --synthetic",
                 "cwd": ".",
                 "git": {
-                    "commit": "abcdef1234567",
+                    "commit": git_commit,
                     "branch": "main",
-                    "dirty": False,
+                    "dirty": git_dirty,
                 },
                 "runtime": {
                     "device_profile": "local_test",
@@ -237,3 +242,188 @@ def test_run_ml100k_paper_multiseed_benchmark_aggregates_seed_benchmarks(
     assert summary["aggregate"]["seed_level"]["test_rmse"]["mean"] == 0.92
     assert summary["aggregate"]["fold_run_level"]["test_rmse"]["mean"] > 0.92
     assert len(summary["per_seed"]) == 3
+
+
+def test_run_ml100k_paper_multiseed_benchmark_accepts_explicit_benchmark_manifest_paths(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    actual_repo_root = Path(__file__).resolve().parents[2]
+    repo_root, processed_manifest_path, model_config_path, runtime_config_path, device_config_path = (
+        _prepare_repo(tmp_path, actual_repo_root)
+    )
+    _write_seed_benchmark(
+        repo_root=repo_root,
+        processed_manifest_path=processed_manifest_path,
+        model_config_path=model_config_path,
+        runtime_config_path=runtime_config_path,
+        device_config_path=device_config_path,
+        seed=1,
+        test_rmse_mean=0.93,
+        train_time_mean=100.0,
+        benchmark_tag="a",
+    )
+    _write_seed_benchmark(
+        repo_root=repo_root,
+        processed_manifest_path=processed_manifest_path,
+        model_config_path=model_config_path,
+        runtime_config_path=runtime_config_path,
+        device_config_path=device_config_path,
+        seed=1,
+        test_rmse_mean=0.931,
+        train_time_mean=101.0,
+        benchmark_tag="b",
+    )
+    _write_seed_benchmark(
+        repo_root=repo_root,
+        processed_manifest_path=processed_manifest_path,
+        model_config_path=model_config_path,
+        runtime_config_path=runtime_config_path,
+        device_config_path=device_config_path,
+        seed=2,
+        test_rmse_mean=0.92,
+        train_time_mean=110.0,
+        benchmark_tag="a",
+    )
+    _write_seed_benchmark(
+        repo_root=repo_root,
+        processed_manifest_path=processed_manifest_path,
+        model_config_path=model_config_path,
+        runtime_config_path=runtime_config_path,
+        device_config_path=device_config_path,
+        seed=3,
+        test_rmse_mean=0.91,
+        train_time_mean=120.0,
+        benchmark_tag="a",
+    )
+
+    monkeypatch.setattr(
+        "recsys_lab.experiments.ml100k_paper_multiseed_benchmark.git_snapshot",
+        lambda _repo_root: {"commit": "abcdef1234567", "branch": "main", "dirty": False},
+    )
+
+    with pytest.raises(ValueError, match="multiple matching seed benchmarks"):
+        run_ml100k_paper_multiseed_benchmark(
+            model_name="biased_mf",
+            processed_manifest_path=processed_manifest_path,
+            model_config_path=model_config_path,
+            runtime_config_path=runtime_config_path,
+            device_config_path=device_config_path,
+            model_seeds=[1, 2, 3],
+            repo_root=repo_root,
+            command="recsys-lab benchmark-ml100k-paper-multiseed --synthetic",
+        )
+
+    payload = run_ml100k_paper_multiseed_benchmark(
+        model_name="biased_mf",
+        processed_manifest_path=processed_manifest_path,
+        model_config_path=model_config_path,
+        runtime_config_path=runtime_config_path,
+        device_config_path=device_config_path,
+        model_seeds=[1, 2, 3],
+        benchmark_manifest_paths=[
+            repo_root
+            / "artifacts"
+            / "benchmarks"
+            / "2026-04-13T120001Z_ml100k_paper_faithful_biased_mf_local_test_a"
+            / "benchmark_manifest.json",
+            repo_root
+            / "artifacts"
+            / "benchmarks"
+            / "2026-04-13T120002Z_ml100k_paper_faithful_biased_mf_local_test_a"
+            / "benchmark_manifest.json",
+            repo_root
+            / "artifacts"
+            / "benchmarks"
+            / "2026-04-13T120003Z_ml100k_paper_faithful_biased_mf_local_test_a"
+            / "benchmark_manifest.json",
+        ],
+        repo_root=repo_root,
+        command="recsys-lab benchmark-ml100k-paper-multiseed --synthetic --benchmark-manifest-paths explicit",
+    )
+
+    summary = json.loads((Path(payload["benchmark_dir"]) / "summary.json").read_text(encoding="utf-8"))
+    assert summary["aggregate"]["seed_level"]["test_rmse"]["mean"] == 0.92
+
+
+def test_run_ml100k_paper_multiseed_benchmark_rejects_mixed_git_state(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    actual_repo_root = Path(__file__).resolve().parents[2]
+    repo_root, processed_manifest_path, model_config_path, runtime_config_path, device_config_path = (
+        _prepare_repo(tmp_path, actual_repo_root)
+    )
+    _write_seed_benchmark(
+        repo_root=repo_root,
+        processed_manifest_path=processed_manifest_path,
+        model_config_path=model_config_path,
+        runtime_config_path=runtime_config_path,
+        device_config_path=device_config_path,
+        seed=1,
+        test_rmse_mean=0.93,
+        train_time_mean=100.0,
+        benchmark_tag="a",
+        git_commit="abcdef1234567",
+        git_dirty=False,
+    )
+    _write_seed_benchmark(
+        repo_root=repo_root,
+        processed_manifest_path=processed_manifest_path,
+        model_config_path=model_config_path,
+        runtime_config_path=runtime_config_path,
+        device_config_path=device_config_path,
+        seed=2,
+        test_rmse_mean=0.92,
+        train_time_mean=110.0,
+        benchmark_tag="a",
+        git_commit="abcdef1234567",
+        git_dirty=False,
+    )
+    _write_seed_benchmark(
+        repo_root=repo_root,
+        processed_manifest_path=processed_manifest_path,
+        model_config_path=model_config_path,
+        runtime_config_path=runtime_config_path,
+        device_config_path=device_config_path,
+        seed=3,
+        test_rmse_mean=0.91,
+        train_time_mean=120.0,
+        benchmark_tag="a",
+        git_commit="7654321fedcba",
+        git_dirty=True,
+    )
+
+    monkeypatch.setattr(
+        "recsys_lab.experiments.ml100k_paper_multiseed_benchmark.git_snapshot",
+        lambda _repo_root: {"commit": "abcdef1234567", "branch": "main", "dirty": False},
+    )
+
+    with pytest.raises(ValueError, match="share identical git commit, branch, and dirty state"):
+        run_ml100k_paper_multiseed_benchmark(
+            model_name="biased_mf",
+            processed_manifest_path=processed_manifest_path,
+            model_config_path=model_config_path,
+            runtime_config_path=runtime_config_path,
+            device_config_path=device_config_path,
+            model_seeds=[1, 2, 3],
+            benchmark_manifest_paths=[
+                repo_root
+                / "artifacts"
+                / "benchmarks"
+                / "2026-04-13T120001Z_ml100k_paper_faithful_biased_mf_local_test_a"
+                / "benchmark_manifest.json",
+                repo_root
+                / "artifacts"
+                / "benchmarks"
+                / "2026-04-13T120002Z_ml100k_paper_faithful_biased_mf_local_test_a"
+                / "benchmark_manifest.json",
+                repo_root
+                / "artifacts"
+                / "benchmarks"
+                / "2026-04-13T120003Z_ml100k_paper_faithful_biased_mf_local_test_a"
+                / "benchmark_manifest.json",
+            ],
+            repo_root=repo_root,
+            command="recsys-lab benchmark-ml100k-paper-multiseed --synthetic --benchmark-manifest-paths explicit",
+        )

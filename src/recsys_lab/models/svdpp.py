@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from time import perf_counter
 
 import numpy as np
 
@@ -36,6 +37,7 @@ class SVDppRecommender:
         self.user_histories: UserHistoryIndex | None = None
         self.rating_min = 0.0
         self.rating_max = 0.0
+        self.epoch_durations_seconds: list[float] = []
 
     def _parameter_dtype(self) -> np.dtype:
         if self.config.dtype not in {"float32", "float64"}:
@@ -72,8 +74,10 @@ class SVDppRecommender:
         item_ids = data.item_ids
         ratings = data.ratings.astype(parameter_dtype, copy=False)
         zero_vector = np.zeros(self.config.latent_dim, dtype=parameter_dtype)
+        self.epoch_durations_seconds = []
 
         for _ in range(self.config.epochs):
+            epoch_started = perf_counter()
             rng.shuffle(order)
             for idx in order:
                 user_id = int(user_ids[idx])
@@ -118,6 +122,7 @@ class SVDppRecommender:
                     self.implicit_factors[history] = implicit_old + implicit_update - (
                         self.config.learning_rate * self.config.lambda_y * implicit_old
                     )
+            self.epoch_durations_seconds.append(perf_counter() - epoch_started)
 
         self.is_fitted = True
         return self

@@ -83,8 +83,10 @@ def _write_completed_run(
     train_rmse: float,
     test_rmse: float,
     training_seconds: float,
+    model_name: str = "biased_mf",
+    cluster_induction_seconds: float | None = None,
 ) -> Path:
-    run_id = f"2026-04-13T00000{fold_index}Z_ml100k_biased_mf_local_test_s{model_seed:03d}"
+    run_id = f"2026-04-13T00000{fold_index}Z_ml100k_{model_name}_local_test_s{model_seed:03d}"
     run_dir = repo_root / "artifacts" / "runs" / run_id
     run_dir.mkdir(parents=True, exist_ok=True)
 
@@ -106,7 +108,7 @@ def _write_completed_run(
                 "loaded_configs": {
                     "processed_manifest": json.loads(processed_manifest_path.read_text(encoding="utf-8")),
                     "model": {
-                        "model": {"name": "biased_mf", "scope": "paper_inspired"},
+                        "model": {"name": model_name, "scope": "paper_inspired"},
                         "training": {"dtype": "float32"},
                     },
                     "runtime": {
@@ -134,6 +136,7 @@ def _write_completed_run(
                     "test_rmse": test_rmse,
                 },
                 "timing": {
+                    "cluster_induction_wall_clock_seconds": cluster_induction_seconds,
                     "training_wall_clock_seconds": training_seconds,
                 },
             },
@@ -165,7 +168,7 @@ def _write_completed_run(
                     "manifest_ref": str(processed_manifest_path.relative_to(repo_root)).replace("\\", "/"),
                 },
                 "model": {
-                    "name": "biased_mf",
+                    "name": model_name,
                     "scope": "paper_inspired",
                     "config_ref": str(model_config_path.relative_to(repo_root)).replace("\\", "/"),
                 },
@@ -271,6 +274,13 @@ def test_run_ml100k_paper_benchmark_reuses_existing_runs_and_aggregates(
 
     assert benchmark_manifest["status"] == "completed"
     assert benchmark_manifest["benchmark_scope"] == "paper_faithful_ml100k_v1_biased_mf_u1_u5"
+    assert benchmark_manifest["runtime"]["cpu_logical_count"] >= 1
+    assert benchmark_manifest["runtime"]["threading"]["omp_num_threads"] == 1
+    assert benchmark_manifest["runtime"]["threading"]["blas_threads"] == 1
+    assert benchmark_manifest["runtime"]["threading"]["env_omp_num_threads"] == "1"
+    assert benchmark_manifest["runtime"]["threading"]["env_mkl_num_threads"] == "1"
+    assert benchmark_manifest["runtime"]["threading"]["env_openblas_num_threads"] == "1"
+    assert benchmark_manifest["runtime"]["threading"]["env_numexpr_num_threads"] == "1"
     assert len(benchmark_manifest["inputs"]["run_ids"]) == 5
     assert calls == [2, 3, 4, 5]
     assert summary["aggregate"]["test_rmse"]["mean"] > 0.0
@@ -351,3 +361,74 @@ def test_run_ml100k_paper_benchmark_disables_reuse_when_repo_is_dirty(
 
     assert calls == [1, 2, 3, 4, 5]
     assert "allow_existing_run_reuse=false" in stdout_log
+
+
+def test_run_ml100k_paper_benchmark_supports_cb_svdpp_and_counts_cluster_time(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    actual_repo_root = Path(__file__).resolve().parents[2]
+    (
+        repo_root,
+        processed_manifest_path,
+        model_config_path,
+        runtime_config_path,
+        device_config_path,
+    ) = _prepare_synthetic_benchmark_repo(tmp_path, actual_repo_root)
+
+    _write_text(
+        model_config_path,
+        "model:\n  name: cb_svdpp\n  scope: paper_inspired\ntraining:\n  dtype: float32\n",
+    )
+
+    monkeypatch.setattr(
+        "recsys_lab.experiments.ml100k_paper_benchmark.git_snapshot",
+        lambda _repo_root: {"commit": "abcdef1234567", "branch": "main", "dirty": False},
+    )
+
+    calls: list[int] = []
+
+    def _fake_runner(**kwargs):
+        fold_index = int(kwargs["split_config"].seed)
+        calls.append(fold_index)
+        run_manifest_path = _write_completed_run(
+            repo_root=repo_root,
+            processed_manifest_path=processed_manifest_path,
+            model_config_path=model_config_path,
+            runtime_config_path=runtime_config_path,
+            device_config_path=device_config_path,
+            fold_index=fold_index,
+            model_seed=int(kwargs["model_seed"]),
+            train_rmse=0.78 + fold_index * 0.01,
+            test_rmse=0.88 + fold_index * 0.01,
+            training_seconds=20.0 * fold_index,
+            model_name="cb_svdpp",
+            cluster_induction_seconds=5.0 * fold_index,
+        )
+        return {
+            "run_manifest": str(run_manifest_path),
+        }
+
+    monkeypatch.setattr(
+        "recsys_lab.experiments.ml100k_paper_benchmark._runner_for_model",
+        lambda _model_name: _fake_runner,
+    )
+
+    payload = run_ml100k_paper_benchmark(
+        model_name="cb_svdpp",
+        processed_manifest_path=processed_manifest_path,
+        model_config_path=model_config_path,
+        runtime_config_path=runtime_config_path,
+        device_config_path=device_config_path,
+        model_seed=2,
+        repo_root=repo_root,
+        command="recsys-lab benchmark-ml100k-paper --synthetic-cb-svdpp",
+    )
+
+    benchmark_dir = Path(payload["benchmark_dir"])
+    summary = json.loads((benchmark_dir / "summary.json").read_text(encoding="utf-8"))
+
+    assert calls == [1, 2, 3, 4, 5]
+    assert summary["model"] == "cb_svdpp"
+    assert summary["aggregate"]["training_wall_clock_seconds"]["mean"] == 75.0
+    assert summary["folds"][0]["training_wall_clock_seconds"] == 25.0

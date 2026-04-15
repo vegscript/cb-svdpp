@@ -1,0 +1,92 @@
+metadata:
+  status: draft
+  owner: repo
+  purpose: tuning_experiment
+
+tuning:
+  name: ml100k_cb_svdpp_stage1
+  dataset_short_name: ml100k
+  split_family: paper_faithful_ml100k_inner_v1
+  selection_stage: stage1
+  objective: validation_rmse_mean
+  folds:
+    - 1
+    - 2
+  validation_ratio: 0.1
+  inner_seed: 17
+  model_seed: 1
+
+base_model_config: configs/models/cb_svdpp.yaml
+
+candidates:
+  - candidate_id: baseline_k050_uc100_ic100_a010_lr0100_reg0020_e020
+    overrides:
+      training:
+        latent_dim: 50
+        epochs: 20
+        learning_rate: 0.01
+        lambda_b: 0.02
+        lambda_p: 0.02
+        lambda_q: 0.02
+        lambda_y: 0.02
+        lambda_pC: 0.02
+        lambda_qC: 0.02
+        lambda_yC: 0.02
+      clustering:
+        n_user_clusters: 100
+        n_item_clusters: 100
+        alpha: 0.10
+
+  - candidate_id: alpha05_k050_uc100_ic100_lr0100_reg0020_e020
+    overrides:
+      training:
+        latent_dim: 50
+        epochs: 20
+        learning_rate: 0.01
+        lambda_b: 0.02
+        lambda_p: 0.02
+        lambda_q: 0.02
+        lambda_y: 0.02
+        lambda_pC: 0.02
+        lambda_qC: 0.02
+        lambda_yC: 0.02
+      clustering:
+        n_user_clusters: 100
+        n_item_clusters: 100
+        alpha: 0.05
+
+  - candidate_id: alpha15_k050_uc100_ic100_lr0100_reg0020_e020
+    overrides:
+      training:
+        latent_dim: 50
+        epochs: 20
+        learning_rate: 0.01
+        lambda_b: 0.02
+        lambda_p: 0.02
+        lambda_q: 0.02
+        lambda_y: 0.02
+        lambda_pC: 0.02
+        lambda_qC: 0.02
+        lambda_yC: 0.02
+      clustering:
+        n_user_clusters: 100
+        n_item_clusters: 100
+        alpha: 0.15
+
+  - candidate_id: rank064_uc080_ic080_a010_lr0075_reg0025_e020
+    overrides:
+      training:
+        latent_dim: 64
+        epochs: 20
+        learning_rate: 0.0075
+        lambda_b: 0.025
+        lambda_p: 0.025
+        lambda_q: 0.025
+        lambda_y: 0.025
+        lambda_pC: 0.025
+        lambda_qC: 0.025
+        lambda_yC: 0.025
+      clustering:
+        n_user_clusters: 80
+        n_item_clusters: 80
+        alpha: 0.10
