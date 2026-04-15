@@ -1,11 +1,14 @@
 from __future__ import annotations
 
-import statistics
 import traceback
 from pathlib import Path
 from typing import Any
 
 from recsys_lab.config.loader import dump_yaml_file, load_yaml_file
+from recsys_lab.experiments.benchmarking import (
+    build_benchmark_measurement,
+    summarize_scalar_samples,
+)
 from recsys_lab.experiments.common import (
     build_runtime_metadata,
     git_snapshot,
@@ -13,19 +16,12 @@ from recsys_lab.experiments.common import (
     write_json,
     write_log,
 )
+from recsys_lab.experiments.runtime import (
+    resolve_runtime_threading_config,
+    runtime_execution_context,
+)
 from recsys_lab.utils.manifests import load_json_file, validate_manifest_file
 from recsys_lab.utils.paths import discover_repo_root, repo_path_string
-
-
-def _float_summary(values: list[float]) -> dict[str, float]:
-    if not values:
-        raise ValueError("cannot summarize empty value list")
-    return {
-        "mean": float(statistics.fmean(values)),
-        "std": float(statistics.stdev(values)) if len(values) > 1 else 0.0,
-        "min": float(min(values)),
-        "max": float(max(values)),
-    }
 
 
 def _seed_slug(seed: int) -> str:
@@ -266,6 +262,7 @@ def run_ml100k_paper_multiseed_benchmark(
         else None
     )
     device_config_payload = load_yaml_file(device_config_path)
+    threading_config = resolve_runtime_threading_config(device_config_payload=device_config_payload)
     device_profile_name = str(device_config_payload["device_profile"]["name"])
 
     timestamp = utc_timestamp()
@@ -307,233 +304,255 @@ def run_ml100k_paper_multiseed_benchmark(
     )
 
     git = git_snapshot(root)
-    benchmark_manifest = {
-        "manifest_version": "v1",
-        "kind": "benchmark_manifest",
-        "generated_at_utc": timestamp,
-        "benchmark_id": benchmark_id,
-        "status": "started",
-        "benchmark_scope": benchmark_scope,
-        "command": command_string,
-        "cwd": repo_path_string(root, repo_root=root),
-        "git": git,
-        "runtime": build_runtime_metadata(
-            device_profile_name=device_profile_name,
-            runtime_dtype=str(device_config_payload["precision"]["default_dtype"]),
-            device_config_payload=device_config_payload,
+    measurement = build_benchmark_measurement(
+        time_metric="training_wall_clock_seconds",
+        time_metric_semantics=(
+            "The primary time aggregate summarizes per-seed benchmark means in seconds. "
+            "Contributing seed benchmarks use the paper benchmark fit-time semantics, including cluster induction when present."
         ),
-        "inputs": {
-            "run_ids": [],
-            "run_manifest_paths": [],
-            "benchmark_ids": [],
-            "benchmark_manifest_paths": benchmark_manifest_path_refs or [],
-            "model_seeds": [int(seed) for seed in model_seeds],
-        },
-        "artifacts": {
-            "summary": repo_path_string(summary_path, repo_root=root),
-            "tables": [repo_path_string(summary_md_path, repo_root=root)],
-            "stdout_log": repo_path_string(stdout_log_path, repo_root=root),
-        },
-        "timing": {
-            "started_at_utc": timestamp,
-        },
-    }
-
-    dump_yaml_file(
-        config_snapshot_path,
-        {
-            "benchmark_id": benchmark_id,
-            "benchmark_scope": benchmark_scope,
-            "model_name": model_name,
-            "model_seeds": [int(seed) for seed in model_seeds],
-            "processed_manifest": processed_manifest_ref,
-            "model_config": model_config_ref,
-            "runtime_config": runtime_config_ref,
-            "device_config": device_config_ref,
-        },
-    )
-    write_log(
-        stdout_log_path,
-        [
-            f"[{timestamp}] benchmark_id={benchmark_id}",
-            f"command={command_string}",
-            "allow_existing_run_reuse=false",
+        sample_unit="seed_benchmark",
+        measured_sample_count=len(model_seeds),
+        warmup_policy="none",
+        warmup_sample_count=0,
+        notes=[
+            "No additional multiseed warmup runs are executed; this artifact aggregates completed seed benchmarks.",
+            "fold_run_level aggregates flatten all contributing fold runs to expose cross-seed timing dispersion.",
         ],
     )
-    write_json(benchmark_manifest_path, benchmark_manifest)
-
-    try:
-        seed_benchmarks = _resolve_seed_benchmarks(
-            repo_root=root,
-            model_name=model_name,
-            processed_manifest_ref=processed_manifest_ref,
-            model_config_ref=model_config_ref,
-            runtime_config_ref=runtime_config_ref,
-            device_config_ref=device_config_ref,
-            model_seeds=model_seeds,
-            benchmark_manifest_paths=benchmark_manifest_paths,
-        )
-
-        run_ids: list[str] = []
-        run_manifest_paths: list[str] = []
-        benchmark_ids: list[str] = []
-        benchmark_manifest_paths: list[str] = []
-        per_seed = []
-        all_fold_train: list[float] = []
-        all_fold_test: list[float] = []
-        all_fold_time: list[float] = []
-        seed_mean_train: list[float] = []
-        seed_mean_test: list[float] = []
-        seed_mean_time: list[float] = []
-
-        for seed, seed_benchmark in zip(model_seeds, seed_benchmarks, strict=True):
-            summary_payload = seed_benchmark["summary"]
-            manifest_payload = seed_benchmark["manifest"]
-            benchmark_ids.append(str(manifest_payload["benchmark_id"]))
-            benchmark_manifest_paths.append(repo_path_string(seed_benchmark["manifest_path"], repo_root=root))
-            run_ids.extend(str(run_id) for run_id in manifest_payload.get("inputs", {}).get("run_ids", []))
-            run_manifest_paths.extend(
-                str(path_ref) for path_ref in manifest_payload.get("inputs", {}).get("run_manifest_paths", [])
-            )
-
-            folds = list(summary_payload["folds"])
-            fold_train = [float(item["train_rmse"]) for item in folds]
-            fold_test = [float(item["test_rmse"]) for item in folds]
-            fold_time = [float(item["training_wall_clock_seconds"]) for item in folds]
-            all_fold_train.extend(fold_train)
-            all_fold_test.extend(fold_test)
-            all_fold_time.extend(fold_time)
-            seed_mean_train.append(float(summary_payload["aggregate"]["train_rmse"]["mean"]))
-            seed_mean_test.append(float(summary_payload["aggregate"]["test_rmse"]["mean"]))
-            seed_mean_time.append(float(summary_payload["aggregate"]["training_wall_clock_seconds"]["mean"]))
-
-            per_seed.append(
-                {
-                    "model_seed": int(seed),
-                    "benchmark_id": str(manifest_payload["benchmark_id"]),
-                    "benchmark_manifest_path": repo_path_string(seed_benchmark["manifest_path"], repo_root=root),
-                    "test_rmse": dict(summary_payload["aggregate"]["test_rmse"]),
-                    "train_rmse": dict(summary_payload["aggregate"]["train_rmse"]),
-                    "training_wall_clock_seconds": dict(
-                        summary_payload["aggregate"]["training_wall_clock_seconds"]
-                    ),
-                }
-            )
-
-        summary_payload = {
+    with runtime_execution_context(threading_config=threading_config):
+        benchmark_manifest = {
+            "manifest_version": "v1",
+            "kind": "benchmark_manifest",
+            "generated_at_utc": timestamp,
             "benchmark_id": benchmark_id,
+            "status": "started",
             "benchmark_scope": benchmark_scope,
-            "dataset": "ml100k",
-            "split_family": "paper_faithful_ml100k_v1",
-            "model": model_name,
-            "model_seeds": [int(seed) for seed in model_seeds],
-            "per_seed": per_seed,
-            "aggregate": {
-                "seed_level": {
-                    "train_rmse": _float_summary(seed_mean_train),
-                    "test_rmse": _float_summary(seed_mean_test),
-                    "training_wall_clock_seconds": _float_summary(seed_mean_time),
-                },
-                "fold_run_level": {
-                    "train_rmse": _float_summary(all_fold_train),
-                    "test_rmse": _float_summary(all_fold_test),
-                    "training_wall_clock_seconds": _float_summary(all_fold_time),
-                },
-            },
-        }
-        write_json(summary_path, summary_payload)
-
-        markdown_lines = [
-            "# Multi-Seed Benchmark Summary",
-            "",
-            f"- benchmark_id: `{benchmark_id}`",
-            f"- benchmark_scope: `{benchmark_scope}`",
-            f"- dataset: `ml100k`",
-            f"- split_family: `paper_faithful_ml100k_v1`",
-            f"- model: `{model_name}`",
-            f"- model_seeds: `{', '.join(str(seed) for seed in model_seeds)}`",
-            "",
-            "## Per Seed",
-            "",
-            "| Seed | Benchmark ID | Test RMSE Mean | Test RMSE Std | Train Time Mean (s) |",
-            "| --- | --- | ---: | ---: | ---: |",
-        ]
-        for item in per_seed:
-            markdown_lines.append(
-                f"| `{item['model_seed']}` | `{item['benchmark_id']}` | "
-                f"{item['test_rmse']['mean']:.6f} | {item['test_rmse']['std']:.6f} | "
-                f"{item['training_wall_clock_seconds']['mean']:.2f} |"
-            )
-        markdown_lines.extend(
-            [
-                "",
-                "## Aggregate",
-                "",
-                f"- seed_level test_rmse mean: `{summary_payload['aggregate']['seed_level']['test_rmse']['mean']:.6f}`",
-                f"- seed_level test_rmse std: `{summary_payload['aggregate']['seed_level']['test_rmse']['std']:.6f}`",
-                f"- fold_run_level test_rmse mean: `{summary_payload['aggregate']['fold_run_level']['test_rmse']['mean']:.6f}`",
-                f"- fold_run_level test_rmse std: `{summary_payload['aggregate']['fold_run_level']['test_rmse']['std']:.6f}`",
-            ]
-        )
-        summary_md_path.write_text("\n".join(markdown_lines).strip() + "\n", encoding="utf-8", newline="\n")
-
-        finished_at = utc_timestamp()
-        write_log(
-            stdout_log_path,
-            [
-                f"[{timestamp}] benchmark_id={benchmark_id}",
-                f"command={command_string}",
-                "allow_existing_run_reuse=false",
-                f"seed_count={len(model_seeds)}",
-                f"test_rmse_seed_level_mean={summary_payload['aggregate']['seed_level']['test_rmse']['mean']:.6f}",
-                f"[{finished_at}] status=completed",
-            ],
-        )
-        completed_manifest = {
-            **benchmark_manifest,
-            "status": "completed",
-            "generated_at_utc": finished_at,
+            "command": command_string,
+            "cwd": repo_path_string(root, repo_root=root),
+            "git": git,
+            "runtime": build_runtime_metadata(
+                device_profile_name=device_profile_name,
+                runtime_dtype=str(device_config_payload["precision"]["default_dtype"]),
+                device_config_payload=device_config_payload,
+            ),
+            "measurement": measurement,
             "inputs": {
-                "run_ids": run_ids,
-                "run_manifest_paths": run_manifest_paths,
-                "benchmark_ids": benchmark_ids,
-                "benchmark_manifest_paths": benchmark_manifest_paths,
+                "run_ids": [],
+                "run_manifest_paths": [],
+                "benchmark_ids": [],
+                "benchmark_manifest_paths": benchmark_manifest_path_refs or [],
                 "model_seeds": [int(seed) for seed in model_seeds],
             },
+            "artifacts": {
+                "summary": repo_path_string(summary_path, repo_root=root),
+                "tables": [repo_path_string(summary_md_path, repo_root=root)],
+                "stdout_log": repo_path_string(stdout_log_path, repo_root=root),
+            },
             "timing": {
-                **benchmark_manifest["timing"],
-                "finished_at_utc": finished_at,
+                "started_at_utc": timestamp,
             },
         }
-        write_json(benchmark_manifest_path, completed_manifest)
-        validate_manifest_file(benchmark_manifest_path, repo_root=root)
-        return {
-            "benchmark_id": benchmark_id,
-            "benchmark_dir": str(benchmark_dir),
-            "benchmark_manifest": str(benchmark_manifest_path),
-            "seed_level_test_rmse_mean": summary_payload["aggregate"]["seed_level"]["test_rmse"]["mean"],
-        }
-    except Exception:
-        finished_at = utc_timestamp()
+
+        dump_yaml_file(
+            config_snapshot_path,
+            {
+                "benchmark_id": benchmark_id,
+                "benchmark_scope": benchmark_scope,
+                "model_name": model_name,
+                "model_seeds": [int(seed) for seed in model_seeds],
+                "processed_manifest": processed_manifest_ref,
+                "model_config": model_config_ref,
+                "runtime_config": runtime_config_ref,
+                "device_config": device_config_ref,
+            },
+        )
         write_log(
             stdout_log_path,
             [
                 f"[{timestamp}] benchmark_id={benchmark_id}",
                 f"command={command_string}",
                 "allow_existing_run_reuse=false",
-                f"[{finished_at}] status=failed",
-                traceback.format_exc().strip(),
             ],
         )
-        failed_manifest = {
-            **benchmark_manifest,
-            "status": "failed",
-            "generated_at_utc": finished_at,
-            "timing": {
-                **benchmark_manifest["timing"],
-                "finished_at_utc": finished_at,
-            },
-        }
-        write_json(benchmark_manifest_path, failed_manifest)
-        validate_manifest_file(benchmark_manifest_path, repo_root=root)
-        raise
+        write_json(benchmark_manifest_path, benchmark_manifest)
+
+        try:
+            seed_benchmarks = _resolve_seed_benchmarks(
+                repo_root=root,
+                model_name=model_name,
+                processed_manifest_ref=processed_manifest_ref,
+                model_config_ref=model_config_ref,
+                runtime_config_ref=runtime_config_ref,
+                device_config_ref=device_config_ref,
+                model_seeds=model_seeds,
+                benchmark_manifest_paths=benchmark_manifest_paths,
+            )
+
+            run_ids: list[str] = []
+            run_manifest_paths: list[str] = []
+            benchmark_ids: list[str] = []
+            benchmark_manifest_paths: list[str] = []
+            per_seed = []
+            all_fold_train: list[float] = []
+            all_fold_test: list[float] = []
+            all_fold_time: list[float] = []
+            seed_mean_train: list[float] = []
+            seed_mean_test: list[float] = []
+            seed_mean_time: list[float] = []
+
+            for seed, seed_benchmark in zip(model_seeds, seed_benchmarks, strict=True):
+                summary_payload = seed_benchmark["summary"]
+                manifest_payload = seed_benchmark["manifest"]
+                benchmark_ids.append(str(manifest_payload["benchmark_id"]))
+                benchmark_manifest_paths.append(repo_path_string(seed_benchmark["manifest_path"], repo_root=root))
+                run_ids.extend(str(run_id) for run_id in manifest_payload.get("inputs", {}).get("run_ids", []))
+                run_manifest_paths.extend(
+                    str(path_ref) for path_ref in manifest_payload.get("inputs", {}).get("run_manifest_paths", [])
+                )
+
+                folds = list(summary_payload["folds"])
+                fold_train = [float(item["train_rmse"]) for item in folds]
+                fold_test = [float(item["test_rmse"]) for item in folds]
+                fold_time = [float(item["training_wall_clock_seconds"]) for item in folds]
+                all_fold_train.extend(fold_train)
+                all_fold_test.extend(fold_test)
+                all_fold_time.extend(fold_time)
+                seed_mean_train.append(float(summary_payload["aggregate"]["train_rmse"]["mean"]))
+                seed_mean_test.append(float(summary_payload["aggregate"]["test_rmse"]["mean"]))
+                seed_mean_time.append(float(summary_payload["aggregate"]["training_wall_clock_seconds"]["mean"]))
+
+                per_seed.append(
+                    {
+                        "model_seed": int(seed),
+                        "benchmark_id": str(manifest_payload["benchmark_id"]),
+                        "benchmark_manifest_path": repo_path_string(seed_benchmark["manifest_path"], repo_root=root),
+                        "test_rmse": dict(summary_payload["aggregate"]["test_rmse"]),
+                        "train_rmse": dict(summary_payload["aggregate"]["train_rmse"]),
+                        "training_wall_clock_seconds": dict(
+                            summary_payload["aggregate"]["training_wall_clock_seconds"]
+                        ),
+                    }
+                )
+
+            summary_payload = {
+                "benchmark_id": benchmark_id,
+                "benchmark_scope": benchmark_scope,
+                "dataset": "ml100k",
+                "split_family": "paper_faithful_ml100k_v1",
+                "model": model_name,
+                "model_seeds": [int(seed) for seed in model_seeds],
+                "measurement": measurement,
+                "per_seed": per_seed,
+                "aggregate": {
+                    "seed_level": {
+                        "train_rmse": summarize_scalar_samples(seed_mean_train),
+                        "test_rmse": summarize_scalar_samples(seed_mean_test),
+                        "training_wall_clock_seconds": summarize_scalar_samples(seed_mean_time),
+                    },
+                    "fold_run_level": {
+                        "train_rmse": summarize_scalar_samples(all_fold_train),
+                        "test_rmse": summarize_scalar_samples(all_fold_test),
+                        "training_wall_clock_seconds": summarize_scalar_samples(all_fold_time),
+                    },
+                },
+            }
+            write_json(summary_path, summary_payload)
+
+            markdown_lines = [
+                "# Multi-Seed Benchmark Summary",
+                "",
+                f"- benchmark_id: `{benchmark_id}`",
+                f"- benchmark_scope: `{benchmark_scope}`",
+                f"- dataset: `ml100k`",
+                f"- split_family: `paper_faithful_ml100k_v1`",
+                f"- model: `{model_name}`",
+                f"- model_seeds: `{', '.join(str(seed) for seed in model_seeds)}`",
+                f"- warmup_policy: `{measurement['warmup_policy']}`",
+                f"- measured_sample_count: `{measurement['measured_sample_count']}`",
+                "",
+                "## Per Seed",
+                "",
+                "| Seed | Benchmark ID | Test RMSE Mean | Test RMSE Std | Train Time Mean (s) |",
+                "| --- | --- | ---: | ---: | ---: |",
+            ]
+            for item in per_seed:
+                markdown_lines.append(
+                    f"| `{item['model_seed']}` | `{item['benchmark_id']}` | "
+                    f"{item['test_rmse']['mean']:.6f} | {item['test_rmse']['std']:.6f} | "
+                    f"{item['training_wall_clock_seconds']['mean']:.2f} |"
+                )
+            markdown_lines.extend(
+                [
+                    "",
+                    "## Aggregate",
+                    "",
+                    f"- seed_level test_rmse count: `{summary_payload['aggregate']['seed_level']['test_rmse']['count']}`",
+                    f"- seed_level test_rmse mean: `{summary_payload['aggregate']['seed_level']['test_rmse']['mean']:.6f}`",
+                    f"- seed_level test_rmse std: `{summary_payload['aggregate']['seed_level']['test_rmse']['std']:.6f}`",
+                    f"- seed_level training_wall_clock_seconds cv: `{summary_payload['aggregate']['seed_level']['training_wall_clock_seconds']['coefficient_of_variation']:.6f}`",
+                    f"- fold_run_level test_rmse mean: `{summary_payload['aggregate']['fold_run_level']['test_rmse']['mean']:.6f}`",
+                    f"- fold_run_level test_rmse std: `{summary_payload['aggregate']['fold_run_level']['test_rmse']['std']:.6f}`",
+                ]
+            )
+            summary_md_path.write_text("\n".join(markdown_lines).strip() + "\n", encoding="utf-8", newline="\n")
+
+            finished_at = utc_timestamp()
+            write_log(
+                stdout_log_path,
+                [
+                    f"[{timestamp}] benchmark_id={benchmark_id}",
+                    f"command={command_string}",
+                    "allow_existing_run_reuse=false",
+                    f"seed_count={len(model_seeds)}",
+                    f"test_rmse_seed_level_mean={summary_payload['aggregate']['seed_level']['test_rmse']['mean']:.6f}",
+                    f"[{finished_at}] status=completed",
+                ],
+            )
+            completed_manifest = {
+                **benchmark_manifest,
+                "status": "completed",
+                "generated_at_utc": finished_at,
+                "inputs": {
+                    "run_ids": run_ids,
+                    "run_manifest_paths": run_manifest_paths,
+                    "benchmark_ids": benchmark_ids,
+                    "benchmark_manifest_paths": benchmark_manifest_paths,
+                    "model_seeds": [int(seed) for seed in model_seeds],
+                },
+                "timing": {
+                    **benchmark_manifest["timing"],
+                    "finished_at_utc": finished_at,
+                },
+            }
+            write_json(benchmark_manifest_path, completed_manifest)
+            validate_manifest_file(benchmark_manifest_path, repo_root=root)
+            return {
+                "benchmark_id": benchmark_id,
+                "benchmark_dir": str(benchmark_dir),
+                "benchmark_manifest": str(benchmark_manifest_path),
+                "seed_level_test_rmse_mean": summary_payload["aggregate"]["seed_level"]["test_rmse"]["mean"],
+            }
+        except Exception:
+            finished_at = utc_timestamp()
+            write_log(
+                stdout_log_path,
+                [
+                    f"[{timestamp}] benchmark_id={benchmark_id}",
+                    f"command={command_string}",
+                    "allow_existing_run_reuse=false",
+                    f"[{finished_at}] status=failed",
+                    traceback.format_exc().strip(),
+                ],
+            )
+            failed_manifest = {
+                **benchmark_manifest,
+                "status": "failed",
+                "generated_at_utc": finished_at,
+                "timing": {
+                    **benchmark_manifest["timing"],
+                    "finished_at_utc": finished_at,
+                },
+            }
+            write_json(benchmark_manifest_path, failed_manifest)
+            validate_manifest_file(benchmark_manifest_path, repo_root=root)
+            raise

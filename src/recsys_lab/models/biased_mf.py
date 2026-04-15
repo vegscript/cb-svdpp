@@ -6,6 +6,7 @@ from time import perf_counter
 import numpy as np
 
 from recsys_lab.data.processed import RatingsData
+from recsys_lab.models.kernels import train_biased_mf_epoch_numba
 
 
 @dataclass(frozen=True, slots=True)
@@ -19,6 +20,7 @@ class BiasedMFConfig:
     seed: int = 42
     init_std: float = 0.1
     dtype: str = "float32"
+    training_backend: str = "auto"
 
 
 class BiasedMFRecommender:
@@ -33,15 +35,64 @@ class BiasedMFRecommender:
         self.rating_min = 0.0
         self.rating_max = 0.0
         self.epoch_durations_seconds: list[float] = []
+        self.training_backend_effective: str | None = None
 
     def _parameter_dtype(self) -> np.dtype:
         if self.config.dtype not in {"float32", "float64"}:
             raise ValueError("biased_mf dtype must be 'float32' or 'float64'")
         return np.dtype(self.config.dtype)
 
+    def _validate_training_backend(self) -> str:
+        backend = str(self.config.training_backend)
+        if backend not in {"auto", "python", "numba"}:
+            raise ValueError("biased_mf training_backend must be 'auto', 'python', or 'numba'")
+        return backend
+
+    def _train_epoch_python(
+        self,
+        order: np.ndarray,
+        user_ids: np.ndarray,
+        item_ids: np.ndarray,
+        ratings: np.ndarray,
+    ) -> None:
+        if (
+            self.user_bias is None
+            or self.item_bias is None
+            or self.user_factors is None
+            or self.item_factors is None
+        ):
+            raise RuntimeError("model parameters are not initialized")
+
+        for idx in order:
+            user_id = int(user_ids[idx])
+            item_id = int(item_ids[idx])
+            rating = float(ratings[idx])
+
+            prediction = self._predict_unchecked(user_id, item_id)
+            error = rating - prediction
+
+            user_bias_old = self.user_bias[user_id]
+            item_bias_old = self.item_bias[item_id]
+            user_vector_old = self.user_factors[user_id].copy()
+            item_vector_old = self.item_factors[item_id].copy()
+
+            self.user_bias[user_id] = user_bias_old + self.config.learning_rate * (
+                error - self.config.lambda_b * user_bias_old
+            )
+            self.item_bias[item_id] = item_bias_old + self.config.learning_rate * (
+                error - self.config.lambda_b * item_bias_old
+            )
+            self.user_factors[user_id] = user_vector_old + self.config.learning_rate * (
+                error * item_vector_old - self.config.lambda_p * user_vector_old
+            )
+            self.item_factors[item_id] = item_vector_old + self.config.learning_rate * (
+                error * user_vector_old - self.config.lambda_q * item_vector_old
+            )
+
     def fit(self, data: RatingsData) -> "BiasedMFRecommender":
         rng = np.random.default_rng(self.config.seed)
         parameter_dtype = self._parameter_dtype()
+        requested_backend = self._validate_training_backend()
         self.global_mean = float(np.mean(data.ratings))
         self.rating_min = data.rating_min
         self.rating_max = data.rating_max
@@ -59,35 +110,37 @@ class BiasedMFRecommender:
         item_ids = data.item_ids
         ratings = data.ratings.astype(parameter_dtype, copy=False)
         self.epoch_durations_seconds = []
+        self.training_backend_effective = None
 
         for _ in range(self.config.epochs):
             epoch_started = perf_counter()
             rng.shuffle(order)
-            for idx in order:
-                user_id = int(user_ids[idx])
-                item_id = int(item_ids[idx])
-                rating = float(ratings[idx])
-
-                prediction = self._predict_unchecked(user_id, item_id)
-                error = rating - prediction
-
-                user_bias_old = self.user_bias[user_id]
-                item_bias_old = self.item_bias[item_id]
-                user_vector_old = self.user_factors[user_id].copy()
-                item_vector_old = self.item_factors[item_id].copy()
-
-                self.user_bias[user_id] = user_bias_old + self.config.learning_rate * (
-                    error - self.config.lambda_b * user_bias_old
-                )
-                self.item_bias[item_id] = item_bias_old + self.config.learning_rate * (
-                    error - self.config.lambda_b * item_bias_old
-                )
-                self.user_factors[user_id] = user_vector_old + self.config.learning_rate * (
-                    error * item_vector_old - self.config.lambda_p * user_vector_old
-                )
-                self.item_factors[item_id] = item_vector_old + self.config.learning_rate * (
-                    error * user_vector_old - self.config.lambda_q * item_vector_old
-                )
+            if requested_backend == "python":
+                self._train_epoch_python(order, user_ids, item_ids, ratings)
+                self.training_backend_effective = "python"
+            else:
+                try:
+                    train_biased_mf_epoch_numba(
+                        order,
+                        user_ids,
+                        item_ids,
+                        ratings,
+                        self.global_mean,
+                        self.config.learning_rate,
+                        self.config.lambda_b,
+                        self.config.lambda_p,
+                        self.config.lambda_q,
+                        self.user_bias,
+                        self.item_bias,
+                        self.user_factors,
+                        self.item_factors,
+                    )
+                    self.training_backend_effective = "numba"
+                except RuntimeError:
+                    if requested_backend == "numba":
+                        raise
+                    self._train_epoch_python(order, user_ids, item_ids, ratings)
+                    self.training_backend_effective = "python"
             self.epoch_durations_seconds.append(perf_counter() - epoch_started)
 
         self.is_fitted = True

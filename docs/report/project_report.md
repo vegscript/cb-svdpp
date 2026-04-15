@@ -404,16 +404,24 @@ only from `u1.base` and `u2.base` and rank candidates by mean validation RMSE.
 | --- | --- | --- | --- | ---: | ---: |
 | `biased_mf` | `stage1` | `u1`, `u2` | `rank064_lr0075_reg0030_e025` | 0.9334 | 0.0047 |
 | `svdpp` | `stage1` | `u1`, `u2` | `rank080_lr0050_reg0030_e020` | 0.9207 | 0.0029 |
+| `cb_svdpp` | `stage1` | `u1`, `u2` | `rank064_uc080_ic080_a010_lr0075_reg0025_e020` | 0.9151 | 0.0043 |
 
 Associated evidence note:
 
 - `docs/evidence/models/biased_mf/2026-04-13_ml100k_biased_mf_inner_tuning_stage1.md`
 - `docs/evidence/models/svdpp/2026-04-13_ml100k_svdpp_inner_tuning_stage1.md`
+- `docs/evidence/models/cb_svdpp/2026-04-15_ml100k_cb_svdpp_inner_tuning_stage1.md`
 
 These tuning studies establish two important points. First, the original draft
 defaults were in fact weak enough to suppress the model family's potential.
 Second, the no-leakage tuning path is now operational, so future improvements
 can be made without compromising the benchmark contract.
+
+For `cb_svdpp`, the first stage1 study also gives a more specific signal: the
+winning candidate is not an `alpha`-only tweak. The best result comes from a
+moderated joint profile with slightly larger latent rank, slightly fewer
+clusters, lower learning rate, and stronger regularization. That reduces mean
+validation RMSE from `0.9265` to `0.9151`, an absolute gain of `0.0114`.
 
 ### 7.0.4 First `stage1_tuned` Official `ml100k` Benchmarks
 
@@ -530,6 +538,37 @@ contract. Second, it gives the first real signal on quality/cost tradeoff:
 This is therefore a promising but still provisional result. The next correct
 step is not immediate promotion, but controlled tuning of the `cb_svdpp`
 profile before any clean benchmark anchor is claimed.
+
+### 7.0.8 First `stage1_tuned` Official `cb_svdpp` Benchmark
+
+After the inner stage1 study, the winning `cb_svdpp` candidate was promoted
+into a versioned config and benchmarked on the official outer `u1` to `u5`
+folds.
+
+| Dataset | Model | Config | Git State | Test RMSE Mean | Test RMSE Std | Fit Time Mean (s) |
+| --- | --- | --- | --- | ---: | ---: | ---: |
+| `ml100k` | `cb_svdpp` | `stage1_tuned` | `59d9e8b`, dirty | 0.9193 | 0.0076 | 510.15 |
+
+Associated evidence note:
+
+- `docs/evidence/models/cb_svdpp/2026-04-15_ml100k_cb_svdpp_stage1_tuned_benchmark.md`
+
+This is the strongest `cb_svdpp` readout currently present in the repository.
+Relative to the draft official `cb_svdpp` benchmark, the tuned profile improves
+mean test RMSE from `0.9259` to `0.9193`, an absolute gain of `0.0066`.
+
+More importantly, this provisional tuned `cb_svdpp` result now beats both
+current reference families on `ml100k`:
+
+- it improves over the clean tuned `biased_mf` anchor by `0.0178` RMSE
+- it improves over the clean tuned `svdpp` anchor by `0.0047` RMSE
+- it remains much cheaper than clean tuned `svdpp`, at about `0.37x` its mean
+  fit time
+
+This is still not a final anchor because the workspace was dirty during the
+benchmark and only one model seed has been evaluated. But it is now the
+strongest current signal that the clustering-based extension may be genuinely
+competitive on `ml100k` rather than merely plausible in theory.
 
 ### 7.1 Main Model Comparisons
 

@@ -202,7 +202,11 @@ def test_run_ml100k_inner_tuning_aggregates_candidates(
     summary = json.loads((Path(payload["benchmark_dir"]) / "summary.json").read_text(encoding="utf-8"))
 
     assert payload["best_candidate"] == "alt"
+    assert summary["measurement"]["sample_unit"] == "inner_tuning_fold_run"
+    assert summary["measurement"]["measured_sample_count"] == 2
     assert summary["best_candidate"]["candidate_id"] == "alt"
+    assert summary["best_candidate"]["aggregate"]["validation_rmse"]["count"] == 2
+    assert summary["best_candidate"]["aggregate"]["training_wall_clock_seconds"]["coefficient_of_variation"] >= 0.0
     assert len(summary["candidates"]) == 2
     assert [candidate["candidate_id"] for candidate in summary["candidates"]] == ["alt", "baseline"]
 
@@ -343,4 +347,5 @@ def test_run_ml100k_inner_tuning_supports_cb_svdpp_and_counts_cluster_time(
 
     assert payload["best_candidate"] == "alpha05"
     assert summary["model"] == "cb_svdpp"
+    assert summary["measurement"]["time_metric"] == "training_wall_clock_seconds"
     assert summary["best_candidate"]["aggregate"]["training_wall_clock_seconds"]["mean"] == 17.5

@@ -166,6 +166,54 @@
         }
       }
     },
+    "measurement": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "time_metric",
+        "time_metric_unit",
+        "time_metric_semantics",
+        "sample_unit",
+        "warmup_policy",
+        "warmup_sample_count",
+        "measured_sample_count"
+      ],
+      "properties": {
+        "time_metric": {
+          "type": "string",
+          "minLength": 1
+        },
+        "time_metric_unit": {
+          "const": "seconds"
+        },
+        "time_metric_semantics": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sample_unit": {
+          "type": "string",
+          "minLength": 1
+        },
+        "warmup_policy": {
+          "enum": ["none", "separate_unmeasured", "included_in_measurement"]
+        },
+        "warmup_sample_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "measured_sample_count": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "notes": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
     "inputs": {
       "type": "object",
       "additionalProperties": false,

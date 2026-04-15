@@ -119,6 +119,12 @@ Ein Benchmark-Manifest muss mindestens enthalten:
 
 Optional, aber dringend empfohlen:
 
+- `measurement.time_metric`
+- `measurement.time_metric_semantics`
+- `measurement.sample_unit`
+- `measurement.warmup_policy`
+- `measurement.warmup_sample_count`
+- `measurement.measured_sample_count`
 - `inputs.run_manifest_paths`
 - `inputs.benchmark_ids`
 - `inputs.benchmark_manifest_paths`
@@ -136,6 +142,9 @@ Hinweis:
 - Fuer Multi-Seed-Benchmarks muessen `inputs.benchmark_ids`,
   `inputs.benchmark_manifest_paths` und `inputs.model_seeds` vollstaendig
   befuellt sein.
+- Wenn ein Benchmark einen `measurement`-Block fuehrt, beschreibt dieser die
+  kanonische Zeitmetrik, deren Semantik, die Warmup-Politik und die Zahl der
+  gemessenen Samples maschinenlesbar.
 - Fuer `started`, `failed` oder `cancelled` Benchmarks duerfen diese Listen leer
   sein, wenn der Prozess vor dem ersten gueltigen Run endet.
 - Seed-Benchmarks, die in einem Multi-Seed-Readout aggregiert werden, muessen

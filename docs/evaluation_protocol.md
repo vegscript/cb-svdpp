@@ -139,6 +139,16 @@ Ein reproduzierbarer Benchmark muss explizit nennen:
 - exaktes Kommando oder Run-Profil
 - welche Zeitmetrik verglichen wird
 
+Empfohlen ist zusaetzlich ein maschinenlesbarer `measurement`-Block im
+Benchmark-Manifest mit:
+
+- `time_metric`
+- `time_metric_semantics`
+- `sample_unit`
+- `warmup_policy`
+- `warmup_sample_count`
+- `measured_sample_count`
+
 Fuer vergleichbare Fit-Zeit-Claims gilt:
 
 - bei Standard-MF-Modellen ist `training_wall_clock_seconds` die kanonische

@@ -144,6 +144,8 @@ def test_run_biased_mf_experiment_supports_ml100k_paper_faithful_split(
     assert manifest["status"] == "completed"
     assert manifest["dataset"]["split_family"] == "paper_faithful_ml100k_v1"
     assert manifest["dataset"]["split_id"] == "paper_faithful_ml100k_v1_u1"
+    assert metrics["model"]["config"]["training_backend"] == "auto"
+    assert metrics["model"]["training_backend_effective"] in {"python", "numba"}
     assert metrics["split"]["has_validation"] is False
     assert metrics["metrics"]["validation_rmse"] is None
     assert metrics["metrics"]["test_rmse"] >= 0.0

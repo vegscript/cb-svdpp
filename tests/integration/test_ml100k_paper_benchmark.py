@@ -281,10 +281,16 @@ def test_run_ml100k_paper_benchmark_reuses_existing_runs_and_aggregates(
     assert benchmark_manifest["runtime"]["threading"]["env_mkl_num_threads"] == "1"
     assert benchmark_manifest["runtime"]["threading"]["env_openblas_num_threads"] == "1"
     assert benchmark_manifest["runtime"]["threading"]["env_numexpr_num_threads"] == "1"
+    assert benchmark_manifest["measurement"]["sample_unit"] == "official_fold_run"
+    assert benchmark_manifest["measurement"]["measured_sample_count"] == 5
     assert len(benchmark_manifest["inputs"]["run_ids"]) == 5
     assert calls == [2, 3, 4, 5]
+    assert summary["measurement"]["warmup_policy"] == "none"
     assert summary["aggregate"]["test_rmse"]["mean"] > 0.0
     assert summary["aggregate"]["test_rmse"]["std"] >= 0.0
+    assert summary["aggregate"]["test_rmse"]["count"] == 5
+    assert summary["aggregate"]["test_rmse"]["median"] > 0.0
+    assert summary["aggregate"]["training_wall_clock_seconds"]["coefficient_of_variation"] >= 0.0
     assert [fold["fold"] for fold in summary["folds"]] == ["u1", "u2", "u3", "u4", "u5"]
 
 
@@ -430,5 +436,7 @@ def test_run_ml100k_paper_benchmark_supports_cb_svdpp_and_counts_cluster_time(
 
     assert calls == [1, 2, 3, 4, 5]
     assert summary["model"] == "cb_svdpp"
+    assert summary["measurement"]["time_metric"] == "training_wall_clock_seconds"
     assert summary["aggregate"]["training_wall_clock_seconds"]["mean"] == 75.0
+    assert summary["aggregate"]["training_wall_clock_seconds"]["count"] == 5
     assert summary["folds"][0]["training_wall_clock_seconds"] == 25.0

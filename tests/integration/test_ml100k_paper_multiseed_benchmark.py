@@ -239,8 +239,12 @@ def test_run_ml100k_paper_multiseed_benchmark_aggregates_seed_benchmarks(
 
     summary = json.loads((Path(payload["benchmark_dir"]) / "summary.json").read_text(encoding="utf-8"))
 
+    assert summary["measurement"]["sample_unit"] == "seed_benchmark"
+    assert summary["measurement"]["measured_sample_count"] == 3
     assert summary["aggregate"]["seed_level"]["test_rmse"]["mean"] == 0.92
     assert summary["aggregate"]["fold_run_level"]["test_rmse"]["mean"] > 0.92
+    assert summary["aggregate"]["seed_level"]["test_rmse"]["count"] == 3
+    assert summary["aggregate"]["seed_level"]["training_wall_clock_seconds"]["coefficient_of_variation"] >= 0.0
     assert len(summary["per_seed"]) == 3
 
 
@@ -343,6 +347,7 @@ def test_run_ml100k_paper_multiseed_benchmark_accepts_explicit_benchmark_manifes
     )
 
     summary = json.loads((Path(payload["benchmark_dir"]) / "summary.json").read_text(encoding="utf-8"))
+    assert summary["measurement"]["warmup_policy"] == "none"
     assert summary["aggregate"]["seed_level"]["test_rmse"]["mean"] == 0.92
 
 

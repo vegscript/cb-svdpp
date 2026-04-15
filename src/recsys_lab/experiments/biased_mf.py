@@ -55,6 +55,7 @@ def _build_biased_mf_config(
         seed=model_seed,
         init_std=float(training.get("init_std", 0.1)),
         dtype=runtime_dtype,
+        training_backend=str(training.get("training_backend", "auto")),
     )
 
 
@@ -273,6 +274,7 @@ def run_biased_mf_experiment(
                 "model": {
                     "name": "biased_mf",
                     "config": asdict(model.config),
+                    "training_backend_effective": model.training_backend_effective,
                 },
                 "timing": {
                     "training_wall_clock_seconds": training_seconds,

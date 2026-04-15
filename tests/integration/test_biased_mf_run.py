@@ -131,6 +131,8 @@ def test_run_biased_mf_experiment_writes_valid_run_artifacts(
     assert manifest["runtime"]["threading"]["env_mkl_num_threads"] == "1"
     assert manifest["runtime"]["threading"]["env_openblas_num_threads"] == "1"
     assert manifest["runtime"]["threading"]["env_numexpr_num_threads"] == "1"
+    assert metrics["model"]["config"]["training_backend"] == "auto"
+    assert metrics["model"]["training_backend_effective"] in {"python", "numba"}
     assert metrics["metrics"]["validation_rmse"] >= 0.0
     assert metrics["system_metrics"]["train_time_total"] > 0.0
     assert metrics["system_metrics"]["train_time_per_epoch"] > 0.0

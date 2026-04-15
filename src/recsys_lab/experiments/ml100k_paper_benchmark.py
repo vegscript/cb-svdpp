@@ -1,11 +1,14 @@
 from __future__ import annotations
 
-import statistics
 import traceback
 from pathlib import Path
 from typing import Any, Callable
 
 from recsys_lab.config.loader import dump_yaml_file, load_yaml_file
+from recsys_lab.experiments.benchmarking import (
+    build_benchmark_measurement,
+    summarize_scalar_samples,
+)
 from recsys_lab.experiments.biased_mf import run_biased_mf_experiment
 from recsys_lab.experiments.cb_svdpp import run_cb_svdpp_experiment
 from recsys_lab.experiments.common import (
@@ -132,17 +135,6 @@ def _runner_for_model(model_name: str) -> Callable[..., dict[str, Any]]:
     raise ValueError(f"unsupported benchmark model: {model_name}")
 
 
-def _float_summary(values: list[float]) -> dict[str, float]:
-    if not values:
-        raise ValueError("cannot summarize empty value list")
-    return {
-        "mean": float(statistics.fmean(values)),
-        "std": float(statistics.stdev(values)) if len(values) > 1 else 0.0,
-        "min": float(min(values)),
-        "max": float(max(values)),
-    }
-
-
 def _benchmark_fit_seconds(metrics: dict[str, Any]) -> float:
     timing = metrics["timing"]
     fit_seconds = float(timing["training_wall_clock_seconds"])
@@ -222,6 +214,21 @@ def run_ml100k_paper_benchmark(
 
     git = git_snapshot(root)
     allow_existing_run_reuse = not bool(git["dirty"])
+    measurement = build_benchmark_measurement(
+        time_metric="training_wall_clock_seconds",
+        time_metric_semantics=(
+            "Benchmark fit time equals training_wall_clock_seconds. "
+            "If cluster_induction_wall_clock_seconds is present, it is added for fair cb_* comparisons."
+        ),
+        sample_unit="official_fold_run",
+        measured_sample_count=5,
+        warmup_policy="none",
+        warmup_sample_count=0,
+        notes=[
+            "No separate warmup benchmark runs are executed; each official fold run is measured once.",
+            "Dispersion across measured samples is reported via std and coefficient_of_variation.",
+        ],
+    )
     with runtime_execution_context(threading_config=threading_config):
         benchmark_manifest = {
             "manifest_version": "v1",
@@ -238,6 +245,7 @@ def run_ml100k_paper_benchmark(
                 runtime_dtype=runtime_dtype,
                 device_config_payload=device_config_payload,
             ),
+            "measurement": measurement,
             "inputs": {
                 "run_ids": [],
                 "run_manifest_paths": [],
@@ -342,11 +350,12 @@ def run_ml100k_paper_benchmark(
                 "dataset": "ml100k",
                 "split_family": "paper_faithful_ml100k_v1",
                 "model": model_name,
+                "measurement": measurement,
                 "folds": per_fold,
                 "aggregate": {
-                    "train_rmse": _float_summary(train_rmses),
-                    "test_rmse": _float_summary(test_rmses),
-                    "training_wall_clock_seconds": _float_summary(training_seconds),
+                    "train_rmse": summarize_scalar_samples(train_rmses),
+                    "test_rmse": summarize_scalar_samples(test_rmses),
+                    "training_wall_clock_seconds": summarize_scalar_samples(training_seconds),
                 },
             }
             write_json(summary_path, summary_payload)
@@ -359,6 +368,8 @@ def run_ml100k_paper_benchmark(
                 f"- dataset: `ml100k`",
                 f"- split_family: `paper_faithful_ml100k_v1`",
                 f"- model: `{model_name}`",
+                f"- warmup_policy: `{measurement['warmup_policy']}`",
+                f"- measured_sample_count: `{measurement['measured_sample_count']}`",
                 "",
                 "| Fold | Run ID | Train RMSE | Test RMSE | Train Time (s) |",
                 "| --- | --- | ---: | ---: | ---: |",
@@ -374,9 +385,12 @@ def run_ml100k_paper_benchmark(
                     "",
                     "## Aggregate",
                     "",
+                    f"- test_rmse count: `{summary_payload['aggregate']['test_rmse']['count']}`",
                     f"- test_rmse mean: `{summary_payload['aggregate']['test_rmse']['mean']:.6f}`",
                     f"- test_rmse std: `{summary_payload['aggregate']['test_rmse']['std']:.6f}`",
+                    f"- test_rmse median: `{summary_payload['aggregate']['test_rmse']['median']:.6f}`",
                     f"- train_rmse mean: `{summary_payload['aggregate']['train_rmse']['mean']:.6f}`",
+                    f"- training_wall_clock_seconds cv: `{summary_payload['aggregate']['training_wall_clock_seconds']['coefficient_of_variation']:.6f}`",
                     f"- training_wall_clock_seconds mean: `{summary_payload['aggregate']['training_wall_clock_seconds']['mean']:.2f}`",
                 ]
             )
