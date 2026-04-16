@@ -270,7 +270,7 @@ class CBASVDppRecommender:
         rng = np.random.default_rng(self.config.seed)
         parameter_dtype = self._parameter_dtype()
 
-        self.global_mean = float(np.mean(data.ratings))
+        self.global_mean = data.effective_ratings_mean()
         self.rating_min = data.rating_min
         self.rating_max = data.rating_max
         self.user_bias = np.zeros(data.n_users, dtype=parameter_dtype)
@@ -307,10 +307,10 @@ class CBASVDppRecommender:
             n_clusters=self.n_item_clusters,
         )
 
-        order = np.arange(len(data), dtype=np.int64)
-        user_ids = data.user_ids
-        item_ids = data.item_ids
-        ratings = data.ratings.astype(parameter_dtype, copy=False)
+        order = data.training_row_indices()
+        user_ids = data.base_user_ids
+        item_ids = data.base_item_ids
+        ratings = data.base_ratings.astype(parameter_dtype, copy=False)
         self.epoch_durations_seconds = []
 
         for _ in range(self.config.epochs):

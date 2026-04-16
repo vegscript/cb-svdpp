@@ -129,6 +129,10 @@ def test_run_asvdpp_experiment_writes_valid_run_artifacts(
     assert metrics["model"]["split_cache"]["requested_policy"] == "auto"
     assert metrics["model"]["split_cache"]["decision_reason"] == "auto_disable_no_positive_evidence_split_family"
     assert metrics["model"]["split_cache"]["status"] == "disabled"
+    assert metrics["model"]["precomputed_index_reuse"] is True
+    assert metrics["model"]["training_index_cache"]["enabled"] is False
+    assert metrics["model"]["training_index_cache"]["user_history"]["status"] == "disabled"
+    assert metrics["model"]["training_index_cache"]["explicit_feedback"]["status"] == "disabled"
     assert metrics["model"]["explicit_summary"]["users_with_explicit_history"] == 4
     assert metrics["system_metrics"]["train_time_total"] > 0.0
     assert metrics["system_metrics"]["train_time_per_epoch"] > 0.0

@@ -56,6 +56,64 @@ class UserClusterCountIndex:
         return self.counts[start:end]
 
 
+def validate_user_history_index(
+    history_index: UserHistoryIndex,
+    *,
+    n_users: int,
+    name: str = "user_history_index",
+) -> None:
+    if history_index.indptr.shape != (n_users + 1,):
+        raise ValueError(f"{name}.indptr must have shape ({n_users + 1},)")
+    if history_index.counts.shape != (n_users,):
+        raise ValueError(f"{name}.counts must have shape ({n_users},)")
+    if history_index.norms.shape != (n_users,):
+        raise ValueError(f"{name}.norms must have shape ({n_users},)")
+    if history_index.item_indices.ndim != 1:
+        raise ValueError(f"{name}.item_indices must be 1D")
+    if int(history_index.indptr[-1]) != int(history_index.item_indices.shape[0]):
+        raise ValueError(f"{name}.indptr[-1] must match item_indices length")
+
+
+def validate_user_explicit_feedback_index(
+    explicit_feedback_index: UserExplicitFeedbackIndex,
+    *,
+    n_users: int,
+    name: str = "explicit_feedback_index",
+) -> None:
+    if explicit_feedback_index.indptr.shape != (n_users + 1,):
+        raise ValueError(f"{name}.indptr must have shape ({n_users + 1},)")
+    if explicit_feedback_index.counts.shape != (n_users,):
+        raise ValueError(f"{name}.counts must have shape ({n_users},)")
+    if explicit_feedback_index.norms.shape != (n_users,):
+        raise ValueError(f"{name}.norms must have shape ({n_users},)")
+    if explicit_feedback_index.item_indices.ndim != 1:
+        raise ValueError(f"{name}.item_indices must be 1D")
+    if explicit_feedback_index.ratings.ndim != 1:
+        raise ValueError(f"{name}.ratings must be 1D")
+    if explicit_feedback_index.item_indices.shape != explicit_feedback_index.ratings.shape:
+        raise ValueError(f"{name}.item_indices and ratings must have identical shape")
+    if int(explicit_feedback_index.indptr[-1]) != int(explicit_feedback_index.item_indices.shape[0]):
+        raise ValueError(f"{name}.indptr[-1] must match item_indices length")
+
+
+def validate_user_cluster_count_index(
+    cluster_count_index: UserClusterCountIndex,
+    *,
+    n_users: int,
+    name: str = "user_cluster_count_index",
+) -> None:
+    if cluster_count_index.indptr.shape != (n_users + 1,):
+        raise ValueError(f"{name}.indptr must have shape ({n_users + 1},)")
+    if cluster_count_index.cluster_ids.ndim != 1:
+        raise ValueError(f"{name}.cluster_ids must be 1D")
+    if cluster_count_index.counts.ndim != 1:
+        raise ValueError(f"{name}.counts must be 1D")
+    if cluster_count_index.cluster_ids.shape != cluster_count_index.counts.shape:
+        raise ValueError(f"{name}.cluster_ids and counts must have identical shape")
+    if int(cluster_count_index.indptr[-1]) != int(cluster_count_index.cluster_ids.shape[0]):
+        raise ValueError(f"{name}.indptr[-1] must match cluster_ids length")
+
+
 def build_user_history_index(
     data: RatingsData,
     *,
@@ -66,9 +124,16 @@ def build_user_history_index(
     if len(data) == 0:
         raise ValueError("cannot build user histories from empty ratings data")
 
-    order = np.lexsort((data.item_ids.astype(np.int64), data.user_ids.astype(np.int64)))
-    sorted_users = data.user_ids[order]
-    sorted_items = data.item_ids[order]
+    if data.row_indices is None:
+        selected_user_ids = data.base_user_ids
+        selected_item_ids = data.base_item_ids
+    else:
+        selected_user_ids = data.base_user_ids[data.row_indices]
+        selected_item_ids = data.base_item_ids[data.row_indices]
+
+    order = np.lexsort((selected_item_ids.astype(np.int64), selected_user_ids.astype(np.int64)))
+    sorted_users = selected_user_ids[order]
+    sorted_items = selected_item_ids[order]
 
     is_new_pair = np.ones(sorted_users.shape[0], dtype=bool)
     is_new_pair[1:] = (sorted_users[1:] != sorted_users[:-1]) | (
@@ -105,10 +170,19 @@ def build_user_explicit_feedback_index(
     if len(data) == 0:
         raise ValueError("cannot build explicit feedback index from empty ratings data")
 
-    order = np.lexsort((data.item_ids.astype(np.int64), data.user_ids.astype(np.int64)))
-    sorted_users = data.user_ids[order]
-    sorted_items = data.item_ids[order]
-    sorted_ratings = data.ratings[order]
+    if data.row_indices is None:
+        selected_user_ids = data.base_user_ids
+        selected_item_ids = data.base_item_ids
+        selected_ratings = data.base_ratings
+    else:
+        selected_user_ids = data.base_user_ids[data.row_indices]
+        selected_item_ids = data.base_item_ids[data.row_indices]
+        selected_ratings = data.base_ratings[data.row_indices]
+
+    order = np.lexsort((selected_item_ids.astype(np.int64), selected_user_ids.astype(np.int64)))
+    sorted_users = selected_user_ids[order]
+    sorted_items = selected_item_ids[order]
+    sorted_ratings = selected_ratings[order]
 
     is_new_pair = np.ones(sorted_users.shape[0], dtype=bool)
     is_new_pair[1:] = (sorted_users[1:] != sorted_users[:-1]) | (

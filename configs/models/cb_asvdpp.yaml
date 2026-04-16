@@ -21,6 +21,9 @@ training:
   lambda_qC: 0.02
   lambda_xC: 0.02
   lambda_yC: 0.02
+  init_std: 0.1
+  dtype: float32
+  implicit_policy: ratings_as_implicit
   residual_weight_contract: detached
 
 clustering:
@@ -28,7 +31,10 @@ clustering:
   n_item_clusters: 100
   alpha: 0.10
   algorithm: kmeans
+  kmeans_n_init: 10
 
 notes:
   - draft defaults only
-  - cb optimization not exact-paper-claim-ready
+  - v1 cb contract uses train-only biased_mf latent induction
+  - r_star is diagnostic_only in v1
+  - explicit residual weights follow the detached repo contract

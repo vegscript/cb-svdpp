@@ -4,6 +4,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
+from recsys_lab.data.histories import build_user_history_index
 from recsys_lab.data.processed import RatingsData
 from recsys_lab.metrics import rmse
 import recsys_lab.models.svdpp as svdpp_module
@@ -131,3 +132,118 @@ def test_svdpp_rejects_unknown_training_backend() -> None:
 
     with pytest.raises(ValueError, match="training_backend"):
         model.fit(data)
+
+
+def test_svdpp_predict_many_matches_scalar_predict_on_repeated_subset() -> None:
+    data = _toy_ratings_data()
+    model = SVDppRecommender(
+        SVDppConfig(
+            latent_dim=5,
+            epochs=6,
+            learning_rate=0.02,
+            lambda_b=0.01,
+            lambda_p=0.01,
+            lambda_q=0.01,
+            lambda_y=0.01,
+            seed=19,
+            init_std=0.04,
+            dtype="float32",
+        )
+    )
+    model.fit(data)
+    assert model._user_context_cache is None
+
+    user_ids = np.asarray([2, 0, 2, 1, 0], dtype=np.int32)
+    item_ids = np.asarray([3, 1, 1, 0, 2], dtype=np.int32)
+    batch_predictions = model.predict_many(user_ids, item_ids, clip=False)
+    assert model._user_context_cache is not None
+    cached_contexts = model._user_context_cache.copy()
+    scalar_predictions = np.asarray(
+        [model.predict(int(user_id), int(item_id), clip=False) for user_id, item_id in zip(user_ids, item_ids)],
+        dtype=np.float64,
+    )
+
+    np.testing.assert_allclose(batch_predictions, scalar_predictions, rtol=1e-6, atol=1e-6)
+    np.testing.assert_allclose(model._user_context_cache, cached_contexts, rtol=0.0, atol=0.0)
+
+
+def test_svdpp_fit_accepts_precomputed_user_histories_without_changing_result() -> None:
+    data = _toy_ratings_data()
+    config = SVDppConfig(
+        latent_dim=4,
+        epochs=4,
+        learning_rate=0.015,
+        lambda_b=0.02,
+        lambda_p=0.03,
+        lambda_q=0.04,
+        lambda_y=0.05,
+        seed=41,
+        init_std=0.02,
+        dtype="float64",
+        training_backend="python",
+    )
+
+    baseline_model = SVDppRecommender(config)
+    baseline_model.fit(data)
+
+    precomputed_histories = build_user_history_index(data, dtype=config.dtype)
+    optimized_model = SVDppRecommender(config)
+    optimized_model.fit(data, user_histories=precomputed_histories)
+
+    np.testing.assert_allclose(optimized_model.user_bias, baseline_model.user_bias, rtol=1e-12, atol=1e-12)
+    np.testing.assert_allclose(optimized_model.item_bias, baseline_model.item_bias, rtol=1e-12, atol=1e-12)
+    np.testing.assert_allclose(optimized_model.user_factors, baseline_model.user_factors, rtol=1e-12, atol=1e-12)
+    np.testing.assert_allclose(optimized_model.item_factors, baseline_model.item_factors, rtol=1e-12, atol=1e-12)
+    np.testing.assert_allclose(
+        optimized_model.implicit_factors,
+        baseline_model.implicit_factors,
+        rtol=1e-12,
+        atol=1e-12,
+    )
+    np.testing.assert_allclose(
+        optimized_model.predict_dataset(data, clip=False),
+        baseline_model.predict_dataset(data, clip=False),
+        rtol=1e-12,
+        atol=1e-12,
+    )
+
+
+def test_svdpp_subset_view_matches_materialized_subset_training_result() -> None:
+    data = _toy_ratings_data()
+    subset_view = data.subset(np.asarray([0, 1, 3, 4, 6, 7], dtype=np.int64), name="toy:train_view")
+    subset_materialized = subset_view.materialize(force_copy=True)
+    config = SVDppConfig(
+        latent_dim=4,
+        epochs=4,
+        learning_rate=0.015,
+        lambda_b=0.02,
+        lambda_p=0.03,
+        lambda_q=0.04,
+        lambda_y=0.05,
+        seed=23,
+        init_std=0.02,
+        dtype="float64",
+        training_backend="python",
+    )
+
+    view_model = SVDppRecommender(config)
+    materialized_model = SVDppRecommender(config)
+    view_model.fit(subset_view)
+    materialized_model.fit(subset_materialized)
+
+    np.testing.assert_allclose(view_model.user_bias, materialized_model.user_bias, rtol=1e-12, atol=1e-12)
+    np.testing.assert_allclose(view_model.item_bias, materialized_model.item_bias, rtol=1e-12, atol=1e-12)
+    np.testing.assert_allclose(view_model.user_factors, materialized_model.user_factors, rtol=1e-12, atol=1e-12)
+    np.testing.assert_allclose(view_model.item_factors, materialized_model.item_factors, rtol=1e-12, atol=1e-12)
+    np.testing.assert_allclose(
+        view_model.implicit_factors,
+        materialized_model.implicit_factors,
+        rtol=1e-12,
+        atol=1e-12,
+    )
+    np.testing.assert_allclose(
+        view_model.predict_dataset(subset_materialized, clip=False),
+        materialized_model.predict_dataset(subset_materialized, clip=False),
+        rtol=1e-12,
+        atol=1e-12,
+    )

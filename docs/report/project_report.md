@@ -293,9 +293,9 @@ This section should contain only stable and evidence-backed results.
 ### 7.0 Initial Local POC Baseline
 
 The first stable end-to-end results are local proof-of-concept baselines for
-`biased_mf`, `svdpp`, `asymmetric_svd`, `asvdpp`, and `cb_svdpp` on
-`ml_latest_small`. These runs are evidence-backed and manifest-valid, but they
-are not part of the final benchmark ladder.
+`biased_mf`, `svdpp`, `asymmetric_svd`, `asvdpp`, `cb_svdpp`, and `cb_asvdpp`
+on `ml_latest_small`. These runs are evidence-backed and manifest-valid, but
+they are not part of the final benchmark ladder.
 
 | Dataset | Model | Split | Train RMSE | Validation RMSE | Test RMSE | Auxiliary Fit Time (s) | Main Train Time (s) | End-to-End Fit Time (s) |
 | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |
@@ -304,6 +304,7 @@ are not part of the final benchmark ladder.
 | `ml_latest_small` | `asymmetric_svd` | `benchmark_random_v1`, seed 1 | 0.7729 | 0.8533 | 0.8730 | 0.00 | 460.52 | 460.52 |
 | `ml_latest_small` | `asvdpp` | `benchmark_random_v1`, seed 1 | 0.4386 | 0.8708 | 0.8881 | 0.00 | 1478.63 | 1478.63 |
 | `ml_latest_small` | `cb_svdpp` | `benchmark_random_v1`, seed 1 | 0.5548 | 0.8549 | 0.8724 | 123.23 | 478.51 | 601.74 |
+| `ml_latest_small` | `cb_asvdpp` | `benchmark_random_v1`, seed 1 | 0.5288 | 0.8567 | 0.8739 | 73.98 | 1341.40 | 1415.38 |
 
 Associated evidence note:
 
@@ -312,6 +313,7 @@ Associated evidence note:
 - `docs/evidence/models/asymmetric_svd/2026-04-12_ml_latest_small_asymmetric_svd_local_poc_baseline.md`
 - `docs/evidence/models/asvdpp/2026-04-13_ml_latest_small_asvdpp_local_poc_baseline.md`
 - `docs/evidence/models/cb_svdpp/2026-04-13_ml_latest_small_cb_svdpp_local_poc_baseline.md`
+- `docs/evidence/models/cb_asvdpp/2026-04-15_ml_latest_small_cb_asvdpp_local_poc_baseline.md`
 
 The current local comparison suggests that the implicit-feedback extension of
 `svdpp` improves rating prediction quality slightly on `ml_latest_small`, but
@@ -338,6 +340,15 @@ validation RMSE; that remains with `asymmetric_svd`. The CB result is therefore
 strong but not conclusive, and it must be reported together with its two-stage
 fit cost: `123.23` seconds of cluster induction plus `478.51` seconds of main
 training.
+
+The first local `cb_asvdpp` baseline validates the full compositional ladder in
+code, but it is a negative draft result on `ml_latest_small`. It improves over
+`biased_mf`, `svdpp`, and `asvdpp`, yet it does not beat `asymmetric_svd` or
+the current `cb_svdpp` local anchor. It is also materially more expensive than
+`cb_svdpp`, with `73.98` seconds of cluster induction plus `1341.40` seconds of
+main training. Under the present detached residual contract and draft
+hyperparameters, `cb_asvdpp` is therefore implemented and stable, but not
+promoted.
 
 ### 7.0.1 First Official `ml100k` Fold Readout
 
@@ -405,12 +416,14 @@ only from `u1.base` and `u2.base` and rank candidates by mean validation RMSE.
 | `biased_mf` | `stage1` | `u1`, `u2` | `rank064_lr0075_reg0030_e025` | 0.9334 | 0.0047 |
 | `svdpp` | `stage1` | `u1`, `u2` | `rank080_lr0050_reg0030_e020` | 0.9207 | 0.0029 |
 | `cb_svdpp` | `stage1` | `u1`, `u2` | `rank064_uc080_ic080_a010_lr0075_reg0025_e020` | 0.9151 | 0.0043 |
+| `cb_asvdpp` | `stage1` | `u1`, `u2` | `rank064_uc080_ic080_a010_lr0075_reg0025_e020` | 0.9130 | 0.0055 |
 
 Associated evidence note:
 
 - `docs/evidence/models/biased_mf/2026-04-13_ml100k_biased_mf_inner_tuning_stage1.md`
 - `docs/evidence/models/svdpp/2026-04-13_ml100k_svdpp_inner_tuning_stage1.md`
 - `docs/evidence/models/cb_svdpp/2026-04-15_ml100k_cb_svdpp_inner_tuning_stage1.md`
+- `docs/evidence/models/cb_asvdpp/2026-04-15_ml100k_cb_asvdpp_inner_tuning_stage1.md`
 
 These tuning studies establish two important points. First, the original draft
 defaults were in fact weak enough to suppress the model family's potential.
@@ -422,6 +435,14 @@ winning candidate is not an `alpha`-only tweak. The best result comes from a
 moderated joint profile with slightly larger latent rank, slightly fewer
 clusters, lower learning rate, and stronger regularization. That reduces mean
 validation RMSE from `0.9265` to `0.9151`, an absolute gain of `0.0114`.
+
+The first `cb_asvdpp` stage1 study strengthens that signal rather than
+weakening it. Using the same winner shape as `cb_svdpp`, but with the full
+explicit residual block active, the best `cb_asvdpp` candidate reaches
+`0.9130` mean validation RMSE. That is `0.0123` better than the `cb_asvdpp`
+draft baseline and `0.0021` better than the current `cb_svdpp` stage1 winner.
+This is strong enough to justify a promoted `cb_asvdpp` stage1 profile and a
+first official outer benchmark.
 
 ### 7.0.4 First `stage1_tuned` Official `ml100k` Benchmarks
 
@@ -569,6 +590,179 @@ This is still not a final anchor because the workspace was dirty during the
 benchmark and only one model seed has been evaluated. But it is now the
 strongest current signal that the clustering-based extension may be genuinely
 competitive on `ml100k` rather than merely plausible in theory.
+
+### 7.0.9 Clean Official `cb_svdpp` Confirmation
+
+The tuned `cb_svdpp` signal has now also been confirmed on a genuinely clean
+Git state by rerunning the official `u1` to `u5` benchmark from an isolated
+clean clone at commit `d76e9d4`.
+
+| Dataset | Model | Config | Git State | Test RMSE Mean | Test RMSE Std | Fit Time Mean (s) |
+| --- | --- | --- | --- | ---: | ---: | ---: |
+| `ml100k` | `cb_svdpp` | `stage1_tuned` | `d76e9d4`, clean | 0.9193 | 0.0076 | 406.41 |
+
+Associated evidence note:
+
+- `docs/evidence/models/cb_svdpp/2026-04-15_ml100k_cb_svdpp_stage1_tuned_clean_benchmark.md`
+
+This clean rerun is important because it closes the methodological gap left by
+the earlier dirty benchmark. The predictive result is not just similar; it is
+identical at the reported aggregate level. The clean benchmark reproduces the
+same mean test RMSE of `0.9193`, which confirms that the earlier tuned CB
+signal was not an artifact of the dirty workspace.
+
+Relative to the current clean anchors:
+
+- clean single-seed `cb_svdpp` improves over clean tuned `biased_mf` by
+  `0.0178` RMSE
+- clean single-seed `cb_svdpp` improves over clean tuned `svdpp` by
+  `0.0047` RMSE
+- clean single-seed `cb_svdpp` costs about `1.47x` clean tuned `biased_mf`
+  and about `0.29x` clean tuned `svdpp`
+
+This is therefore the strongest clean CB result currently in the repository.
+It is still not the final CB benchmark claim, because only one model seed has
+been confirmed so far. The next correct step is clean multi-seed confirmation
+on the same frozen `stage1_tuned` profile.
+
+### 7.0.10 Clean Multi-Seed `cb_svdpp` Anchor
+
+The repository now also has a clean multi-seed official `cb_svdpp` anchor on
+`ml100k`. Seeds `1`, `2`, and `3` were benchmarked separately on the official
+`u1` to `u5` folds from the same isolated clean clone and then aggregated via
+explicit benchmark manifest paths.
+
+| Dataset | Model | Scope | Git State | Test RMSE Mean | Seed-Level Std | Fit Time Mean (s) |
+| --- | --- | --- | --- | ---: | ---: | ---: |
+| `ml100k` | `cb_svdpp` | `stage1_tuned`, seeds `1,2,3` | `d76e9d4`, clean | 0.9190 | 0.0009 | 357.33 |
+
+Associated evidence note:
+
+- `docs/evidence/models/cb_svdpp/2026-04-15_ml100k_cb_svdpp_stage1_tuned_clean_multiseed.md`
+
+This result materially strengthens the CB story in the repository. The model is
+no longer supported only by a clean single-seed rerun; it now has a clean
+three-seed official benchmark anchor with a very small seed-level dispersion.
+
+Relative to the current clean multi-seed anchors:
+
+- clean multi-seed `cb_svdpp` improves over clean tuned `biased_mf` by
+  `0.0181` RMSE
+- clean multi-seed `cb_svdpp` improves over clean tuned `svdpp` by
+  `0.0050` RMSE
+- clean multi-seed `cb_svdpp` costs about `1.29x` clean tuned `biased_mf`
+  and about `0.26x` clean tuned `svdpp`
+
+This is now the strongest clean official result in the repository on `ml100k`.
+The next question is no longer whether the CB family can beat the present
+anchors on this dataset. It can. The next question is whether that advantage
+holds under broader search and on larger datasets, and whether `cb_asvdpp` can
+improve further on the same evaluation contract.
+
+### 7.0.11 Targeted `cb_svdpp` Stage2 Search
+
+After the clean multi-seed anchor was established, the repository ran a bounded
+second inner-tuning study around the current `cb_svdpp` winner instead of
+immediately widening the search arbitrarily. The goal was to check whether a
+small local search around the current profile could justify another outer
+benchmark.
+
+| Model | Selection Stage | Outer Base Folds | Winning Candidate | Validation RMSE Mean | Validation RMSE Std |
+| --- | --- | --- | --- | ---: | ---: |
+| `cb_svdpp` | `stage2` | `u1`, `u2`, `u3` | `rank064_uc080_ic080_a015_lr0075_reg0025_e020` | 0.9151 | 0.0032 |
+
+Associated evidence note:
+
+- `docs/evidence/models/cb_svdpp/2026-04-15_ml100k_cb_svdpp_inner_tuning_stage2.md`
+
+This result is deliberately not promoted as a new tuned benchmark profile. The
+bounded search does find a slightly better candidate than the stage2 baseline
+inside the same study, but the gain is only `0.000785` validation RMSE. That is
+too small to justify a new promoted config or a stronger claim without outer
+benchmark confirmation.
+
+The practical conclusion is therefore conservative: the current clean multi-seed
+`cb_svdpp` anchor remains the repo's active CB reference point, while the
+`alpha=0.15` stage2 winner is kept only as a plausible next benchmark
+candidate.
+
+### 7.0.12 First Local `cb_asvdpp` POC
+
+The repository now also has its first completed end-to-end `cb_asvdpp` run on
+the local `ml_latest_small` contract. This run is intentionally local and
+draft-scoped; it exists to verify the composed model path before any official
+`ml100k` benchmark claim is attempted.
+
+- train RMSE: `0.5288`
+- validation RMSE: `0.8567`
+- test RMSE: `0.8739`
+- cluster induction wall-clock time: `73.98` seconds
+- main training wall-clock time: `1341.40` seconds
+- end-to-end fit time: `1415.38` seconds
+
+Associated evidence note:
+
+- `docs/evidence/models/cb_asvdpp/2026-04-15_ml_latest_small_cb_asvdpp_local_poc_baseline.md`
+
+This readout is methodologically useful for two reasons. First, it confirms
+that the repository can execute the full `cb_asvdpp` path under the accepted
+`D-003` and `D-004` contracts with valid run artifacts. Second, it gives an
+important negative signal: on the current local POC dataset and draft profile,
+`cb_asvdpp` does not improve over either `asymmetric_svd` or the current
+`cb_svdpp` local anchor, while costing substantially more than `cb_svdpp` in
+end-to-end fit time.
+
+The correct next step is therefore not immediate promotion, but controlled
+`ml100k` tuning on the established leakagesafe inner-validation path.
+
+### 7.0.13 Leakagesafe `cb_asvdpp` Stage1 Inner Tuning
+
+That next step is now complete. The repository has run the first leakagesafe
+`cb_asvdpp` stage1 search on `ml100k` using the established
+`paper_faithful_ml100k_inner_v1` contract.
+
+| Model | Selection Stage | Outer Folds | Winning Candidate | Validation RMSE Mean | Validation RMSE Std |
+| --- | --- | --- | --- | ---: | ---: |
+| `cb_asvdpp` | `stage1` | `u1`, `u2` | `rank064_uc080_ic080_a010_lr0075_reg0025_e020` | 0.9130 | 0.0055 |
+
+Associated evidence note:
+
+- `docs/evidence/models/cb_asvdpp/2026-04-15_ml100k_cb_asvdpp_inner_tuning_stage1.md`
+
+This result matters because it is not just an internal consistency check. It is
+the first benchmark-relevant signal that the composed `cb_asvdpp` family can
+outperform the current `cb_svdpp` tuning winner on the same no-leakage
+selection protocol. Relative to the current `cb_svdpp` stage1 winner, the gain
+is `0.0021` validation RMSE. That is small enough to need outer confirmation,
+but large enough to justify promotion into a versioned `stage1_tuned` config.
+
+### 7.0.14 First Official `ml100k` `cb_asvdpp` Benchmark
+
+The promoted `cb_asvdpp` stage1 profile has now also been benchmarked on the
+official outer `u1` to `u5` folds.
+
+| Dataset | Model | Config | Git State | Test RMSE Mean | Test RMSE Std | Fit Time Mean (s) |
+| --- | --- | --- | --- | ---: | ---: | ---: |
+| `ml100k` | `cb_asvdpp` | `stage1_tuned` | dirty | 0.9174 | 0.0075 | 477.52 |
+
+Associated evidence note:
+
+- `docs/evidence/models/cb_asvdpp/2026-04-15_ml100k_cb_asvdpp_stage1_tuned_benchmark.md`
+
+This is a strong but still provisional result. At the RMSE level, the first
+official `cb_asvdpp` readout is better than every current anchor in the report,
+including the clean multi-seed `cb_svdpp` anchor. Relative to the clean anchor
+set:
+
+- it improves over clean multi-seed `biased_mf` by `0.0197` RMSE
+- it improves over clean multi-seed `svdpp` by `0.0066` RMSE
+- it improves over clean multi-seed `cb_svdpp` by `0.0016` RMSE
+
+That does not make it the new final repository champion yet. The benchmark was
+recorded on a dirty workspace, and the model still inherits the accepted
+detached residual contract from `D-003`. The correct next step is therefore a
+clean rerun of the same `stage1_tuned` profile, followed by clean multi-seed
+confirmation.
 
 ### 7.1 Main Model Comparisons
 

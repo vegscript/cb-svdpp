@@ -11,6 +11,10 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 
 from recsys_lab.data.ml100k_official_splits import official_ml100k_split_paths, read_legacy_ml100k_split
+from recsys_lab.data.processed import (
+    build_interaction_array_manifest_payload,
+    write_interaction_array_artifacts,
+)
 
 
 MODERN_REQUIRED_FILES = {
@@ -50,6 +54,9 @@ LEGACY_1M_USER_FIELDS = ["userId", "gender", "age", "occupation", "zipCode"]
 class PreparedDatasetArtifacts:
     manifest_path: Path
     interactions_path: Path
+    user_ids_array_path: Path
+    item_ids_array_path: Path
+    ratings_array_path: Path
     user_mapping_path: Path
     item_mapping_path: Path
     movies_path: Path
@@ -589,6 +596,9 @@ def prepare_movielens_explicit_dataset(
     artifacts = PreparedDatasetArtifacts(
         manifest_path=output_dir / f"{prefix}_manifest.json",
         interactions_path=output_dir / f"{prefix}_interactions.parquet",
+        user_ids_array_path=output_dir / f"{prefix}_user_ids.npy",
+        item_ids_array_path=output_dir / f"{prefix}_item_ids.npy",
+        ratings_array_path=output_dir / f"{prefix}_ratings.npy",
         user_mapping_path=output_dir / f"{prefix}_user_mapping.parquet",
         item_mapping_path=output_dir / f"{prefix}_item_mapping.parquet",
         movies_path=output_dir / f"{prefix}_movies.parquet",
@@ -609,6 +619,13 @@ def prepare_movielens_explicit_dataset(
         dataset_short_name=dataset_short_name,
         format_family=actual_format_family,
         ratings_records=ratings_records,
+    )
+    interaction_array_artifacts = write_interaction_array_artifacts(
+        user_ids=interactions_table["user_idx"].to_numpy().astype("int32", copy=False),
+        item_ids=interactions_table["item_idx"].to_numpy().astype("int32", copy=False),
+        ratings=interactions_table["rating"].to_numpy(),
+        output_dir=output_dir,
+        prefix=prefix,
     )
 
     manifest_payload = {
@@ -639,6 +656,7 @@ def prepare_movielens_explicit_dataset(
         },
         "artifacts": {
             "interactions": str(artifacts.interactions_path),
+            "interaction_arrays": build_interaction_array_manifest_payload(interaction_array_artifacts),
             "user_mapping": str(artifacts.user_mapping_path),
             "item_mapping": str(artifacts.item_mapping_path),
             "movies": str(artifacts.movies_path),

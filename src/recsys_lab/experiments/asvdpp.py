@@ -9,6 +9,10 @@ from typing import Any
 from recsys_lab.config.loader import dump_yaml_file, load_yaml_file
 from recsys_lab.data.histories import build_user_explicit_feedback_index, build_user_history_index
 from recsys_lab.data.processed import load_processed_dataset_manifest, load_ratings_data_from_manifest
+from recsys_lab.data.training_index_cache import (
+    load_or_build_user_explicit_feedback_index,
+    load_or_build_user_history_index,
+)
 from recsys_lab.data.splitters import random_split_with_train_coverage
 from recsys_lab.experiments.common import (
     SplitConfig,
@@ -17,6 +21,7 @@ from recsys_lab.experiments.common import (
     git_snapshot,
     ratings_summary,
     resolve_runtime_dtype,
+    split_id,
     split_summary,
     utc_timestamp,
     write_json,
@@ -69,6 +74,8 @@ def run_asvdpp_experiment(
     repo_root: Path | None = None,
     command: str | None = None,
     use_split_cache: bool | None = None,
+    reuse_precomputed_indices: bool = True,
+    use_training_index_cache: bool = False,
 ) -> dict[str, Any]:
     root = (repo_root or discover_repo_root()).resolve()
 
@@ -120,6 +127,7 @@ def run_asvdpp_experiment(
         f"--runtime-config {repo_path_string(runtime_config_path, repo_root=root)} "
         f"--device-config {repo_path_string(device_config_path, repo_root=root)} "
         f"{'--use-split-cache ' if split_cache_policy.effective_use_cache else ''}"
+        f"{'' if use_training_index_cache else '--disable-training-index-cache '}"
         f"--split-seed {split_config.seed} --model-seed {model_seed}"
     )
 
@@ -161,6 +169,8 @@ def run_asvdpp_experiment(
                 "use_split_cache": split_cache_policy.effective_use_cache,
                 "use_split_cache_policy_requested": split_cache_policy.requested_policy,
                 "use_split_cache_decision_reason": split_cache_policy.decision_reason,
+                "reuse_precomputed_indices": reuse_precomputed_indices,
+                "use_training_index_cache": use_training_index_cache,
                 "loaded_configs": {
                     "processed_manifest": processed_manifest,
                     "model": model_config_payload,
@@ -203,8 +213,34 @@ def run_asvdpp_experiment(
                 use_cache=split_cache_policy.effective_use_cache,
             )
             split = split_result.split
-            explicit_index = build_user_explicit_feedback_index(split.train, dtype=runtime_dtype)
-            implicit_index = build_user_history_index(split.train, dtype=runtime_dtype)
+            explicit_index_result = load_or_build_user_explicit_feedback_index(
+                data=split.train,
+                dtype=runtime_dtype,
+                dataset_short_name=dataset_short_name,
+                split_family="benchmark_random_v1",
+                split_id=split_id_for_cache,
+                processed_manifest_path=processed_manifest_path,
+                repo_root=root,
+                runtime_config_payload=runtime_config_payload,
+                use_cache=use_training_index_cache,
+            )
+            implicit_index_result = load_or_build_user_history_index(
+                data=split.train,
+                dtype=runtime_dtype,
+                dataset_short_name=dataset_short_name,
+                split_family="benchmark_random_v1",
+                split_id=split_id_for_cache,
+                processed_manifest_path=processed_manifest_path,
+                repo_root=root,
+                runtime_config_payload=runtime_config_payload,
+                use_cache=use_training_index_cache,
+            )
+            if reuse_precomputed_indices:
+                explicit_index = explicit_index_result.index
+                implicit_index = implicit_index_result.index
+            else:
+                explicit_index = build_user_explicit_feedback_index(split.train, dtype=runtime_dtype)
+                implicit_index = build_user_history_index(split.train, dtype=runtime_dtype)
 
             model = ASVDppRecommender(
                 _build_asvdpp_config(
@@ -216,7 +252,11 @@ def run_asvdpp_experiment(
 
             with PeakMemoryMonitor() as memory_monitor:
                 training_started = perf_counter()
-                model.fit(split.train)
+                model.fit(
+                    split.train,
+                    explicit_feedback=explicit_index if reuse_precomputed_indices else None,
+                    implicit_history=implicit_index if reuse_precomputed_indices else None,
+                )
                 training_seconds = perf_counter() - training_started
 
                 inference_started = perf_counter()
@@ -256,6 +296,30 @@ def run_asvdpp_experiment(
                         "split_id": split_id_for_cache,
                         "status": split_result.metadata.cache_status,
                         "manifest": repo_path_string(split_result.metadata.cache_manifest_path, repo_root=root),
+                    },
+                    "precomputed_index_reuse": reuse_precomputed_indices,
+                    "training_index_cache": {
+                        "enabled": use_training_index_cache,
+                        "split_id": split_id_for_cache,
+                        "cache_root": repo_path_string(
+                            explicit_index_result.metadata.cache_root,
+                            repo_root=root,
+                        ),
+                        "train_fingerprint_sha256": explicit_index_result.metadata.train_fingerprint.sha256,
+                        "user_history": {
+                            "status": implicit_index_result.metadata.cache_status,
+                            "manifest": repo_path_string(
+                                implicit_index_result.metadata.cache_manifest_path,
+                                repo_root=root,
+                            ),
+                        },
+                        "explicit_feedback": {
+                            "status": explicit_index_result.metadata.cache_status,
+                            "manifest": repo_path_string(
+                                explicit_index_result.metadata.cache_manifest_path,
+                                repo_root=root,
+                            ),
+                        },
                     },
                     "explicit_summary": {
                         "users_with_explicit_history": int((explicit_counts > 0).sum()),

@@ -60,6 +60,9 @@ def test_prepare_movielens_explicit_dataset_writes_expected_artifacts(tmp_path: 
 
     assert artifacts.manifest_path.exists()
     assert artifacts.interactions_path.exists()
+    assert artifacts.user_ids_array_path.exists()
+    assert artifacts.item_ids_array_path.exists()
+    assert artifacts.ratings_array_path.exists()
     assert artifacts.user_mapping_path.exists()
     assert artifacts.item_mapping_path.exists()
 
@@ -67,12 +70,16 @@ def test_prepare_movielens_explicit_dataset_writes_expected_artifacts(tmp_path: 
     assert manifest["counts"]["interactions"] == 3
     assert manifest["counts"]["users"] == 2
     assert manifest["counts"]["rated_items"] == 2
+    assert "interaction_arrays" in manifest["artifacts"]
 
     interactions = pq.read_table(artifacts.interactions_path).to_pydict()
     assert interactions["user_idx"] == [0, 0, 1]
     assert interactions["item_idx"] == [0, 1, 0]
     assert interactions["raw_user_id"] == [10, 10, 11]
     assert interactions["raw_item_id"] == [2, 5, 2]
+    np.testing.assert_array_equal(np.load(artifacts.user_ids_array_path), np.asarray([0, 0, 1], dtype=np.int32))
+    np.testing.assert_array_equal(np.load(artifacts.item_ids_array_path), np.asarray([0, 1, 0], dtype=np.int32))
+    np.testing.assert_allclose(np.load(artifacts.ratings_array_path), np.asarray([4.0, 3.5, 5.0], dtype=np.float32))
 
     movies = pq.read_table(artifacts.movies_path).to_pydict()
     assert movies["item_idx"] == [0, 1, None]
@@ -155,11 +162,16 @@ def test_prepare_legacy_movielens_100k_layout_writes_expected_artifacts(tmp_path
     assert manifest["counts"]["rated_items"] == 2
     assert manifest["counts"]["links"] == 0
     assert manifest["counts"]["tags"] == 0
+    assert "interaction_arrays" in manifest["artifacts"]
 
     movies = pq.read_table(artifacts.movies_path).to_pydict()
     assert movies["item_idx"] == [0, 1, None]
     assert movies["genres"][0] == "Action|Drama"
     assert movies["genres"][1] == "Comedy|Drama"
+
+    np.testing.assert_array_equal(np.load(artifacts.user_ids_array_path), np.asarray([0, 0, 1], dtype=np.int32))
+    np.testing.assert_array_equal(np.load(artifacts.item_ids_array_path), np.asarray([0, 1, 0], dtype=np.int32))
+    np.testing.assert_allclose(np.load(artifacts.ratings_array_path), np.asarray([4.0, 5.0, 3.0], dtype=np.float32))
 
     links = pq.read_table(artifacts.links_path).to_pydict()
     assert links["raw_item_id"] == []

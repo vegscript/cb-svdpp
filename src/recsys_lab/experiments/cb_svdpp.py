@@ -10,8 +10,9 @@ import numpy as np
 
 from recsys_lab.clustering import induce_train_only_clusters
 from recsys_lab.config.loader import dump_yaml_file, load_yaml_file
-from recsys_lab.data.histories import build_user_cluster_count_index, build_user_history_index
+from recsys_lab.data.histories import build_user_cluster_count_index
 from recsys_lab.data.processed import load_processed_dataset_manifest, load_ratings_data_from_manifest
+from recsys_lab.data.training_index_cache import load_or_build_user_history_index
 from recsys_lab.data.splitters import (
     official_ml100k_inner_validation_split,
     official_ml100k_paper_faithful_split,
@@ -101,6 +102,8 @@ def run_cb_svdpp_experiment(
     split_family: str | None = None,
     inner_validation_seed: int | None = None,
     evaluate_test: bool = True,
+    reuse_precomputed_indices: bool = True,
+    use_training_index_cache: bool = False,
 ) -> dict[str, Any]:
     root = (repo_root or discover_repo_root()).resolve()
 
@@ -152,6 +155,7 @@ def run_cb_svdpp_experiment(
         f"--split-seed {split_config.seed} "
         f"{'' if inner_validation_seed is None else f'--inner-validation-seed {inner_validation_seed} '}"
         f"{'' if evaluate_test else '--skip-test-eval '}"
+        f"{'' if use_training_index_cache else '--disable-training-index-cache '}"
         f"--model-seed {model_seed}"
     )
 
@@ -205,6 +209,8 @@ def run_cb_svdpp_experiment(
                 },
                 "split": asdict(split_config),
                 "model_seed": model_seed,
+                "reuse_precomputed_indices": reuse_precomputed_indices,
+                "use_training_index_cache": use_training_index_cache,
                 "loaded_configs": {
                     "processed_manifest": processed_manifest,
                     "model": model_config_payload,
@@ -275,7 +281,19 @@ def run_cb_svdpp_experiment(
                 )
                 clustering_seconds = perf_counter() - clustering_started
 
-                history_index = build_user_history_index(split.train, dtype=runtime_dtype)
+                split_id_for_cache = str(base_manifest["dataset"]["split_id"])
+                history_index_result = load_or_build_user_history_index(
+                    data=split.train,
+                    dtype=runtime_dtype,
+                    dataset_short_name=dataset_short_name,
+                    split_family=requested_split_family,
+                    split_id=split_id_for_cache,
+                    processed_manifest_path=processed_manifest_path,
+                    repo_root=root,
+                    runtime_config_payload=runtime_config_payload,
+                    use_cache=use_training_index_cache,
+                )
+                history_index = history_index_result.index
                 cluster_history_index = build_user_cluster_count_index(
                     history_index,
                     cluster_artifacts.item_clusters,
@@ -291,7 +309,11 @@ def run_cb_svdpp_experiment(
                 )
 
                 training_started = perf_counter()
-                model.fit(split.train)
+                model.fit(
+                    split.train,
+                    user_histories=history_index if reuse_precomputed_indices else None,
+                    user_cluster_histories=cluster_history_index if reuse_precomputed_indices else None,
+                )
                 training_seconds = perf_counter() - training_started
 
                 inference_started = perf_counter()
@@ -343,6 +365,27 @@ def run_cb_svdpp_experiment(
                 "model": {
                     "name": "cb_svdpp",
                     "config": asdict(model.config),
+                    "precomputed_index_reuse": reuse_precomputed_indices,
+                    "training_index_cache": {
+                        "enabled": use_training_index_cache,
+                        "split_id": split_id_for_cache,
+                        "cache_root": repo_path_string(
+                            history_index_result.metadata.cache_root,
+                            repo_root=root,
+                        ),
+                        "train_fingerprint_sha256": history_index_result.metadata.train_fingerprint.sha256,
+                        "user_history": {
+                            "status": history_index_result.metadata.cache_status,
+                            "manifest": repo_path_string(
+                                history_index_result.metadata.cache_manifest_path,
+                                repo_root=root,
+                            ),
+                        },
+                        "user_cluster_history": {
+                            "status": "not_persisted",
+                            "reason": "depends_on_train_only_cluster_induction",
+                        },
+                    },
                     "clustering": {
                         "induction_model": "biased_mf",
                         "induction_config": asdict(induction_config),

@@ -533,3 +533,75 @@ def test_run_ml100k_paper_benchmark_supports_cb_svdpp_and_counts_cluster_time(
     assert summary["aggregate"]["training_wall_clock_seconds"]["mean"] == 75.0
     assert summary["aggregate"]["training_wall_clock_seconds"]["count"] == 5
     assert summary["folds"][0]["training_wall_clock_seconds"] == 25.0
+
+
+def test_run_ml100k_paper_benchmark_supports_cb_asvdpp_and_counts_cluster_time(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    actual_repo_root = Path(__file__).resolve().parents[2]
+    (
+        repo_root,
+        processed_manifest_path,
+        model_config_path,
+        runtime_config_path,
+        device_config_path,
+    ) = _prepare_synthetic_benchmark_repo(tmp_path, actual_repo_root)
+
+    _write_text(
+        model_config_path,
+        "model:\n  name: cb_asvdpp\n  scope: paper_inspired\ntraining:\n  dtype: float32\n",
+    )
+
+    monkeypatch.setattr(
+        "recsys_lab.experiments.ml100k_paper_benchmark.git_snapshot",
+        lambda _repo_root: {"commit": "abcdef1234567", "branch": "main", "dirty": False},
+    )
+
+    calls: list[int] = []
+
+    def _fake_runner(**kwargs):
+        fold_index = int(kwargs["split_config"].seed)
+        calls.append(fold_index)
+        run_manifest_path = _write_completed_run(
+            repo_root=repo_root,
+            processed_manifest_path=processed_manifest_path,
+            model_config_path=model_config_path,
+            runtime_config_path=runtime_config_path,
+            device_config_path=device_config_path,
+            fold_index=fold_index,
+            model_seed=int(kwargs["model_seed"]),
+            train_rmse=0.77 + fold_index * 0.01,
+            test_rmse=0.87 + fold_index * 0.01,
+            training_seconds=18.0 * fold_index,
+            model_name="cb_asvdpp",
+            cluster_induction_seconds=4.0 * fold_index,
+        )
+        return {
+            "run_manifest": str(run_manifest_path),
+        }
+
+    monkeypatch.setattr(
+        "recsys_lab.experiments.ml100k_paper_benchmark._runner_for_model",
+        lambda _model_name: _fake_runner,
+    )
+
+    payload = run_ml100k_paper_benchmark(
+        model_name="cb_asvdpp",
+        processed_manifest_path=processed_manifest_path,
+        model_config_path=model_config_path,
+        runtime_config_path=runtime_config_path,
+        device_config_path=device_config_path,
+        model_seed=2,
+        repo_root=repo_root,
+        command="recsys-lab benchmark-ml100k-paper --synthetic-cb-asvdpp",
+    )
+
+    benchmark_dir = Path(payload["benchmark_dir"])
+    summary = json.loads((benchmark_dir / "summary.json").read_text(encoding="utf-8"))
+
+    assert calls == [1, 2, 3, 4, 5]
+    assert summary["model"] == "cb_asvdpp"
+    assert summary["measurement"]["time_metric"] == "training_wall_clock_seconds"
+    assert summary["aggregate"]["training_wall_clock_seconds"]["mean"] == 66.0
+    assert summary["folds"][0]["training_wall_clock_seconds"] == 22.0

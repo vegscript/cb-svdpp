@@ -59,6 +59,39 @@ vorliegen als:
 
 Roh-IDs und gemappte IDs muessen nachvollziehbar verknuepfbar bleiben.
 
+Processed manifests duerfen zusaetzlich optionale, spaltenweise
+Interaktions-Sidecars referenzieren, zum Beispiel getrennte
+`user_ids_npy`-, `item_ids_npy`- und `ratings_npy`-Artefakte.
+
+Diese Sidecars sind ein zusaetzlicher Ladepfad, keine zweite Wahrheit:
+
+- der Parquet-Interaktionspfad bleibt kanonisch
+- Sidecars muessen aus genau demselben verarbeiteten Interaktionsstand
+  abgeleitet sein
+- ein Loader darf sie nur explizit und bewusst verwenden; kein stiller
+  Methodenwechsel ohne Messung
+
+## Split-Specific Training Caches
+
+Fuer wiederholte Trainingslaeufe duerfen zusaetzlich split-spezifische,
+abgeleitete Trainingsindizes unter dem Runtime-Cache-Root liegen, zum Beispiel:
+
+- `user_history`-Indizes fuer `svdpp`, `asvdpp` und `cb_svdpp`
+- `user_explicit_feedback`-Indizes fuer `asvdpp`
+
+Diese Caches sind keine kanonischen Datenquellen:
+
+- sie leben unter `artifacts/local/` oder einem explizit gesetzten
+  `RECSYS_CACHE_ROOT`
+- sie muessen an `dataset`, `split_family`, `split_id`, `dtype` und einen
+  Fingerprint des konkreten `train`-Splits gebunden sein
+- sie duerfen nur train-only Artefakte enthalten
+- clusterabhaengige Ableitungen duerfen nicht still unter denselben generischen
+  Schluesseln persistiert werden
+
+Wenn ein Cache nicht exakt zur aktuellen Trainingspartition passt, muss er
+ignoriert und neu erzeugt werden.
+
 ## Mapping Rules
 
 - User- und Item-IDs werden frueh auf kompakte, dichte Integer abgebildet.
@@ -130,6 +163,21 @@ Status:
 - Test wird nur fuer finale Bewertung verwendet.
 - Dieselbe Split-Definition muss fuer vergleichbare Modelllaeufe gleich bleiben.
 - Der Split-Seed ist Bestandteil des Experiment-Profils.
+
+Split-Artefakte duerfen intern als logische Zeilenselektionen auf dem
+verarbeiteten Interaktionsstand reprasentiert werden, statt sofort neue
+vollmaterialisierte Interaktionsarrays zu erzeugen.
+
+Dafuer gilt:
+
+- die logische Split-Mitgliedschaft ist die Wahrheit, nicht ein bestimmter
+  In-Memory-Layoutstil
+- eine explizite Materialisierung eines Splits muss exakt dieselben Zeilen in
+  derselben Reihenfolge liefern
+- Trainings- und Evaluationspfade duerfen auf solchen Split-Views arbeiten,
+  solange ihre Ergebnisse numerisch dem materialisierten Gegenpfad entsprechen
+- wenn ein Pfad eine echte, getrennte Materialisierung benoetigt, muss diese
+  explizit und lokal erfolgen statt still als Default fuer alle Splits
 
 ## Leakage Rules
 

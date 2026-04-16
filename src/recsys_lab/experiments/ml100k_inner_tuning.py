@@ -11,6 +11,7 @@ from recsys_lab.experiments.benchmarking import (
     summarize_scalar_samples,
 )
 from recsys_lab.experiments.biased_mf import run_biased_mf_experiment
+from recsys_lab.experiments.cb_asvdpp import run_cb_asvdpp_experiment
 from recsys_lab.experiments.cb_svdpp import run_cb_svdpp_experiment
 from recsys_lab.experiments.common import (
     SplitConfig,
@@ -29,7 +30,7 @@ from recsys_lab.utils.manifests import load_json_file, validate_manifest_file
 from recsys_lab.utils.paths import discover_repo_root, repo_path_string
 
 
-SUPPORTED_MODELS = {"biased_mf", "svdpp", "cb_svdpp"}
+SUPPORTED_MODELS = {"biased_mf", "svdpp", "cb_svdpp", "cb_asvdpp"}
 
 
 def _runner_for_model(model_name: str) -> Callable[..., dict[str, Any]]:
@@ -39,6 +40,8 @@ def _runner_for_model(model_name: str) -> Callable[..., dict[str, Any]]:
         return run_svdpp_experiment
     if model_name == "cb_svdpp":
         return run_cb_svdpp_experiment
+    if model_name == "cb_asvdpp":
+        return run_cb_asvdpp_experiment
     raise ValueError(f"unsupported tuning model: {model_name}")
 
 

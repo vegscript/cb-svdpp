@@ -189,6 +189,10 @@ def test_run_cb_svdpp_experiment_supports_official_split_family_without_test_eva
     metrics = json.loads(metrics_path.read_text(encoding="utf-8"))
 
     assert metrics["split"]["family"] == "paper_faithful_ml100k_v1"
+    assert metrics["model"]["precomputed_index_reuse"] is True
+    assert metrics["model"]["training_index_cache"]["enabled"] is False
+    assert metrics["model"]["training_index_cache"]["user_history"]["status"] == "disabled"
+    assert metrics["model"]["training_index_cache"]["user_cluster_history"]["status"] == "not_persisted"
     assert metrics["split"]["test_metrics_available"] is False
     assert metrics["metrics"]["validation_rmse"] is None
     assert metrics["metrics"]["test_rmse"] is None

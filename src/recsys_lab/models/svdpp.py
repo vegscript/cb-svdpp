@@ -5,8 +5,13 @@ from time import perf_counter
 
 import numpy as np
 
-from recsys_lab.data.histories import UserHistoryIndex, build_user_history_index
+from recsys_lab.data.histories import (
+    UserHistoryIndex,
+    build_user_history_index,
+    validate_user_history_index,
+)
 from recsys_lab.data.processed import RatingsData
+from recsys_lab.models.inference import build_user_context_cache
 from recsys_lab.models.kernels import train_svdpp_epoch_numba
 
 
@@ -41,6 +46,7 @@ class SVDppRecommender:
         self.rating_max = 0.0
         self.epoch_durations_seconds: list[float] = []
         self.training_backend_effective: str | None = None
+        self._user_context_cache: np.ndarray | None = None
 
     def _parameter_dtype(self) -> np.dtype:
         if self.config.dtype not in {"float32", "float64"}:
@@ -120,13 +126,18 @@ class SVDppRecommender:
                     self.config.learning_rate * self.config.lambda_y * implicit_old
                 )
 
-    def fit(self, data: RatingsData) -> "SVDppRecommender":
+    def fit(
+        self,
+        data: RatingsData,
+        *,
+        user_histories: UserHistoryIndex | None = None,
+    ) -> "SVDppRecommender":
         self._validate_policy()
         requested_backend = self._validate_training_backend()
         rng = np.random.default_rng(self.config.seed)
         parameter_dtype = self._parameter_dtype()
 
-        self.global_mean = float(np.mean(data.ratings))
+        self.global_mean = data.effective_ratings_mean()
         self.rating_min = data.rating_min
         self.rating_max = data.rating_max
         self.user_bias = np.zeros(data.n_users, dtype=parameter_dtype)
@@ -140,15 +151,20 @@ class SVDppRecommender:
         self.implicit_factors = rng.normal(
             0.0, self.config.init_std, size=(data.n_items, self.config.latent_dim)
         ).astype(parameter_dtype, copy=False)
-        self.user_histories = build_user_history_index(data, dtype=self.config.dtype)
+        if user_histories is None:
+            self.user_histories = build_user_history_index(data, dtype=self.config.dtype)
+        else:
+            validate_user_history_index(user_histories, n_users=data.n_users)
+            self.user_histories = user_histories
 
-        order = np.arange(len(data), dtype=np.int64)
-        user_ids = data.user_ids
-        item_ids = data.item_ids
-        ratings = data.ratings.astype(parameter_dtype, copy=False)
+        order = data.training_row_indices()
+        user_ids = data.base_user_ids
+        item_ids = data.base_item_ids
+        ratings = data.base_ratings.astype(parameter_dtype, copy=False)
         zero_vector = np.zeros(self.config.latent_dim, dtype=parameter_dtype)
         self.epoch_durations_seconds = []
         self.training_backend_effective = None
+        self._user_context_cache = None
 
         for _ in range(self.config.epochs):
             epoch_started = perf_counter()
@@ -201,7 +217,7 @@ class SVDppRecommender:
         self.is_fitted = True
         return self
 
-    def _user_context(self, user_id: int) -> np.ndarray:
+    def _compute_user_context(self, user_id: int) -> np.ndarray:
         if self.user_factors is None or self.implicit_factors is None or self.user_histories is None:
             raise RuntimeError("model parameters are not initialized")
 
@@ -214,13 +230,27 @@ class SVDppRecommender:
         implicit_sum = norm * np.sum(self.implicit_factors[history], axis=0)
         return context + implicit_sum.astype(np.float64, copy=False)
 
+    def _ensure_user_context_cache(self) -> np.ndarray:
+        if self.user_factors is None:
+            raise RuntimeError("model parameters are not initialized")
+        if self._user_context_cache is None:
+            self._user_context_cache = build_user_context_cache(
+                n_users=self.user_factors.shape[0],
+                context_dim=self.user_factors.shape[1],
+                build_user_context=self._compute_user_context,
+            )
+        return self._user_context_cache
+
+    def _user_context(self, user_id: int) -> np.ndarray:
+        return self._ensure_user_context_cache()[user_id]
+
     def predict(self, user_id: int, item_id: int, *, clip: bool = True) -> float:
         if not self.is_fitted:
             raise RuntimeError("svdpp is not fitted")
         if self.user_bias is None or self.item_bias is None or self.item_factors is None:
             raise RuntimeError("model parameters are not initialized")
 
-        context = self._user_context(user_id)
+        context = self._ensure_user_context_cache()[user_id]
         prediction = float(
             self.global_mean
             + self.user_bias[user_id]
@@ -251,24 +281,13 @@ class SVDppRecommender:
             raise RuntimeError("model parameters are not initialized")
 
         users = np.asarray(user_ids, dtype=np.int64)
+        contexts = self._ensure_user_context_cache()[users]
         items = np.asarray(item_ids, dtype=np.int64)
-        contexts = np.zeros((self.user_factors.shape[0], self.user_factors.shape[1]), dtype=np.float64)
-        contexts[:] = self.user_factors.astype(np.float64, copy=False)
-
-        for user_id in np.unique(users):
-            history = self.user_histories.items_for_user(int(user_id))
-            if history.size == 0:
-                continue
-            norm = float(self.user_histories.norms[int(user_id)])
-            contexts[int(user_id)] += (
-                norm * np.sum(self.implicit_factors[history], axis=0).astype(np.float64, copy=False)
-            )
-
         predictions = (
             self.global_mean
             + self.user_bias[users].astype(np.float64, copy=False)
             + self.item_bias[items].astype(np.float64, copy=False)
-            + np.sum(contexts[users] * self.item_factors[items].astype(np.float64, copy=False), axis=1)
+            + np.sum(contexts * self.item_factors[items].astype(np.float64, copy=False), axis=1)
         )
         if clip:
             predictions = np.clip(predictions, self.rating_min, self.rating_max)

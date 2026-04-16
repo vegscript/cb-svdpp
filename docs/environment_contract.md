@@ -73,6 +73,11 @@ ueber klar benannte Variablen, zum Beispiel:
 
 Keine undokumentierten lokalen Zusatzvariablen.
 
+Wenn `RECSYS_CACHE_ROOT` verwendet wird, dann ist dies der kanonische Ort fuer
+abgeleitete, rebuildbare Runtime-Caches wie split-spezifische Trainingsindizes.
+Solche Caches duerfen niemals die kanonischen Datenartefakte unter
+`data/processed/` ersetzen.
+
 ## Threading Contract
 
 Benchmark-Laufe muessen ihre Thread-Konfiguration explizit dokumentieren.
