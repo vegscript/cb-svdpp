@@ -62,16 +62,18 @@ def build_run_id(
     model_name: str,
     device_profile_name: str,
     model_seed: int,
+    split_id_value: str | None = None,
 ) -> str:
-    return "_".join(
-        [
-            timestamp,
-            dataset_short_name,
-            model_name,
-            device_profile_name,
-            seed_slug(model_seed),
-        ]
-    )
+    parts = [
+        timestamp,
+        dataset_short_name,
+        model_name,
+        device_profile_name,
+    ]
+    if split_id_value is not None:
+        parts.append(str(split_id_value))
+    parts.append(seed_slug(model_seed))
+    return "_".join(parts)
 
 
 def split_id(split_family: str, split_config: SplitConfig) -> str:

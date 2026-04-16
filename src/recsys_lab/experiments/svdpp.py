@@ -23,6 +23,7 @@ from recsys_lab.experiments.common import (
     paper_faithful_ml100k_split_id,
     ratings_summary,
     resolve_runtime_dtype,
+    split_id,
     split_summary,
     utc_timestamp,
     write_json,
@@ -99,6 +100,19 @@ def run_svdpp_experiment(
     )
     threading_config = resolve_runtime_threading_config(device_config_payload=device_config_payload)
 
+    if requested_split_family == "paper_faithful_ml100k_v1":
+        run_context_slug = paper_faithful_ml100k_split_id(split_config.seed)
+    elif requested_split_family == "paper_faithful_ml100k_inner_v1":
+        if inner_validation_seed is None:
+            raise ValueError("inner_validation_seed is required for paper_faithful_ml100k_inner_v1")
+        run_context_slug = paper_faithful_ml100k_inner_split_id(
+            fold_index=split_config.seed,
+            validation_ratio=split_config.validation_ratio,
+            inner_seed=inner_validation_seed,
+        )
+    else:
+        run_context_slug = split_id(requested_split_family, split_config)
+
     timestamp = utc_timestamp()
     device_profile_name = str(device_config_payload["device_profile"]["name"])
     run_id = build_run_id(
@@ -107,6 +121,7 @@ def run_svdpp_experiment(
         model_name="svdpp",
         device_profile_name=device_profile_name,
         model_seed=model_seed,
+        split_id_value=run_context_slug,
     )
 
     run_dir = root / "artifacts" / "runs" / run_id
@@ -132,19 +147,6 @@ def run_svdpp_experiment(
         f"--model-seed {model_seed}"
     )
 
-    if requested_split_family == "paper_faithful_ml100k_v1":
-        split_id_value = paper_faithful_ml100k_split_id(split_config.seed)
-    elif requested_split_family == "paper_faithful_ml100k_inner_v1":
-        if inner_validation_seed is None:
-            raise ValueError("inner_validation_seed is required for paper_faithful_ml100k_inner_v1")
-        split_id_value = paper_faithful_ml100k_inner_split_id(
-            fold_index=split_config.seed,
-            validation_ratio=split_config.validation_ratio,
-            inner_seed=inner_validation_seed,
-        )
-    else:
-        split_id_value = None
-
     with runtime_execution_context(threading_config=threading_config):
         base_manifest = build_base_run_manifest(
             timestamp=timestamp,
@@ -166,7 +168,7 @@ def run_svdpp_experiment(
             metrics_path=metrics_path,
             stdout_log_path=stdout_log_path,
             split_family_name=requested_split_family,
-            split_id_value=split_id_value,
+            split_id_value=run_context_slug,
         )
 
         dump_yaml_file(

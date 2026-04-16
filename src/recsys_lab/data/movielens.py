@@ -88,12 +88,30 @@ def _read_delimited_rows(
     return actual_fieldnames, rows
 
 
+def _read_legacy_double_colon_rows(path: Path, *, fieldnames: list[str]) -> tuple[list[str], list[dict[str, str]]]:
+    rows: list[dict[str, str]] = []
+    with path.open("r", encoding="latin-1", newline="") as handle:
+        for raw_line in handle:
+            line = raw_line.rstrip("\n\r")
+            if not line:
+                continue
+            parts = line.split("::")
+            if len(parts) != len(fieldnames):
+                raise ValueError(
+                    f"unexpected field count in {path}: expected {len(fieldnames)}, got {len(parts)}"
+                )
+            rows.append(dict(zip(fieldnames, parts, strict=True)))
+    return list(fieldnames), rows
+
+
 def _detect_movielens_format_family(raw_dir: Path) -> str:
     modern_present = all((raw_dir / filename).exists() for filename in MODERN_REQUIRED_FILES.values())
     legacy_100k_present = all(
         (raw_dir / filename).exists() for filename in LEGACY_100K_REQUIRED_FILES.values()
     )
-    legacy_1m_present = all((raw_dir / filename).exists() for filename in LEGACY_1M_REQUIRED_FILES.values())
+    legacy_1m_present = all(
+        (raw_dir / filename).exists() for filename in LEGACY_1M_REQUIRED_FILES.values()
+    )
 
     if modern_present:
         return "modern_csv"
@@ -468,7 +486,6 @@ def _maybe_build_official_ml100k_split_artifacts(
         "version": "paper_faithful_ml100k_v1",
         "folds": folds_payload,
     }
-
 
 def prepare_movielens_explicit_dataset(
     raw_dir: Path,

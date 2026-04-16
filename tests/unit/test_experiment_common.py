@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from recsys_lab.experiments.common import build_runtime_metadata
+from recsys_lab.experiments.common import build_run_id, build_runtime_metadata
 
 
 class _FakeProcess:
@@ -74,3 +74,19 @@ def test_build_runtime_metadata_includes_thread_env_and_cpu_fingerprint(monkeypa
             "version": "0.3.28",
         }
     ]
+
+def test_build_run_id_includes_split_id_when_present() -> None:
+    run_id = build_run_id(
+        timestamp="2026-04-16T080000Z",
+        dataset_short_name="ml1m",
+        model_name="biased_mf",
+        device_profile_name="local_i5_2500k_24gb",
+        model_seed=1,
+        split_id_value="benchmark_random_v1_tr080_va010_s003",
+    )
+
+    assert run_id == (
+        "2026-04-16T080000Z_ml1m_biased_mf_local_i5_2500k_24gb_"
+        "benchmark_random_v1_tr080_va010_s003_s001"
+    )
+

@@ -17,6 +17,7 @@ from recsys_lab.experiments.common import (
     SplitConfig,
     build_runtime_metadata,
     git_snapshot,
+    seed_slug,
     utc_timestamp,
     write_json,
     write_log,
@@ -80,7 +81,34 @@ def _read_run_metrics(run_manifest_path: Path, *, repo_root: Path) -> dict[str, 
     return load_json_file(metrics_path)
 
 
-def run_ml100k_inner_tuning(
+def _resolve_selection_units(
+    *,
+    tuning: dict[str, Any],
+    dataset_short_name: str,
+    split_family: str,
+) -> tuple[list[int], list[str], str, int | None]:
+    if split_family == "paper_faithful_ml100k_inner_v1":
+        if dataset_short_name != "ml100k":
+            raise ValueError("paper_faithful_ml100k_inner_v1 requires dataset_short_name='ml100k'")
+        units = [int(fold) for fold in tuning.get("folds", [])]
+        if not units:
+            raise ValueError("tuning.folds must contain at least one fold")
+        inner_seed = int(tuning["inner_seed"])
+        return units, [f"u{fold}" for fold in units], "official_fold", inner_seed
+
+    if split_family == "benchmark_random_v1":
+        raw_values = tuning.get("split_seeds")
+        if raw_values is None:
+            raw_values = tuning.get("folds", [])
+        units = [int(seed) for seed in raw_values]
+        if not units:
+            raise ValueError("tuning.split_seeds must contain at least one split seed")
+        return units, [seed_slug(seed) for seed in units], "split_seed", None
+
+    raise ValueError(f"unsupported tuning split_family: {split_family}")
+
+
+def run_inner_tuning(
     *,
     tuning_config_path: Path,
     processed_manifest_path: Path,
@@ -103,12 +131,15 @@ def run_ml100k_inner_tuning(
     device_config_payload = load_yaml_file(device_config_path)
     threading_config = resolve_runtime_threading_config(device_config_payload=device_config_payload)
 
-    if str(processed_manifest["dataset_short_name"]) != "ml100k":
-        raise ValueError("ml100k inner tuning requires dataset_short_name='ml100k'")
-    if str(tuning.get("dataset_short_name")) != "ml100k":
-        raise ValueError("tuning.dataset_short_name must be 'ml100k'")
-    if str(tuning.get("split_family")) != "paper_faithful_ml100k_inner_v1":
-        raise ValueError("tuning.split_family must be 'paper_faithful_ml100k_inner_v1'")
+    dataset_short_name = str(processed_manifest["dataset_short_name"])
+    if str(tuning.get("dataset_short_name")) != dataset_short_name:
+        raise ValueError("tuning.dataset_short_name must match processed manifest dataset_short_name")
+    requested_split_family = str(tuning["split_family"])
+    selection_units, selection_labels, selection_unit_kind, inner_seed = _resolve_selection_units(
+        tuning=tuning,
+        dataset_short_name=dataset_short_name,
+        split_family=requested_split_family,
+    )
 
     base_model_config_ref = str(tuning_payload["base_model_config"])
     base_model_config_path = (root / base_model_config_ref).resolve()
@@ -122,20 +153,23 @@ def run_ml100k_inner_tuning(
     candidate_payloads = list(tuning_payload.get("candidates", []))
     if not candidate_payloads:
         raise ValueError("tuning config must contain at least one candidate")
-    folds = [int(fold) for fold in tuning.get("folds", [])]
-    if not folds:
-        raise ValueError("tuning.folds must contain at least one fold")
-
     validation_ratio = float(tuning["validation_ratio"])
-    inner_seed = int(tuning["inner_seed"])
+    if requested_split_family == "paper_faithful_ml100k_inner_v1":
+        train_ratio = 1.0 - validation_ratio
+    elif requested_split_family == "benchmark_random_v1":
+        train_ratio = float(tuning.get("train_ratio", SplitConfig().train_ratio))
+    else:
+        raise ValueError(f"unsupported tuning split_family: {requested_split_family}")
     model_seed = int(tuning["model_seed"])
     selection_stage = str(tuning["selection_stage"])
-    benchmark_scope = f"tuning_ml100k_inner_v1_{model_name}_{selection_stage}"
+    benchmark_scope = "_".join(
+        ["tuning", dataset_short_name, requested_split_family, model_name, selection_stage]
+    )
 
     timestamp = utc_timestamp()
     device_profile_name = str(device_config_payload["device_profile"]["name"])
     benchmark_id = "_".join(
-        [timestamp, "ml100k", "inner_tuning", model_name, selection_stage, device_profile_name]
+        [timestamp, dataset_short_name, "inner_tuning", model_name, selection_stage, device_profile_name]
     )
     benchmark_dir = root / "artifacts" / "benchmarks" / benchmark_id
     benchmark_dir.mkdir(parents=True, exist_ok=False)
@@ -155,7 +189,7 @@ def run_ml100k_inner_tuning(
         split_cache_mode = "enable" if use_split_cache else "disable"
         split_cache_command_fragment = f"--split-cache {split_cache_mode} "
     command_string = command or (
-        "recsys-lab tune-ml100k-inner "
+        "recsys-lab tune-inner "
         f"--tuning-config {repo_path_string(tuning_config_path, repo_root=root)} "
         f"--processed-manifest {repo_path_string(processed_manifest_path, repo_root=root)} "
         f"--runtime-config {repo_path_string(runtime_config_path, repo_root=root)} "
@@ -165,16 +199,16 @@ def run_ml100k_inner_tuning(
     measurement = build_benchmark_measurement(
         time_metric="training_wall_clock_seconds",
         time_metric_semantics=(
-            "Per-candidate fit-time aggregates summarize inner-fold training_wall_clock_seconds. "
+            "Per-candidate fit-time aggregates summarize validation-selection runs. "
             "If cluster_induction_wall_clock_seconds is present, it is added for fair cb_* candidate comparison."
         ),
-        sample_unit="inner_tuning_fold_run",
-        measured_sample_count=len(folds),
+        sample_unit="inner_tuning_run",
+        measured_sample_count=len(selection_units),
         warmup_policy="none",
         warmup_sample_count=0,
         notes=[
-            "No separate warmup runs are executed during inner tuning; each candidate fold run is measured once.",
-            "Dispersion across candidate fold timings is reported via std and coefficient_of_variation.",
+            "No separate warmup runs are executed during inner tuning; each candidate selection run is measured once.",
+            "Dispersion across candidate timings is reported via std and coefficient_of_variation.",
         ],
     )
 
@@ -258,26 +292,26 @@ def run_ml100k_inner_tuning(
                 dump_yaml_file(candidate_config_path, effective_model_config)
 
                 fold_results: list[dict[str, Any]] = []
-                for fold_index in folds:
+                for selection_unit, selection_label in zip(selection_units, selection_labels, strict=True):
                     runner_kwargs = {
                         "processed_manifest_path": processed_manifest_path,
                         "model_config_path": candidate_config_path,
                         "runtime_config_path": runtime_config_path,
                         "device_config_path": device_config_path,
                         "split_config": SplitConfig(
-                            train_ratio=1.0 - validation_ratio,
+                            train_ratio=train_ratio,
                             validation_ratio=validation_ratio,
-                            seed=fold_index,
+                            seed=selection_unit,
                         ),
                         "model_seed": model_seed,
                         "repo_root": root,
-                        "split_family": "paper_faithful_ml100k_inner_v1",
+                        "split_family": requested_split_family,
                         "inner_validation_seed": inner_seed,
                         "evaluate_test": False,
                         "command": (
-                            "recsys-lab tune-ml100k-inner "
+                            "recsys-lab tune-inner "
                             f"--tuning-config {repo_path_string(tuning_config_path, repo_root=root)} "
-                            f"--candidate-id {candidate_id} --fold {fold_index}"
+                            f"--candidate-id {candidate_id} --selection-unit {selection_label}"
                         ),
                     }
                     if model_name in {"svdpp", "cb_svdpp"}:
@@ -288,7 +322,8 @@ def run_ml100k_inner_tuning(
                     metrics = _read_run_metrics(run_manifest_path, repo_root=root)
                     fold_results.append(
                         {
-                            "fold": f"u{fold_index}",
+                            "selection_unit": selection_label,
+                            "fold": selection_label,
                             "run_id": str(metrics["run_id"]),
                             "train_rmse": float(metrics["metrics"]["train_rmse"]),
                             "validation_rmse": float(metrics["metrics"]["validation_rmse"]),
@@ -305,6 +340,7 @@ def run_ml100k_inner_tuning(
                         "candidate_config": repo_path_string(candidate_config_path, repo_root=root),
                         "measurement": measurement,
                         "folds": fold_results,
+                        "selection_unit_kind": selection_unit_kind,
                         "aggregate": {
                             "validation_rmse": summarize_scalar_samples(validation_values),
                             "train_rmse": summarize_scalar_samples(train_values),
@@ -319,12 +355,15 @@ def run_ml100k_inner_tuning(
             summary_payload = {
                 "benchmark_id": benchmark_id,
                 "benchmark_scope": benchmark_scope,
-                "dataset": "ml100k",
-                "split_family": "paper_faithful_ml100k_inner_v1",
+                "dataset": dataset_short_name,
+                "split_family": requested_split_family,
                 "selection_stage": selection_stage,
+                "selection_unit_kind": selection_unit_kind,
+                "selection_units": selection_labels,
                 "model": model_name,
-                "folds": [f"u{fold_index}" for fold_index in folds],
+                "folds": selection_labels,
                 "validation_ratio": validation_ratio,
+                "train_ratio": train_ratio,
                 "inner_seed": inner_seed,
                 "model_seed": model_seed,
                 "measurement": measurement,
@@ -339,12 +378,14 @@ def run_ml100k_inner_tuning(
                 "",
                 f"- benchmark_id: `{benchmark_id}`",
                 f"- benchmark_scope: `{benchmark_scope}`",
-                f"- dataset: `ml100k`",
-                f"- split_family: `paper_faithful_ml100k_inner_v1`",
+                f"- dataset: `{dataset_short_name}`",
+                f"- split_family: `{requested_split_family}`",
                 f"- selection_stage: `{selection_stage}`",
-                f"- folds: `{', '.join(summary_payload['folds'])}`",
+                f"- selection_unit_kind: `{selection_unit_kind}`",
+                f"- selection_units: `{', '.join(selection_labels)}`",
                 f"- validation_ratio: `{validation_ratio:.3f}`",
-                f"- inner_seed: `{inner_seed}`",
+                f"- train_ratio: `{train_ratio:.3f}`",
+                f"- inner_seed: `{'NA' if inner_seed is None else inner_seed}`",
                 f"- model_seed: `{model_seed}`",
                 f"- warmup_policy: `{measurement['warmup_policy']}`",
                 f"- measured_sample_count: `{measurement['measured_sample_count']}`",
@@ -440,3 +481,25 @@ def run_ml100k_inner_tuning(
             write_json(benchmark_manifest_path, failed_manifest)
             validate_manifest_file(benchmark_manifest_path, repo_root=root)
             raise
+
+
+def run_ml100k_inner_tuning(
+    *,
+    tuning_config_path: Path,
+    processed_manifest_path: Path,
+    runtime_config_path: Path,
+    device_config_path: Path,
+    use_split_cache: bool | None = None,
+    repo_root: Path | None = None,
+    command: str | None = None,
+) -> dict[str, Any]:
+    return run_inner_tuning(
+        tuning_config_path=tuning_config_path,
+        processed_manifest_path=processed_manifest_path,
+        runtime_config_path=runtime_config_path,
+        device_config_path=device_config_path,
+        use_split_cache=use_split_cache,
+        repo_root=repo_root,
+        command=command,
+    )
+

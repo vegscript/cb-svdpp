@@ -1,10 +1,10 @@
 metadata:
-  status: stage0_transfer
+  status: probe
   owner: repo
   purpose: model_profile
   provenance:
-    transferred_from: configs/models/tuned/ml100k_cb_asvdpp_stage1.yaml
-    transfer_stage: ml1m_stage0
+    derived_from: configs/models/tuned/ml1m_cb_asvdpp_stage0_transfer.yaml
+    probe_stage: ml1m_stage0_feasibility
 
 model:
   name: cb_asvdpp
@@ -13,7 +13,7 @@ model:
 
 training:
   latent_dim: 64
-  epochs: 20
+  epochs: 3
   learning_rate: 0.0075
   lambda_b: 0.025
   lambda_p: 0.025
@@ -37,9 +37,8 @@ clustering:
   kmeans_n_init: 10
 
 notes:
-  - transferred from the clean ml100k stage1 tuned profile
-  - not tuned on ml1m
+  - feasibility probe only
+  - derived from the ml1m stage0 transfer profile
   - fit-time comparisons must include cluster induction plus main training
   - uses the accepted detached explicit residual contract
-  - first scaling readout only
-  - not benchmark-final
+  - not claimable as a benchmark-final profile

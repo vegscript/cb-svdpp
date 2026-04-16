@@ -764,6 +764,108 @@ detached residual contract from `D-003`. The correct next step is therefore a
 clean rerun of the same `stage1_tuned` profile, followed by clean multi-seed
 confirmation.
 
+### 7.0.15 First `ml1m` Scaling Readouts
+
+The repository now also has its first medium-scale scaling readouts on
+`MovieLens 1M`. This step was executed from a controlled clean clone because the
+canonical `G:` workspace remained unavailable during execution, but the runs
+still inherit a dirty Git state because the `legacy_1m` ingestion support and
+`ml1m` transfer profiles were added in the same workspace before the runs. The
+results are therefore evidence-backed and manifest-valid, but they are not yet
+clean benchmark anchors.
+
+The data path itself is now active: the official `ml-1m.zip` archive from
+GroupLens is ingested under `data/raw/ml1m/` and prepared into the canonical
+processed contract at
+`data/processed/ml1m/ml1m_benchmark_random_v1_explicit_v1_float32_manifest.json`.
+
+The first completed `ml1m` baseline is the transferred `biased_mf` profile:
+
+| Dataset | Model | Profile | Train RMSE | Validation RMSE | Test RMSE | Fit Time (s) | Peak Memory (MB) |
+| --- | --- | --- | ---: | ---: | ---: | ---: | ---: |
+| `ml1m` | `biased_mf` | `stage0_transfer`, seed `1` | 0.6430 | 0.8667 | 0.8685 | 56.58 | 843.54 |
+| `ml1m` | `cb_asvdpp` | `stage0_probe_e003`, seed `1` | 0.8790 | 0.9015 | 0.9041 | 1750.54 | 1465.63 |
+| `ml1m` | `cb_svdpp` | `stage0_probe_e003`, seed `1` | 0.8868 | 0.9074 | 0.9101 | 782.35 | 1461.59 |
+
+Associated evidence notes:
+
+- `docs/evidence/data/2026-04-16_ml1m_official_ingestion.md`
+- `docs/evidence/models/biased_mf/2026-04-16_ml1m_biased_mf_stage0_transfer_baseline.md`
+- `docs/evidence/models/cb_asvdpp/2026-04-16_ml1m_cb_asvdpp_scaling_probe.md`
+- `docs/evidence/models/cb_svdpp/2026-04-16_ml1m_cb_svdpp_scaling_probe.md`
+- `docs/evidence/models/cb_svdpp/2026-04-16_ml1m_cb_svdpp_inner_tuning_stage0.md`
+- `docs/evidence/models/biased_mf/2026-04-16_ml1m_biased_mf_clean_control_baseline.md`
+- `docs/evidence/models/cb_svdpp/2026-04-16_ml1m_cb_svdpp_clean_confirmatory_run.md`
+
+Two attempted full transfer runs are also important and must be interpreted
+explicitly rather than silently ignored:
+
+- the full `ml1m` `cb_asvdpp` transfer run was cancelled after an external timeout and is not claimable
+- the full `ml1m` `cb_svdpp` transfer run was also cancelled after an external timeout and is not claimable
+
+The bounded probes turn those cancellations into useful scaling evidence. On the
+default `local_i5_2500k_24gb` device, the measured `3`-epoch probes imply:
+
+- projected full-transfer `cb_asvdpp` fit time of about `2.97` hours
+- projected full-transfer `cb_svdpp` fit time of about `71.09` minutes
+
+This changes the current interpretation of the scaling ladder. The repository
+now has a trustworthy `ml1m` baseline in `biased_mf`, plus a first practical
+feasibility ranking for the clustering-based families on the same machine:
+
+- `cb_svdpp` is the more viable local `ml1m` clustering path
+- `cb_asvdpp` is materially more expensive and should not be rerun blindly on this device
+- neither clustering family should be judged against the fully trained `biased_mf` baseline from the current `3`-epoch probes alone
+
+That reduced-budget conclusion has now been followed by a clean confirmatory `cb_svdpp` run and a clean `biased_mf` control run. The next valid step on `ml1m` is therefore a multi-seed clean comparison, not another stage-0 search.
+
+### 7.0.16 `ml1m` `cb_svdpp` Reduced-Budget Inner Tuning
+
+A reduced-budget selection benchmark was completed for `cb_svdpp` on `ml1m`
+under `benchmark_random_v1` using split seeds `1` and `2`, model seed `1`,
+the canonical `train_ratio=0.8`, `validation_ratio=0.1` contract, and `2`
+epochs per candidate. The benchmark artifact is
+`artifacts/benchmarks/2026-04-16T054923Z_ml1m_inner_tuning_cb_svdpp_stage0_local_i5_2500k_24gb/`.
+The benchmark manifest and all six run manifests validated successfully, but the
+Git state was dirty, so the result is a development selection study rather than
+a benchmark-final claim.
+
+| Candidate | Validation RMSE Mean | Validation RMSE Std | Effective Fit Time Mean (s) |
+| --- | ---: | ---: | ---: |
+| `rank064_uc080_ic080_a010_lr0075_reg0025_e002` | 0.914705 | 0.000766 | 456.33 |
+| `rank064_uc064_ic064_a015_lr0075_reg0025_e002` | 0.915358 | 0.001009 | 484.08 |
+| `rank064_uc080_ic080_a015_lr0075_reg0025_e002` | 0.915431 | 0.000779 | 479.63 |
+
+The winning candidate is the same hyperparameter profile already stored in
+`configs/models/tuned/ml1m_cb_svdpp_stage0_transfer.yaml`, namely rank `64`,
+`80/80` clusters, `alpha=0.10`, learning rate `0.0075`, and regularization
+`0.025`. No new `ml1m` `cb_svdpp` config was promoted from this stage; the
+selection study instead confirms that the transferred profile remains the best
+local stage-0 candidate among the tested alternatives.
+
+That reduced-budget selection step has now been followed by a clean confirmatory run. The next clean evaluation step is therefore a multi-seed comparison against the same clean `biased_mf` control family.
+
+### 7.0.17 Clean `ml1m` Control Comparison: `cb_svdpp` vs `biased_mf`
+
+The first clean `ml1m` confirmatory comparison is now available from a clean
+cloned snapshot at commit `2c6ffa1e1b19ac9cc0952f96b8ccac8dbb1ff656`. The two
+claim-faehigen run artifacts are
+`artifacts/runs/2026-04-16T065748Z_ml1m_cb_svdpp_local_i5_2500k_24gb_s001/` and
+`artifacts/runs/2026-04-16T081023Z_ml1m_biased_mf_local_i5_2500k_24gb_s001/`.
+Both run manifests validated successfully and report `dirty=false`.
+
+| Model | Validation RMSE | Test RMSE | Effective Fit Time (s) | Peak Memory (MB) |
+| --- | ---: | ---: | ---: | ---: |
+| `biased_mf` | 0.866678 | 0.868475 | 43.29 | 849.29 |
+| `cb_svdpp` | 0.857911 | 0.859314 | 3389.09 | 1477.73 |
+
+On this clean single-seed comparison, `cb_svdpp` improves validation RMSE by
+`0.008766` and test RMSE by `0.009162` relative to `biased_mf`. The systems
+tradeoff is large: `cb_svdpp` takes the quality lead, but at much higher fit
+cost and memory footprint on the default local device. This is therefore strong
+single-seed evidence in favor of the model family on `ml1m`, but not yet a
+multi-seed final claim.
+
 ### 7.1 Main Model Comparisons
 
 This subsection should compare models on identical datasets and split settings.

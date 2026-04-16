@@ -183,22 +183,21 @@ def test_prepare_legacy_movielens_100k_layout_writes_expected_artifacts(tmp_path
     assert np.load(u1_payload["train_row_indices_npy"]).tolist() == [0, 2]
     assert np.load(u1_payload["test_row_indices_npy"]).tolist() == [1]
 
-
 def test_prepare_legacy_movielens_1m_layout_writes_expected_artifacts(tmp_path: Path) -> None:
     raw_dir = tmp_path / "raw_ml1m"
     output_dir = tmp_path / "processed_ml1m"
 
     _write_text(
         raw_dir / "ratings.dat",
-        "1::10::5::978300760\n"
-        "1::20::4::978302109\n"
+        "1::10::4::978300760\n"
+        "1::20::5::978302109\n"
         "2::10::3::978301968\n",
     )
     _write_text(
         raw_dir / "movies.dat",
-        "10::Toy Story (1995)::Animation|Children's|Comedy\n"
-        "20::Jumanji (1995)::Adventure|Children's|Fantasy\n"
-        "30::Grumpier Old Men (1995)::Comedy|Romance\n",
+        "10::Toy Movie (1995)::Animation|Children's\n"
+        "20::Serious Movie (1994)::Drama\n"
+        "30::Unrated Movie (1993)::Comedy\n",
     )
     _write_text(
         raw_dir / "users.dat",
@@ -231,6 +230,8 @@ def test_prepare_legacy_movielens_1m_layout_writes_expected_artifacts(tmp_path: 
     assert manifest["counts"]["catalog_items"] == 3
     assert manifest["counts"]["links"] == 0
     assert manifest["counts"]["tags"] == 0
+    assert "interaction_arrays" in manifest["artifacts"]
+    assert "official_ml100k_splits" not in manifest["artifacts"]
 
     interactions = pq.read_table(artifacts.interactions_path).to_pydict()
     assert interactions["raw_user_id"] == [1, 1, 2]
@@ -238,11 +239,13 @@ def test_prepare_legacy_movielens_1m_layout_writes_expected_artifacts(tmp_path: 
 
     movies = pq.read_table(artifacts.movies_path).to_pydict()
     assert movies["item_idx"] == [0, 1, None]
-    assert movies["genres"][0] == "Animation|Children's|Comedy"
+    assert movies["genres"] == ["Animation|Children's", "Drama", "Comedy"]
+    np.testing.assert_array_equal(np.load(artifacts.user_ids_array_path), np.asarray([0, 0, 1], dtype=np.int32))
+    np.testing.assert_array_equal(np.load(artifacts.item_ids_array_path), np.asarray([0, 1, 0], dtype=np.int32))
+    np.testing.assert_allclose(np.load(artifacts.ratings_array_path), np.asarray([4.0, 5.0, 3.0], dtype=np.float32))
 
     links = pq.read_table(artifacts.links_path).to_pydict()
     assert links["raw_item_id"] == []
 
     tags = pq.read_table(artifacts.tags_path).to_pydict()
     assert tags["raw_user_id"] == []
-    assert "official_ml100k_splits" not in manifest["artifacts"]

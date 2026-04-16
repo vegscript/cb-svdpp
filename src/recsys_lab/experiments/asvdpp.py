@@ -101,6 +101,8 @@ def run_asvdpp_experiment(
     )
     threading_config = resolve_runtime_threading_config(device_config_payload=device_config_payload)
 
+    run_context_slug = split_id("benchmark_random_v1", split_config)
+
     timestamp = utc_timestamp()
     device_profile_name = str(device_config_payload["device_profile"]["name"])
     run_id = build_run_id(
@@ -109,6 +111,7 @@ def run_asvdpp_experiment(
         model_name="asvdpp",
         device_profile_name=device_profile_name,
         model_seed=model_seed,
+        split_id_value=run_context_slug,
     )
 
     run_dir = root / "artifacts" / "runs" / run_id

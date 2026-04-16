@@ -12,7 +12,7 @@ from recsys_lab.experiments.biased_mf import run_biased_mf_experiment
 from recsys_lab.experiments.cb_asvdpp import run_cb_asvdpp_experiment
 from recsys_lab.experiments.cb_svdpp import run_cb_svdpp_experiment
 from recsys_lab.experiments.common import SplitConfig
-from recsys_lab.experiments.ml100k_inner_tuning import run_ml100k_inner_tuning
+from recsys_lab.experiments.ml100k_inner_tuning import run_inner_tuning, run_ml100k_inner_tuning
 from recsys_lab.experiments.ml100k_paper_benchmark import run_ml100k_paper_benchmark
 from recsys_lab.experiments.ml100k_paper_multiseed_benchmark import run_ml100k_paper_multiseed_benchmark
 from recsys_lab.experiments.svdpp import run_svdpp_experiment
@@ -482,6 +482,34 @@ def tune_ml100k_inner(
         runtime_config_path=runtime_config_path,
         device_config_path=device_config_path,
         use_split_cache=_resolve_split_cache_override(split_cache),
+        repo_root=root,
+    )
+    typer.echo(json.dumps(payload, indent=2, sort_keys=True))
+
+
+@app.command("tune-inner")
+def tune_inner(
+    tuning_config: str,
+    processed_manifest: str,
+    runtime_config: str = "configs/runtime/base.yaml",
+    device_config: str = "configs/runtime/devices/local_i5_2500k_24gb.yaml",
+) -> None:
+    root = discover_repo_root()
+    tuning_config_path = _resolve_path(tuning_config, repo_root=root)
+    processed_manifest_path = _resolve_path(processed_manifest, repo_root=root)
+    runtime_config_path = _resolve_path(runtime_config, repo_root=root)
+    device_config_path = _resolve_path(device_config, repo_root=root)
+
+    if tuning_config_path is None or processed_manifest_path is None:
+        raise typer.BadParameter("tuning_config and processed_manifest are required")
+    if runtime_config_path is None or device_config_path is None:
+        raise typer.BadParameter("runtime_config and device_config are required")
+
+    payload = run_inner_tuning(
+        tuning_config_path=tuning_config_path,
+        processed_manifest_path=processed_manifest_path,
+        runtime_config_path=runtime_config_path,
+        device_config_path=device_config_path,
         repo_root=root,
     )
     typer.echo(json.dumps(payload, indent=2, sort_keys=True))

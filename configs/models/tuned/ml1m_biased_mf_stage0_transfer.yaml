@@ -4,7 +4,7 @@ metadata:
   purpose: model_profile
   provenance:
     transferred_from: configs/models/tuned/ml100k_biased_mf_stage1.yaml
-    transfer_stage: ml1m_initial_scaling
+    transfer_stage: ml1m_stage0
 
 model:
   name: biased_mf
@@ -21,7 +21,7 @@ training:
   dtype: float32
 
 notes:
-  - transferred from the current clean ml100k stage1 profile
+  - transferred from the clean ml100k stage1 tuned profile
   - not tuned on ml1m
-  - intended only for the first scaling readout
+  - first scaling readout only
   - not benchmark-final
