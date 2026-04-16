@@ -6,15 +6,28 @@ from pathlib import Path
 from time import perf_counter
 from typing import Any
 
+import numpy as np
+
+from recsys_lab.clustering import induce_train_only_clusters
 from recsys_lab.config.loader import dump_yaml_file, load_yaml_file
-from recsys_lab.data.histories import build_user_explicit_feedback_index, build_user_history_index
+from recsys_lab.data.histories import (
+    build_user_cluster_count_index,
+    build_user_explicit_feedback_index,
+    build_user_history_index,
+)
 from recsys_lab.data.processed import load_processed_dataset_manifest, load_ratings_data_from_manifest
-from recsys_lab.data.splitters import random_split_with_train_coverage
+from recsys_lab.data.splitters import (
+    official_ml100k_inner_validation_split,
+    official_ml100k_paper_faithful_split,
+    random_split_with_train_coverage,
+)
 from recsys_lab.experiments.common import (
     SplitConfig,
     build_base_run_manifest,
     build_run_id,
     git_snapshot,
+    paper_faithful_ml100k_inner_split_id,
+    paper_faithful_ml100k_split_id,
     ratings_summary,
     resolve_runtime_dtype,
     split_summary,
@@ -27,21 +40,22 @@ from recsys_lab.experiments.runtime import (
     resolve_runtime_threading_config,
     runtime_execution_context,
 )
-from recsys_lab.experiments.split_cache import load_or_build_split_cache, resolve_split_cache_policy
 from recsys_lab.metrics import rmse
-from recsys_lab.models.asvdpp import ASVDppConfig, ASVDppRecommender
+from recsys_lab.models.biased_mf import BiasedMFConfig
+from recsys_lab.models.cb_asvdpp import CBASVDppConfig, CBASVDppRecommender
 from recsys_lab.utils.manifests import validate_manifest_file
 from recsys_lab.utils.paths import discover_repo_root, repo_path_string
 
 
-def _build_asvdpp_config(
+def _build_cb_asvdpp_config(
     *,
     model_config_payload: dict[str, Any],
     model_seed: int,
     runtime_dtype: str,
-) -> ASVDppConfig:
+) -> CBASVDppConfig:
     training = model_config_payload.get("training", {})
-    return ASVDppConfig(
+    clustering = model_config_payload.get("clustering", {})
+    return CBASVDppConfig(
         latent_dim=int(training.get("latent_dim", 50)),
         epochs=int(training.get("epochs", 20)),
         learning_rate=float(training.get("learning_rate", 0.01)),
@@ -50,6 +64,11 @@ def _build_asvdpp_config(
         lambda_q=float(training.get("lambda_q", 0.02)),
         lambda_x=float(training.get("lambda_x", 0.02)),
         lambda_y=float(training.get("lambda_y", 0.02)),
+        lambda_pC=float(training.get("lambda_pC", 0.02)),
+        lambda_qC=float(training.get("lambda_qC", 0.02)),
+        lambda_xC=float(training.get("lambda_xC", training.get("lambda_x", 0.02))),
+        lambda_yC=float(training.get("lambda_yC", 0.02)),
+        alpha=float(clustering.get("alpha", 0.10)),
         seed=model_seed,
         init_std=float(training.get("init_std", 0.1)),
         dtype=runtime_dtype,
@@ -58,7 +77,25 @@ def _build_asvdpp_config(
     )
 
 
-def run_asvdpp_experiment(
+def _build_induction_config(
+    *,
+    cb_config: CBASVDppConfig,
+    model_seed: int,
+) -> BiasedMFConfig:
+    return BiasedMFConfig(
+        latent_dim=cb_config.latent_dim,
+        epochs=cb_config.epochs,
+        learning_rate=cb_config.learning_rate,
+        lambda_b=cb_config.lambda_b,
+        lambda_p=cb_config.lambda_p,
+        lambda_q=cb_config.lambda_q,
+        seed=model_seed,
+        init_std=cb_config.init_std,
+        dtype=cb_config.dtype,
+    )
+
+
+def run_cb_asvdpp_experiment(
     *,
     processed_manifest_path: Path,
     model_config_path: Path,
@@ -68,7 +105,9 @@ def run_asvdpp_experiment(
     model_seed: int,
     repo_root: Path | None = None,
     command: str | None = None,
-    use_split_cache: bool | None = None,
+    split_family: str | None = None,
+    inner_validation_seed: int | None = None,
+    evaluate_test: bool = True,
 ) -> dict[str, Any]:
     root = (repo_root or discover_repo_root()).resolve()
 
@@ -79,10 +118,7 @@ def run_asvdpp_experiment(
 
     processed_manifest = load_processed_dataset_manifest(processed_manifest_path)
     dataset_short_name = str(processed_manifest["dataset_short_name"])
-    split_cache_policy = resolve_split_cache_policy(
-        split_family="benchmark_random_v1",
-        use_split_cache=use_split_cache,
-    )
+    requested_split_family = split_family or str(processed_manifest["split_family"])
 
     runtime_config_payload = load_yaml_file(runtime_config_path)
     device_config_payload = load_yaml_file(device_config_path)
@@ -99,7 +135,7 @@ def run_asvdpp_experiment(
     run_id = build_run_id(
         timestamp=timestamp,
         dataset_short_name=dataset_short_name,
-        model_name="asvdpp",
+        model_name="cb_asvdpp",
         device_profile_name=device_profile_name,
         model_seed=model_seed,
     )
@@ -114,14 +150,30 @@ def run_asvdpp_experiment(
 
     git = git_snapshot(root)
     command_string = command or (
-        "recsys-lab train-asvdpp "
+        "recsys-lab train-cb-asvdpp "
         f"--processed-manifest {repo_path_string(processed_manifest_path, repo_root=root)} "
         f"--model-config {repo_path_string(model_config_path, repo_root=root)} "
         f"--runtime-config {repo_path_string(runtime_config_path, repo_root=root)} "
         f"--device-config {repo_path_string(device_config_path, repo_root=root)} "
-        f"{'--use-split-cache ' if split_cache_policy.effective_use_cache else ''}"
-        f"--split-seed {split_config.seed} --model-seed {model_seed}"
+        f"--split-family {requested_split_family} "
+        f"--split-seed {split_config.seed} "
+        f"{'' if inner_validation_seed is None else f'--inner-validation-seed {inner_validation_seed} '}"
+        f"{'' if evaluate_test else '--skip-test-eval '}"
+        f"--model-seed {model_seed}"
     )
+
+    if requested_split_family == "paper_faithful_ml100k_v1":
+        split_id_value = paper_faithful_ml100k_split_id(split_config.seed)
+    elif requested_split_family == "paper_faithful_ml100k_inner_v1":
+        if inner_validation_seed is None:
+            raise ValueError("inner_validation_seed is required for paper_faithful_ml100k_inner_v1")
+        split_id_value = paper_faithful_ml100k_inner_split_id(
+            fold_index=split_config.seed,
+            validation_ratio=split_config.validation_ratio,
+            inner_seed=inner_validation_seed,
+        )
+    else:
+        split_id_value = None
 
     with runtime_execution_context(threading_config=threading_config):
         base_manifest = build_base_run_manifest(
@@ -132,7 +184,7 @@ def run_asvdpp_experiment(
             git=git,
             processed_manifest=processed_manifest,
             processed_manifest_path=processed_manifest_path,
-            model_name="asvdpp",
+            model_name="cb_asvdpp",
             model_scope=str(model_config_payload.get("model", {}).get("scope", "paper_inspired")),
             model_config_path=model_config_path,
             device_profile_name=device_profile_name,
@@ -143,6 +195,8 @@ def run_asvdpp_experiment(
             config_snapshot_path=config_snapshot_path,
             metrics_path=metrics_path,
             stdout_log_path=stdout_log_path,
+            split_family_name=requested_split_family,
+            split_id_value=split_id_value,
         )
 
         dump_yaml_file(
@@ -158,9 +212,6 @@ def run_asvdpp_experiment(
                 },
                 "split": asdict(split_config),
                 "model_seed": model_seed,
-                "use_split_cache": split_cache_policy.effective_use_cache,
-                "use_split_cache_policy_requested": split_cache_policy.requested_policy,
-                "use_split_cache_decision_reason": split_cache_policy.decision_reason,
                 "loaded_configs": {
                     "processed_manifest": processed_manifest,
                     "model": model_config_payload,
@@ -182,80 +233,159 @@ def run_asvdpp_experiment(
 
         try:
             ratings_data = load_ratings_data_from_manifest(processed_manifest_path)
-            split_id_for_cache = (
-                f"benchmark_random_v1_tr{int(round(split_config.train_ratio * 100)):03d}"
-                f"_va{int(round(split_config.validation_ratio * 100)):03d}_s{split_config.seed:03d}"
-            )
-            split_result = load_or_build_split_cache(
-                data=ratings_data,
-                dataset_short_name=dataset_short_name,
-                split_family="benchmark_random_v1",
-                split_id=split_id_for_cache,
-                processed_manifest_path=processed_manifest_path,
-                repo_root=root,
-                runtime_config_payload=runtime_config_payload,
-                build_split=lambda: random_split_with_train_coverage(
+            if requested_split_family == "benchmark_random_v1":
+                split = random_split_with_train_coverage(
                     ratings_data,
                     train_ratio=split_config.train_ratio,
                     validation_ratio=split_config.validation_ratio,
                     seed=split_config.seed,
-                ),
-                use_cache=split_cache_policy.effective_use_cache,
-            )
-            split = split_result.split
-            explicit_index = build_user_explicit_feedback_index(split.train, dtype=runtime_dtype)
-            implicit_index = build_user_history_index(split.train, dtype=runtime_dtype)
-
-            model = ASVDppRecommender(
-                _build_asvdpp_config(
-                    model_config_payload=model_config_payload,
-                    model_seed=model_seed,
-                    runtime_dtype=runtime_dtype,
                 )
+            elif requested_split_family == "paper_faithful_ml100k_v1":
+                split = official_ml100k_paper_faithful_split(
+                    ratings_data,
+                    processed_manifest_path=processed_manifest_path,
+                    fold_index=split_config.seed,
+                )
+            elif requested_split_family == "paper_faithful_ml100k_inner_v1":
+                if inner_validation_seed is None:
+                    raise ValueError("inner_validation_seed is required for paper_faithful_ml100k_inner_v1")
+                split = official_ml100k_inner_validation_split(
+                    ratings_data,
+                    processed_manifest_path=processed_manifest_path,
+                    fold_index=split_config.seed,
+                    validation_ratio=split_config.validation_ratio,
+                    inner_seed=inner_validation_seed,
+                )
+            else:
+                raise ValueError(f"unsupported split family for cb_asvdpp: {requested_split_family}")
+
+            cb_config = _build_cb_asvdpp_config(
+                model_config_payload=model_config_payload,
+                model_seed=model_seed,
+                runtime_dtype=runtime_dtype,
             )
+            induction_config = _build_induction_config(cb_config=cb_config, model_seed=model_seed)
+            clustering_config = model_config_payload.get("clustering", {})
 
             with PeakMemoryMonitor() as memory_monitor:
+                clustering_started = perf_counter()
+                cluster_artifacts = induce_train_only_clusters(
+                    split.train,
+                    induction_config=induction_config,
+                    n_user_clusters=int(clustering_config.get("n_user_clusters", 100)),
+                    n_item_clusters=int(clustering_config.get("n_item_clusters", 100)),
+                    algorithm=str(clustering_config.get("algorithm", "kmeans")),
+                    kmeans_n_init=int(clustering_config.get("kmeans_n_init", 10)),
+                )
+                clustering_seconds = perf_counter() - clustering_started
+
+                explicit_index = build_user_explicit_feedback_index(split.train, dtype=runtime_dtype)
+                history_index = build_user_history_index(split.train, dtype=runtime_dtype)
+                cluster_history_index = build_user_cluster_count_index(
+                    history_index,
+                    cluster_artifacts.item_clusters,
+                    n_clusters=cluster_artifacts.r_star_counts.shape[1],
+                )
+
+                model = CBASVDppRecommender(
+                    cb_config,
+                    user_clusters=cluster_artifacts.user_clusters,
+                    item_clusters=cluster_artifacts.item_clusters,
+                    n_user_clusters=cluster_artifacts.r_star_counts.shape[0],
+                    n_item_clusters=cluster_artifacts.r_star_counts.shape[1],
+                )
+
                 training_started = perf_counter()
                 model.fit(split.train)
                 training_seconds = perf_counter() - training_started
 
                 inference_started = perf_counter()
                 train_predictions = model.predict_dataset(split.train)
-                validation_predictions = model.predict_dataset(split.validation)
-                test_predictions = model.predict_dataset(split.test)
+                validation_predictions = (
+                    None if split.validation is None else model.predict_dataset(split.validation)
+                )
+                test_predictions = None if not evaluate_test else model.predict_dataset(split.test)
                 inference_seconds = perf_counter() - inference_started
 
+            inference_rows = len(split.train)
+            if split.validation is not None:
+                inference_rows += len(split.validation)
+            if evaluate_test:
+                inference_rows += len(split.test)
             system_metrics = build_system_metrics(
                 train_rows=len(split.train),
                 epochs=model.config.epochs,
                 training_wall_clock_seconds=training_seconds,
-                inference_rows=len(split.train) + len(split.validation) + len(split.test),
+                inference_rows=inference_rows,
                 inference_wall_clock_seconds=inference_seconds,
                 peak_memory_bytes=memory_monitor.peak_rss_bytes,
                 baseline_memory_bytes=memory_monitor.start_rss_bytes,
                 model=model,
                 epoch_durations_seconds=model.epoch_durations_seconds,
+                train_time_total_seconds=clustering_seconds + training_seconds,
+                extra_fields={
+                    "cluster_induction_wall_clock_seconds": float(clustering_seconds),
+                    "main_training_wall_clock_seconds": float(training_seconds),
+                },
             )
 
             explicit_counts = explicit_index.counts.astype("int64", copy=False)
-            implicit_counts = implicit_index.counts.astype("int64", copy=False)
+            history_counts = history_index.counts.astype("int64", copy=False)
+            per_user_active_cluster_counts = np.diff(cluster_history_index.indptr).astype("int64", copy=False)
+            r_star_counts = cluster_artifacts.r_star_counts.astype("int64", copy=False)
+            nonempty_cluster_pairs = int((r_star_counts > 0).sum())
+            total_cluster_pairs = int(r_star_counts.size)
+
             metrics_payload = {
                 "run_id": run_id,
                 "dataset": ratings_summary(ratings_data),
                 "split": {
+                    "family": requested_split_family,
                     **asdict(split_config),
+                    "inner_validation_seed": inner_validation_seed,
+                    "test_metrics_available": evaluate_test,
                     **split_summary(split),
                 },
                 "model": {
-                    "name": "asvdpp",
+                    "name": "cb_asvdpp",
                     "config": asdict(model.config),
-                    "split_cache": {
-                        "enabled": split_cache_policy.effective_use_cache,
-                        "requested_policy": split_cache_policy.requested_policy,
-                        "decision_reason": split_cache_policy.decision_reason,
-                        "split_id": split_id_for_cache,
-                        "status": split_result.metadata.cache_status,
-                        "manifest": repo_path_string(split_result.metadata.cache_manifest_path, repo_root=root),
+                    "clustering": {
+                        "induction_model": "biased_mf",
+                        "induction_config": asdict(induction_config),
+                        "algorithm": str(clustering_config.get("algorithm", "kmeans")),
+                        "kmeans_n_init": int(clustering_config.get("kmeans_n_init", 10)),
+                        "train_only_assignments": True,
+                        "fixed_assignments_during_cb_training": True,
+                        "r_star_role": "diagnostic_only",
+                        "n_user_clusters": int(cluster_artifacts.r_star_counts.shape[0]),
+                        "n_item_clusters": int(cluster_artifacts.r_star_counts.shape[1]),
+                        "user_cluster_summary": {
+                            "min_size": int(cluster_artifacts.user_cluster_sizes.min()),
+                            "max_size": int(cluster_artifacts.user_cluster_sizes.max()),
+                            "mean_size": float(cluster_artifacts.user_cluster_sizes.mean()),
+                        },
+                        "item_cluster_summary": {
+                            "min_size": int(cluster_artifacts.item_cluster_sizes.min()),
+                            "max_size": int(cluster_artifacts.item_cluster_sizes.max()),
+                            "mean_size": float(cluster_artifacts.item_cluster_sizes.mean()),
+                        },
+                        "history_cluster_summary": {
+                            "mean_active_item_clusters_per_user": float(per_user_active_cluster_counts.mean()),
+                            "max_active_item_clusters_per_user": int(per_user_active_cluster_counts.max()),
+                            "users_with_history": int((history_counts > 0).sum()),
+                        },
+                        "r_star_summary": {
+                            "nonempty_pairs": nonempty_cluster_pairs,
+                            "total_pairs": total_cluster_pairs,
+                            "density": float(nonempty_cluster_pairs / total_cluster_pairs),
+                            "observed_rating_min": float(cluster_artifacts.r_star_means[r_star_counts > 0].min()),
+                            "observed_rating_max": float(cluster_artifacts.r_star_means[r_star_counts > 0].max()),
+                        },
+                        "induction_diagnostics": {
+                            "train_rmse": cluster_artifacts.induction_train_rmse,
+                            "user_kmeans_inertia": cluster_artifacts.user_kmeans_inertia,
+                            "item_kmeans_inertia": cluster_artifacts.item_kmeans_inertia,
+                        },
                     },
                     "explicit_summary": {
                         "users_with_explicit_history": int((explicit_counts > 0).sum()),
@@ -263,37 +393,56 @@ def run_asvdpp_experiment(
                         "max_explicit_history_size": int(explicit_counts.max()),
                     },
                     "implicit_summary": {
-                        "users_with_history": int((implicit_counts > 0).sum()),
-                        "mean_history_size": float(implicit_counts.mean()),
-                        "max_history_size": int(implicit_counts.max()),
+                        "users_with_history": int((history_counts > 0).sum()),
+                        "mean_history_size": float(history_counts.mean()),
+                        "max_history_size": int(history_counts.max()),
                     },
                 },
                 "timing": {
+                    "cluster_induction_wall_clock_seconds": clustering_seconds,
                     "training_wall_clock_seconds": training_seconds,
                     "inference_wall_clock_seconds": inference_seconds,
                 },
                 "system_metrics": system_metrics,
                 "metrics": {
                     "train_rmse": rmse(split.train.ratings, train_predictions),
-                    "validation_rmse": rmse(split.validation.ratings, validation_predictions),
-                    "test_rmse": rmse(split.test.ratings, test_predictions),
+                    "validation_rmse": (
+                        None
+                        if split.validation is None or validation_predictions is None
+                        else rmse(split.validation.ratings, validation_predictions)
+                    ),
+                    "test_rmse": (
+                        None
+                        if not evaluate_test or test_predictions is None
+                        else rmse(split.test.ratings, test_predictions)
+                    ),
                 },
             }
             write_json(metrics_path, metrics_payload)
 
             finished_at = utc_timestamp()
+            validation_rmse_value = metrics_payload["metrics"]["validation_rmse"]
+            test_rmse_value = metrics_payload["metrics"]["test_rmse"]
+            validation_rmse_display = "NA" if validation_rmse_value is None else f"{validation_rmse_value:.6f}"
+            test_rmse_display = "NA" if test_rmse_value is None else f"{test_rmse_value:.6f}"
             write_log(
                 stdout_log_path,
                 [
                     f"[{timestamp}] run_id={run_id}",
                     f"command={command_string}",
                     f"processed_manifest={repo_path_string(processed_manifest_path, repo_root=root)}",
-                    f"train_rows={len(split.train)} validation_rows={len(split.validation)} test_rows={len(split.test)}",
+                    f"train_rows={len(split.train)} validation_rows={0 if split.validation is None else len(split.validation)} test_rows={len(split.test)}",
+                    (
+                        "clustering "
+                        f"user_clusters={metrics_payload['model']['clustering']['n_user_clusters']} "
+                        f"item_clusters={metrics_payload['model']['clustering']['n_item_clusters']} "
+                        f"r_star_density={metrics_payload['model']['clustering']['r_star_summary']['density']:.6f}"
+                    ),
                     (
                         "rmse "
                         f"train={metrics_payload['metrics']['train_rmse']:.6f} "
-                        f"validation={metrics_payload['metrics']['validation_rmse']:.6f} "
-                        f"test={metrics_payload['metrics']['test_rmse']:.6f}"
+                        f"validation={validation_rmse_display} "
+                        f"test={test_rmse_display}"
                     ),
                     (
                         "explicit_summary "
@@ -301,6 +450,7 @@ def run_asvdpp_experiment(
                         f"mean_explicit_history_size={metrics_payload['model']['explicit_summary']['mean_explicit_history_size']:.4f} "
                         f"max_explicit_history_size={metrics_payload['model']['explicit_summary']['max_explicit_history_size']}"
                     ),
+                    f"cluster_induction_wall_clock_seconds={clustering_seconds:.6f}",
                     f"training_wall_clock_seconds={training_seconds:.6f}",
                     (
                         "system_metrics "

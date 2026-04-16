@@ -1,0 +1,27 @@
+metadata:
+  status: stage0_transfer
+  owner: repo
+  purpose: model_profile
+  provenance:
+    transferred_from: configs/models/tuned/ml100k_biased_mf_stage1.yaml
+    transfer_stage: ml1m_initial_scaling
+
+model:
+  name: biased_mf
+  family: matrix_factorization
+  scope: paper_inspired
+
+training:
+  latent_dim: 64
+  epochs: 25
+  learning_rate: 0.0075
+  lambda_b: 0.03
+  lambda_p: 0.03
+  lambda_q: 0.03
+  dtype: float32
+
+notes:
+  - transferred from the current clean ml100k stage1 profile
+  - not tuned on ml1m
+  - intended only for the first scaling readout
+  - not benchmark-final

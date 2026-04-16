@@ -1,6 +1,7 @@
 import json
 from pathlib import Path
 
+import numpy as np
 import pyarrow.parquet as pq
 
 from recsys_lab.data.movielens import prepare_movielens_explicit_dataset, validate_movielens_directory
@@ -118,6 +119,18 @@ def test_prepare_legacy_movielens_100k_layout_writes_expected_artifacts(tmp_path
         "20|Serious Movie (1994)|01-Jan-1994||http://example.com/20|0|0|0|0|0|1|0|0|1|0|0|0|0|0|0|0|0|0|0\n"
         "30|Unrated Movie (1993)|01-Jan-1993||http://example.com/30|1|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0\n",
     )
+    _write_text(
+        raw_dir / "u1.base",
+        "1\t10\t4\t874965758\n"
+        "2\t10\t3\t874965760\n",
+    )
+    _write_text(
+        raw_dir / "u1.test",
+        "1\t20\t5\t874965759\n",
+    )
+    for fold_index in (2, 3, 4, 5):
+        _write_text(raw_dir / f"u{fold_index}.base", "")
+        _write_text(raw_dir / f"u{fold_index}.test", "")
 
     summary = validate_movielens_directory(raw_dir)
     assert summary["format_family"] == "legacy_100k"
@@ -153,3 +166,71 @@ def test_prepare_legacy_movielens_100k_layout_writes_expected_artifacts(tmp_path
 
     tags = pq.read_table(artifacts.tags_path).to_pydict()
     assert tags["raw_user_id"] == []
+    assert manifest["artifacts"]["official_ml100k_splits"]["version"] == "paper_faithful_ml100k_v1"
+    u1_payload = manifest["artifacts"]["official_ml100k_splits"]["folds"]["u1"]
+    assert np.load(u1_payload["train_row_indices_npy"]).tolist() == [0, 2]
+    assert np.load(u1_payload["test_row_indices_npy"]).tolist() == [1]
+
+
+def test_prepare_legacy_movielens_1m_layout_writes_expected_artifacts(tmp_path: Path) -> None:
+    raw_dir = tmp_path / "raw_ml1m"
+    output_dir = tmp_path / "processed_ml1m"
+
+    _write_text(
+        raw_dir / "ratings.dat",
+        "1::10::5::978300760\n"
+        "1::20::4::978302109\n"
+        "2::10::3::978301968\n",
+    )
+    _write_text(
+        raw_dir / "movies.dat",
+        "10::Toy Story (1995)::Animation|Children's|Comedy\n"
+        "20::Jumanji (1995)::Adventure|Children's|Fantasy\n"
+        "30::Grumpier Old Men (1995)::Comedy|Romance\n",
+    )
+    _write_text(
+        raw_dir / "users.dat",
+        "1::F::1::10::48067\n"
+        "2::M::56::16::70072\n",
+    )
+
+    summary = validate_movielens_directory(raw_dir)
+    assert summary["format_family"] == "legacy_1m"
+    assert summary["counts"]["ratings"] == 3
+    assert summary["counts"]["movies"] == 3
+    assert summary["counts"]["users"] == 2
+    assert summary["counts"]["tags"] == 0
+
+    artifacts = prepare_movielens_explicit_dataset(
+        raw_dir=raw_dir,
+        output_dir=output_dir,
+        dataset_name="MovieLens 1M",
+        dataset_short_name="ml1m",
+        split_family="benchmark_random_v1",
+        format_family="legacy_1m",
+        dtype="float32",
+    )
+
+    manifest = json.loads(artifacts.manifest_path.read_text(encoding="utf-8"))
+    assert manifest["source"]["format_family"] == "legacy_1m"
+    assert manifest["counts"]["interactions"] == 3
+    assert manifest["counts"]["users"] == 2
+    assert manifest["counts"]["rated_items"] == 2
+    assert manifest["counts"]["catalog_items"] == 3
+    assert manifest["counts"]["links"] == 0
+    assert manifest["counts"]["tags"] == 0
+
+    interactions = pq.read_table(artifacts.interactions_path).to_pydict()
+    assert interactions["raw_user_id"] == [1, 1, 2]
+    assert interactions["raw_item_id"] == [10, 20, 10]
+
+    movies = pq.read_table(artifacts.movies_path).to_pydict()
+    assert movies["item_idx"] == [0, 1, None]
+    assert movies["genres"][0] == "Animation|Children's|Comedy"
+
+    links = pq.read_table(artifacts.links_path).to_pydict()
+    assert links["raw_item_id"] == []
+
+    tags = pq.read_table(artifacts.tags_path).to_pydict()
+    assert tags["raw_user_id"] == []
+    assert "official_ml100k_splits" not in manifest["artifacts"]

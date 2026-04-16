@@ -152,11 +152,14 @@ def run_ml100k_paper_benchmark(
     runtime_config_path: Path,
     device_config_path: Path,
     model_seed: int,
+    use_split_cache: bool | None = None,
     repo_root: Path | None = None,
     command: str | None = None,
 ) -> dict[str, Any]:
     if model_name not in SUPPORTED_MODELS:
         raise ValueError(f"unsupported benchmark model: {model_name}")
+    if use_split_cache is not None and model_name not in {"svdpp", "cb_svdpp"}:
+        raise ValueError("explicit split-cache override is only supported for svdpp and cb_svdpp benchmarks")
 
     root = (repo_root or discover_repo_root()).resolve()
     processed_manifest_path = processed_manifest_path.resolve()
@@ -202,6 +205,11 @@ def run_ml100k_paper_benchmark(
     config_snapshot_path = benchmark_dir / "config_snapshot.yaml"
 
     benchmark_scope = f"paper_faithful_ml100k_v1_{model_name}_u1_u5"
+    if use_split_cache is None:
+        split_cache_command_fragment = ""
+    else:
+        split_cache_mode = "enable" if use_split_cache else "disable"
+        split_cache_command_fragment = f"--split-cache {split_cache_mode} "
     command_string = command or (
         "recsys-lab benchmark-ml100k-paper "
         f"--model {model_name} "
@@ -209,6 +217,7 @@ def run_ml100k_paper_benchmark(
         f"--model-config {repo_path_string(model_config_path, repo_root=root)} "
         f"--runtime-config {repo_path_string(runtime_config_path, repo_root=root)} "
         f"--device-config {repo_path_string(device_config_path, repo_root=root)} "
+        f"{split_cache_command_fragment}"
         f"--model-seed {model_seed}"
     )
 
@@ -267,6 +276,7 @@ def run_ml100k_paper_benchmark(
                 "benchmark_scope": benchmark_scope,
                 "model_name": model_name,
                 "model_seed": model_seed,
+                "use_split_cache": use_split_cache,
                 "processed_manifest": repo_path_string(processed_manifest_path, repo_root=root),
                 "model_config": repo_path_string(model_config_path, repo_root=root),
                 "runtime_config": repo_path_string(runtime_config_path, repo_root=root),
@@ -313,15 +323,20 @@ def run_ml100k_paper_benchmark(
                     run_manifest_paths.append(existing_manifest_path)
                     continue
 
+                runner_kwargs = {
+                    "processed_manifest_path": processed_manifest_path,
+                    "model_config_path": model_config_path,
+                    "runtime_config_path": runtime_config_path,
+                    "device_config_path": device_config_path,
+                    "split_config": SplitConfig(train_ratio=0.8, validation_ratio=0.1, seed=fold_index),
+                    "model_seed": model_seed,
+                    "repo_root": root,
+                    "split_family": "paper_faithful_ml100k_v1",
+                }
+                if model_name in {"svdpp", "cb_svdpp"}:
+                    runner_kwargs["use_split_cache"] = use_split_cache
                 payload = runner(
-                    processed_manifest_path=processed_manifest_path,
-                    model_config_path=model_config_path,
-                    runtime_config_path=runtime_config_path,
-                    device_config_path=device_config_path,
-                    split_config=SplitConfig(train_ratio=0.8, validation_ratio=0.1, seed=fold_index),
-                    model_seed=model_seed,
-                    repo_root=root,
-                    split_family="paper_faithful_ml100k_v1",
+                    **runner_kwargs,
                 )
                 run_manifest_paths.append(Path(str(payload["run_manifest"])).resolve())
 

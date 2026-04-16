@@ -1,13 +1,17 @@
 from __future__ import annotations
 
-import csv
 from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np
 import pyarrow.parquet as pq
 
+from recsys_lab.data.ml100k_official_splits import read_legacy_ml100k_split
 from recsys_lab.data.processed import RatingsData, load_processed_dataset_manifest
+
+
+OFFICIAL_ML100K_SPLIT_SOURCE_PROCESSED_MANIFEST = "processed_manifest_official_indices"
+OFFICIAL_ML100K_SPLIT_SOURCE_LEGACY_RUNTIME_LOOKUP = "legacy_runtime_lookup_fallback"
 
 
 @dataclass(frozen=True, slots=True)
@@ -15,21 +19,6 @@ class RatingsSplit:
     train: RatingsData
     validation: RatingsData | None
     test: RatingsData
-
-
-def _read_legacy_ml100k_split(path: Path) -> list[tuple[int, int, float, int]]:
-    records: list[tuple[int, int, float, int]] = []
-    with path.open("r", encoding="latin-1", newline="") as handle:
-        reader = csv.reader(handle, delimiter="\t")
-        for row in reader:
-            if not row:
-                continue
-            if len(row) != 4:
-                raise ValueError(f"unexpected row width in ml100k split file: {path}")
-            records.append((int(row[0]), int(row[1]), float(row[2]), int(row[3])))
-    return records
-
-
 def _paper_faithful_ml100k_split_indices(
     *,
     processed_manifest_path: Path,
@@ -45,6 +34,19 @@ def _paper_faithful_ml100k_split_indices(
     source = processed_manifest.get("source", {})
     if str(source.get("format_family")) != "legacy_100k":
         raise ValueError("paper-faithful ml100k splits require source.format_family='legacy_100k'")
+
+    artifacts = processed_manifest.get("artifacts", {})
+    official_splits = artifacts.get("official_ml100k_splits")
+    if isinstance(official_splits, dict):
+        folds_payload = official_splits.get("folds")
+        fold_payload = None if not isinstance(folds_payload, dict) else folds_payload.get(f"u{fold_index}")
+        if isinstance(fold_payload, dict):
+            train_indices = np.load(Path(str(fold_payload["train_row_indices_npy"])), mmap_mode="r")
+            test_indices = np.load(Path(str(fold_payload["test_row_indices_npy"])), mmap_mode="r")
+            return (
+                np.asarray(train_indices, dtype=np.int64),
+                np.asarray(test_indices, dtype=np.int64),
+            )
 
     raw_dir = Path(str(source["raw_dir"])).resolve()
     train_split_path = raw_dir / f"u{fold_index}.base"
@@ -85,8 +87,8 @@ def _paper_faithful_ml100k_split_indices(
             indices.append(int(row_lookup[record]))
         return np.asarray(indices, dtype=np.int64)
 
-    train_idx = resolve_indices(_read_legacy_ml100k_split(train_split_path))
-    test_idx = resolve_indices(_read_legacy_ml100k_split(test_split_path))
+    train_idx = resolve_indices(read_legacy_ml100k_split(train_split_path))
+    test_idx = resolve_indices(read_legacy_ml100k_split(test_split_path))
 
     train_set = set(train_idx.tolist())
     test_set = set(test_idx.tolist())
@@ -96,6 +98,29 @@ def _paper_faithful_ml100k_split_indices(
         raise ValueError("official ml100k split files do not cover the full processed interaction table")
 
     return train_idx, test_idx
+
+
+def official_ml100k_split_resolution_source(
+    *,
+    processed_manifest_path: Path,
+    fold_index: int,
+) -> str:
+    if fold_index not in {1, 2, 3, 4, 5}:
+        raise ValueError("paper-faithful ml100k fold_index must be one of 1, 2, 3, 4, 5")
+
+    processed_manifest = load_processed_dataset_manifest(processed_manifest_path)
+    if str(processed_manifest["dataset_short_name"]) != "ml100k":
+        raise ValueError("paper-faithful ml100k split source is only valid for dataset_short_name='ml100k'")
+
+    artifacts = processed_manifest.get("artifacts", {})
+    official_splits = artifacts.get("official_ml100k_splits")
+    if isinstance(official_splits, dict):
+        folds_payload = official_splits.get("folds")
+        fold_payload = None if not isinstance(folds_payload, dict) else folds_payload.get(f"u{fold_index}")
+        if isinstance(fold_payload, dict):
+            return OFFICIAL_ML100K_SPLIT_SOURCE_PROCESSED_MANIFEST
+
+    return OFFICIAL_ML100K_SPLIT_SOURCE_LEGACY_RUNTIME_LOOKUP
 
 
 def official_ml100k_paper_faithful_split(

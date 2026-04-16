@@ -35,6 +35,17 @@ def _resolve_path(path_value: str | None, *, repo_root: Path) -> Path | None:
     return path.resolve()
 
 
+def _resolve_split_cache_override(split_cache: str) -> bool | None:
+    normalized = split_cache.strip().lower()
+    if normalized == "auto":
+        return None
+    if normalized == "enable":
+        return True
+    if normalized == "disable":
+        return False
+    raise typer.BadParameter("split_cache must be one of: auto, enable, disable")
+
+
 @app.command("bootstrap-check")
 def bootstrap_check(repo_root: str | None = None) -> None:
     root = _resolve_path(repo_root, repo_root=discover_repo_root()) if repo_root else discover_repo_root()
@@ -165,6 +176,7 @@ def train_svdpp(
     validation_ratio: float = 0.1,
     split_seed: int = 1,
     model_seed: int = 1,
+    split_cache: str = typer.Option("auto", help="Split-cache policy: auto, enable, or disable."),
 ) -> None:
     root = discover_repo_root()
     processed_manifest_path = _resolve_path(processed_manifest, repo_root=root)
@@ -190,6 +202,7 @@ def train_svdpp(
         model_seed=model_seed,
         repo_root=root,
         split_family=split_family,
+        use_split_cache=_resolve_split_cache_override(split_cache),
     )
     typer.echo(json.dumps(payload, indent=2, sort_keys=True))
 
@@ -242,6 +255,7 @@ def train_asvdpp(
     validation_ratio: float = 0.1,
     split_seed: int = 1,
     model_seed: int = 1,
+    split_cache: str = typer.Option("auto", help="Split-cache policy: auto, enable, or disable."),
 ) -> None:
     root = discover_repo_root()
     processed_manifest_path = _resolve_path(processed_manifest, repo_root=root)
@@ -266,6 +280,7 @@ def train_asvdpp(
         ),
         model_seed=model_seed,
         repo_root=root,
+        use_split_cache=_resolve_split_cache_override(split_cache),
     )
     typer.echo(json.dumps(payload, indent=2, sort_keys=True))
 
@@ -281,6 +296,7 @@ def train_cb_svdpp(
     validation_ratio: float = 0.1,
     split_seed: int = 1,
     model_seed: int = 1,
+    split_cache: str = typer.Option("auto", help="Split-cache policy: auto, enable, or disable."),
 ) -> None:
     root = discover_repo_root()
     processed_manifest_path = _resolve_path(processed_manifest, repo_root=root)
@@ -306,6 +322,7 @@ def train_cb_svdpp(
         model_seed=model_seed,
         repo_root=root,
         split_family=split_family,
+        use_split_cache=_resolve_split_cache_override(split_cache),
     )
     typer.echo(json.dumps(payload, indent=2, sort_keys=True))
 
@@ -318,6 +335,7 @@ def benchmark_ml100k_paper(
     runtime_config: str = "configs/runtime/base.yaml",
     device_config: str = "configs/runtime/devices/local_i5_2500k_24gb.yaml",
     model_seed: int = 1,
+    split_cache: str = typer.Option("auto", help="Split-cache policy: auto, enable, or disable."),
 ) -> None:
     root = discover_repo_root()
     processed_manifest_path = _resolve_path(processed_manifest, repo_root=root)
@@ -337,6 +355,7 @@ def benchmark_ml100k_paper(
         runtime_config_path=runtime_config_path,
         device_config_path=device_config_path,
         model_seed=model_seed,
+        use_split_cache=_resolve_split_cache_override(split_cache),
         repo_root=root,
     )
     typer.echo(json.dumps(payload, indent=2, sort_keys=True))
@@ -403,6 +422,7 @@ def tune_ml100k_inner(
     processed_manifest: str,
     runtime_config: str = "configs/runtime/base.yaml",
     device_config: str = "configs/runtime/devices/local_i5_2500k_24gb.yaml",
+    split_cache: str = typer.Option("auto", help="Split-cache policy: auto, enable, or disable."),
 ) -> None:
     root = discover_repo_root()
     tuning_config_path = _resolve_path(tuning_config, repo_root=root)
@@ -420,6 +440,7 @@ def tune_ml100k_inner(
         processed_manifest_path=processed_manifest_path,
         runtime_config_path=runtime_config_path,
         device_config_path=device_config_path,
+        use_split_cache=_resolve_split_cache_override(split_cache),
         repo_root=root,
     )
     typer.echo(json.dumps(payload, indent=2, sort_keys=True))

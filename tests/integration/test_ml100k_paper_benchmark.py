@@ -1,6 +1,8 @@
 import json
 from pathlib import Path
 
+import pytest
+
 from recsys_lab.experiments.ml100k_paper_benchmark import run_ml100k_paper_benchmark
 
 
@@ -367,6 +369,97 @@ def test_run_ml100k_paper_benchmark_disables_reuse_when_repo_is_dirty(
 
     assert calls == [1, 2, 3, 4, 5]
     assert "allow_existing_run_reuse=false" in stdout_log
+
+
+def test_run_ml100k_paper_benchmark_passes_split_cache_override_to_supported_models(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    actual_repo_root = Path(__file__).resolve().parents[2]
+    (
+        repo_root,
+        processed_manifest_path,
+        _model_config_path,
+        runtime_config_path,
+        device_config_path,
+    ) = _prepare_synthetic_benchmark_repo(tmp_path, actual_repo_root)
+
+    model_config_path = repo_root / "configs" / "models" / "svdpp.yaml"
+    _write_text(
+        model_config_path,
+        "model:\n  name: svdpp\n  scope: paper_inspired\ntraining:\n  dtype: float32\n",
+    )
+
+    monkeypatch.setattr(
+        "recsys_lab.experiments.ml100k_paper_benchmark.git_snapshot",
+        lambda _repo_root: {"commit": "abcdef1234567", "branch": "main", "dirty": True},
+    )
+
+    observed_split_cache: list[bool | None] = []
+
+    def _fake_runner(**kwargs):
+        fold_index = int(kwargs["split_config"].seed)
+        observed_split_cache.append(kwargs.get("use_split_cache"))
+        run_manifest_path = _write_completed_run(
+            repo_root=repo_root,
+            processed_manifest_path=processed_manifest_path,
+            model_config_path=model_config_path,
+            runtime_config_path=runtime_config_path,
+            device_config_path=device_config_path,
+            fold_index=fold_index,
+            model_seed=int(kwargs["model_seed"]),
+            train_rmse=0.80 + fold_index * 0.01,
+            test_rmse=0.90 + fold_index * 0.01,
+            training_seconds=10.0 * fold_index,
+            model_name="svdpp",
+        )
+        return {
+            "run_manifest": str(run_manifest_path),
+        }
+
+    monkeypatch.setattr(
+        "recsys_lab.experiments.ml100k_paper_benchmark._runner_for_model",
+        lambda _model_name: _fake_runner,
+    )
+
+    run_ml100k_paper_benchmark(
+        model_name="svdpp",
+        processed_manifest_path=processed_manifest_path,
+        model_config_path=model_config_path,
+        runtime_config_path=runtime_config_path,
+        device_config_path=device_config_path,
+        model_seed=1,
+        use_split_cache=False,
+        repo_root=repo_root,
+        command="recsys-lab benchmark-ml100k-paper --synthetic-override",
+    )
+
+    assert observed_split_cache == [False, False, False, False, False]
+
+
+def test_run_ml100k_paper_benchmark_rejects_explicit_split_cache_override_for_unsupported_models(
+    tmp_path: Path,
+) -> None:
+    actual_repo_root = Path(__file__).resolve().parents[2]
+    (
+        repo_root,
+        processed_manifest_path,
+        model_config_path,
+        runtime_config_path,
+        device_config_path,
+    ) = _prepare_synthetic_benchmark_repo(tmp_path, actual_repo_root)
+
+    with pytest.raises(ValueError, match="explicit split-cache override"):
+        run_ml100k_paper_benchmark(
+            model_name="biased_mf",
+            processed_manifest_path=processed_manifest_path,
+            model_config_path=model_config_path,
+            runtime_config_path=runtime_config_path,
+            device_config_path=device_config_path,
+            model_seed=1,
+            use_split_cache=True,
+            repo_root=repo_root,
+        )
 
 
 def test_run_ml100k_paper_benchmark_supports_cb_svdpp_and_counts_cluster_time(

@@ -83,6 +83,7 @@ def run_ml100k_inner_tuning(
     processed_manifest_path: Path,
     runtime_config_path: Path,
     device_config_path: Path,
+    use_split_cache: bool | None = None,
     repo_root: Path | None = None,
     command: str | None = None,
 ) -> dict[str, Any]:
@@ -112,6 +113,8 @@ def run_ml100k_inner_tuning(
     model_name = str(base_model_config_payload["model"]["name"])
     if model_name not in SUPPORTED_MODELS:
         raise ValueError(f"unsupported tuning model: {model_name}")
+    if use_split_cache is not None and model_name not in {"svdpp", "cb_svdpp"}:
+        raise ValueError("explicit split-cache override is only supported for svdpp and cb_svdpp tuning runs")
 
     candidate_payloads = list(tuning_payload.get("candidates", []))
     if not candidate_payloads:
@@ -143,12 +146,18 @@ def run_ml100k_inner_tuning(
     config_snapshot_path = benchmark_dir / "config_snapshot.yaml"
 
     git = git_snapshot(root)
+    if use_split_cache is None:
+        split_cache_command_fragment = ""
+    else:
+        split_cache_mode = "enable" if use_split_cache else "disable"
+        split_cache_command_fragment = f"--split-cache {split_cache_mode} "
     command_string = command or (
         "recsys-lab tune-ml100k-inner "
         f"--tuning-config {repo_path_string(tuning_config_path, repo_root=root)} "
         f"--processed-manifest {repo_path_string(processed_manifest_path, repo_root=root)} "
         f"--runtime-config {repo_path_string(runtime_config_path, repo_root=root)} "
-        f"--device-config {repo_path_string(device_config_path, repo_root=root)}"
+        f"--device-config {repo_path_string(device_config_path, repo_root=root)} "
+        f"{split_cache_command_fragment}"
     )
     measurement = build_benchmark_measurement(
         time_metric="training_wall_clock_seconds",
@@ -206,6 +215,7 @@ def run_ml100k_inner_tuning(
                 "processed_manifest": repo_path_string(processed_manifest_path, repo_root=root),
                 "runtime_config": repo_path_string(runtime_config_path, repo_root=root),
                 "device_config": repo_path_string(device_config_path, repo_root=root),
+                "use_split_cache": use_split_cache,
                 "loaded_configs": {
                     "tuning": tuning_payload,
                     "processed_manifest": processed_manifest,
@@ -246,27 +256,30 @@ def run_ml100k_inner_tuning(
 
                 fold_results: list[dict[str, Any]] = []
                 for fold_index in folds:
-                    payload = runner(
-                        processed_manifest_path=processed_manifest_path,
-                        model_config_path=candidate_config_path,
-                        runtime_config_path=runtime_config_path,
-                        device_config_path=device_config_path,
-                        split_config=SplitConfig(
+                    runner_kwargs = {
+                        "processed_manifest_path": processed_manifest_path,
+                        "model_config_path": candidate_config_path,
+                        "runtime_config_path": runtime_config_path,
+                        "device_config_path": device_config_path,
+                        "split_config": SplitConfig(
                             train_ratio=1.0 - validation_ratio,
                             validation_ratio=validation_ratio,
                             seed=fold_index,
                         ),
-                        model_seed=model_seed,
-                        repo_root=root,
-                        split_family="paper_faithful_ml100k_inner_v1",
-                        inner_validation_seed=inner_seed,
-                        evaluate_test=False,
-                        command=(
+                        "model_seed": model_seed,
+                        "repo_root": root,
+                        "split_family": "paper_faithful_ml100k_inner_v1",
+                        "inner_validation_seed": inner_seed,
+                        "evaluate_test": False,
+                        "command": (
                             "recsys-lab tune-ml100k-inner "
                             f"--tuning-config {repo_path_string(tuning_config_path, repo_root=root)} "
                             f"--candidate-id {candidate_id} --fold {fold_index}"
                         ),
-                    )
+                    }
+                    if model_name in {"svdpp", "cb_svdpp"}:
+                        runner_kwargs["use_split_cache"] = use_split_cache
+                    payload = runner(**runner_kwargs)
                     run_manifest_path = Path(str(payload["run_manifest"])).resolve()
                     run_manifest_paths.append(run_manifest_path)
                     metrics = _read_run_metrics(run_manifest_path, repo_root=root)

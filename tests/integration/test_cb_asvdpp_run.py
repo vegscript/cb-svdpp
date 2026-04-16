@@ -4,8 +4,10 @@ from pathlib import Path
 import pyarrow as pa
 import pyarrow.parquet as pq
 
+from recsys_lab.data.processed import load_ratings_data_from_manifest
+from recsys_lab.data.splitters import RatingsSplit
+from recsys_lab.experiments.cb_asvdpp import run_cb_asvdpp_experiment
 from recsys_lab.experiments.common import SplitConfig
-from recsys_lab.experiments.svdpp import run_svdpp_experiment
 
 
 def _write_text(path: Path, text: str) -> None:
@@ -28,12 +30,16 @@ def _prepare_synthetic_repo(tmp_path: Path, actual_repo_root: Path) -> tuple[Pat
     (repo_root / "configs" / "runtime" / "devices").mkdir(parents=True, exist_ok=True)
 
     _write_text(
-        repo_root / "configs" / "models" / "svdpp.yaml",
-        "model:\n  name: svdpp\n  scope: paper_inspired\ntraining:\n"
+        repo_root / "configs" / "models" / "cb_asvdpp.yaml",
+        "model:\n  name: cb_asvdpp\n  scope: paper_inspired\ntraining:\n"
         "  latent_dim: 8\n  epochs: 8\n  learning_rate: 0.02\n"
         "  lambda_b: 0.01\n  lambda_p: 0.01\n  lambda_q: 0.01\n"
-        "  lambda_y: 0.01\n  init_std: 0.05\n  dtype: float32\n"
-        "  implicit_policy: ratings_as_implicit\n",
+        "  lambda_x: 0.01\n  lambda_y: 0.01\n"
+        "  lambda_pC: 0.01\n  lambda_qC: 0.01\n  lambda_xC: 0.01\n  lambda_yC: 0.01\n"
+        "  init_std: 0.05\n  dtype: float32\n  implicit_policy: ratings_as_implicit\n"
+        "  residual_weight_contract: detached\nclustering:\n"
+        "  n_user_clusters: 2\n  n_item_clusters: 2\n  alpha: 0.2\n"
+        "  algorithm: kmeans\n  kmeans_n_init: 5\n",
     )
     _write_text(
         repo_root / "configs" / "runtime" / "base.yaml",
@@ -82,12 +88,12 @@ def _prepare_synthetic_repo(tmp_path: Path, actual_repo_root: Path) -> tuple[Pat
     return (
         repo_root,
         processed_manifest_path,
-        repo_root / "configs" / "models" / "svdpp.yaml",
+        repo_root / "configs" / "models" / "cb_asvdpp.yaml",
         repo_root / "configs" / "runtime" / "devices" / "local.yaml",
     )
 
 
-def test_run_svdpp_experiment_writes_valid_run_artifacts(tmp_path: Path, monkeypatch) -> None:
+def test_run_cb_asvdpp_experiment_writes_valid_run_artifacts(tmp_path: Path, monkeypatch) -> None:
     actual_repo_root = Path(__file__).resolve().parents[2]
     repo_root, processed_manifest_path, model_config_path, device_config_path = _prepare_synthetic_repo(
         tmp_path,
@@ -96,11 +102,11 @@ def test_run_svdpp_experiment_writes_valid_run_artifacts(tmp_path: Path, monkeyp
     runtime_config_path = repo_root / "configs" / "runtime" / "base.yaml"
 
     monkeypatch.setattr(
-        "recsys_lab.experiments.svdpp.git_snapshot",
+        "recsys_lab.experiments.cb_asvdpp.git_snapshot",
         lambda _repo_root: {"commit": "abcdef1234567", "branch": "main", "dirty": False},
     )
 
-    payload = run_svdpp_experiment(
+    payload = run_cb_asvdpp_experiment(
         processed_manifest_path=processed_manifest_path,
         model_config_path=model_config_path,
         runtime_config_path=runtime_config_path,
@@ -108,7 +114,7 @@ def test_run_svdpp_experiment_writes_valid_run_artifacts(tmp_path: Path, monkeyp
         split_config=SplitConfig(train_ratio=0.5, validation_ratio=0.25, seed=3),
         model_seed=4,
         repo_root=repo_root,
-        command="recsys-lab train-svdpp --synthetic",
+        command="recsys-lab train-cb-asvdpp --synthetic",
     )
 
     run_manifest_path = Path(payload["run_manifest"])
@@ -119,18 +125,66 @@ def test_run_svdpp_experiment_writes_valid_run_artifacts(tmp_path: Path, monkeyp
     metrics = json.loads(metrics_path.read_text(encoding="utf-8"))
 
     assert manifest["status"] == "completed"
-    assert manifest["model"]["name"] == "svdpp"
+    assert manifest["model"]["name"] == "cb_asvdpp"
     assert metrics["metrics"]["validation_rmse"] >= 0.0
-    assert metrics["model"]["config"]["training_backend"] == "auto"
-    assert metrics["model"]["training_backend_effective"] in {"python", "numba"}
-    assert metrics["model"]["implicit_summary"]["users_with_history"] == 4
-    assert metrics["system_metrics"]["train_time_total"] > 0.0
-    assert metrics["system_metrics"]["train_time_per_epoch"] > 0.0
-    assert metrics["system_metrics"]["ratings_per_second_train"] > 0.0
-    assert metrics["system_metrics"]["ratings_per_second_inference"] > 0.0
-    assert metrics["system_metrics"]["peak_memory_mb"] > 0.0
-    assert metrics["system_metrics"]["peak_memory_delta_mb"] >= 0.0
-    assert metrics["system_metrics"]["model_size_mb"] > 0.0
+    assert metrics["model"]["clustering"]["r_star_role"] == "diagnostic_only"
+    assert metrics["model"]["clustering"]["train_only_assignments"] is True
+    assert metrics["model"]["explicit_summary"]["users_with_explicit_history"] == 4
+    assert metrics["system_metrics"]["train_time_total"] >= metrics["timing"]["training_wall_clock_seconds"]
+    assert metrics["system_metrics"]["cluster_induction_wall_clock_seconds"] > 0.0
+    assert metrics["system_metrics"]["main_training_wall_clock_seconds"] > 0.0
     assert len(metrics["system_metrics"]["epoch_durations_seconds"]) == 8
     assert metrics["timing"]["inference_wall_clock_seconds"] >= 0.0
     assert stdout_log_path.exists()
+
+
+def test_run_cb_asvdpp_experiment_supports_official_split_family_without_test_eval(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    actual_repo_root = Path(__file__).resolve().parents[2]
+    repo_root, processed_manifest_path, model_config_path, device_config_path = _prepare_synthetic_repo(
+        tmp_path,
+        actual_repo_root,
+    )
+    runtime_config_path = repo_root / "configs" / "runtime" / "base.yaml"
+    ratings_data = load_ratings_data_from_manifest(processed_manifest_path)
+
+    monkeypatch.setattr(
+        "recsys_lab.experiments.cb_asvdpp.git_snapshot",
+        lambda _repo_root: {"commit": "abcdef1234567", "branch": "main", "dirty": False},
+    )
+
+    def _fake_official_split(ratings_data, *, processed_manifest_path, fold_index):
+        del processed_manifest_path, fold_index
+        return RatingsSplit(
+            train=ratings_data.subset([0, 1, 3, 4, 6, 7, 9, 10], name="train"),
+            validation=None,
+            test=ratings_data.subset([2, 5, 8, 11], name="test"),
+        )
+
+    monkeypatch.setattr(
+        "recsys_lab.experiments.cb_asvdpp.official_ml100k_paper_faithful_split",
+        _fake_official_split,
+    )
+
+    payload = run_cb_asvdpp_experiment(
+        processed_manifest_path=processed_manifest_path,
+        model_config_path=model_config_path,
+        runtime_config_path=runtime_config_path,
+        device_config_path=device_config_path,
+        split_config=SplitConfig(train_ratio=0.8, validation_ratio=0.1, seed=2),
+        model_seed=5,
+        repo_root=repo_root,
+        command="recsys-lab train-cb-asvdpp --synthetic-official",
+        split_family="paper_faithful_ml100k_v1",
+        evaluate_test=False,
+    )
+
+    metrics_path = Path(payload["run_dir"]) / "metrics.json"
+    metrics = json.loads(metrics_path.read_text(encoding="utf-8"))
+
+    assert metrics["split"]["family"] == "paper_faithful_ml100k_v1"
+    assert metrics["split"]["test_metrics_available"] is False
+    assert metrics["metrics"]["validation_rmse"] is None
+    assert metrics["metrics"]["test_rmse"] is None
