@@ -15,6 +15,7 @@ from recsys_lab.experiments.common import SplitConfig
 from recsys_lab.experiments.ml100k_inner_tuning import run_inner_tuning, run_ml100k_inner_tuning
 from recsys_lab.experiments.ml100k_paper_benchmark import run_ml100k_paper_benchmark
 from recsys_lab.experiments.ml100k_paper_multiseed_benchmark import run_ml100k_paper_multiseed_benchmark
+from recsys_lab.experiments.random_multiseed_benchmark import run_random_multiseed_benchmark
 from recsys_lab.experiments.svdpp import run_svdpp_experiment
 from recsys_lab.experiments.runner import build_dry_run_plan
 from recsys_lab.utils.manifests import validate_manifest_file
@@ -452,6 +453,59 @@ def benchmark_ml100k_paper_multiseed(
         device_config_path=device_config_path,
         model_seeds=seed_values,
         benchmark_manifest_paths=benchmark_manifest_path_values,
+        repo_root=root,
+    )
+    typer.echo(json.dumps(payload, indent=2, sort_keys=True))
+
+
+@app.command("benchmark-random-multiseed")
+def benchmark_random_multiseed(
+    processed_manifest: str,
+    model_config: str,
+    runtime_config: str = "configs/runtime/base.yaml",
+    device_config: str = "configs/runtime/devices/local_i5_2500k_24gb.yaml",
+    split_seeds: str = "1,2,3",
+    model_seed: int = 1,
+    run_manifest_paths: str | None = None,
+) -> None:
+    root = discover_repo_root()
+    processed_manifest_path = _resolve_path(processed_manifest, repo_root=root)
+    model_config_path = _resolve_path(model_config, repo_root=root)
+    runtime_config_path = _resolve_path(runtime_config, repo_root=root)
+    device_config_path = _resolve_path(device_config, repo_root=root)
+
+    if processed_manifest_path is None or model_config_path is None:
+        raise typer.BadParameter("processed_manifest and model_config are required")
+    if runtime_config_path is None or device_config_path is None:
+        raise typer.BadParameter("runtime_config and device_config are required")
+
+    try:
+        split_seed_values = [int(value.strip()) for value in split_seeds.split(",") if value.strip()]
+    except ValueError as exc:
+        raise typer.BadParameter("split_seeds must be a comma-separated list of integers") from exc
+    if not split_seed_values:
+        raise typer.BadParameter("split_seeds must contain at least one integer")
+
+    run_manifest_path_values = None
+    if run_manifest_paths is not None:
+        run_manifest_path_values = [
+            _resolve_path(value.strip(), repo_root=root)
+            for value in run_manifest_paths.split(",")
+            if value.strip()
+        ]
+        if not run_manifest_path_values:
+            raise typer.BadParameter("run_manifest_paths must contain at least one comma-separated path")
+        if any(path is None for path in run_manifest_path_values):
+            raise typer.BadParameter("run_manifest_paths contains an invalid path")
+
+    payload = run_random_multiseed_benchmark(
+        processed_manifest_path=processed_manifest_path,
+        model_config_path=model_config_path,
+        runtime_config_path=runtime_config_path,
+        device_config_path=device_config_path,
+        split_seeds=split_seed_values,
+        model_seed=model_seed,
+        run_manifest_paths=run_manifest_path_values,
         repo_root=root,
     )
     typer.echo(json.dumps(payload, indent=2, sort_keys=True))

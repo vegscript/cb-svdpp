@@ -129,6 +129,7 @@ Optional, aber dringend empfohlen:
 - `inputs.benchmark_ids`
 - `inputs.benchmark_manifest_paths`
 - `inputs.model_seeds`
+- `inputs.split_seeds`
 - `artifacts.tables`
 - `artifacts.figures`
 - `artifacts.stdout_log`
@@ -142,6 +143,8 @@ Hinweis:
 - Fuer Multi-Seed-Benchmarks muessen `inputs.benchmark_ids`,
   `inputs.benchmark_manifest_paths` und `inputs.model_seeds` vollstaendig
   befuellt sein.
+- Fuer `benchmark_random_v1`-Aggregationen ueber mehrere Split-Seeds soll
+  zusaetzlich `inputs.split_seeds` vollstaendig befuellt sein.
 - Wenn ein Benchmark einen `measurement`-Block fuehrt, beschreibt dieser die
   kanonische Zeitmetrik, deren Semantik, die Warmup-Politik und die Zahl der
   gemessenen Samples maschinenlesbar.

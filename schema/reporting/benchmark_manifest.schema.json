@@ -251,6 +251,13 @@
             "type": "integer",
             "minimum": 0
           }
+        },
+        "split_seeds": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 0
+          }
         }
       }
     },
