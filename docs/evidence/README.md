@@ -49,4 +49,4 @@ Jede Evidence-Datei soll mindestens enthalten:
 
 Das kanonische Template liegt in:
 
-- [docs/templates/evidence_note_template.md](G:/Meine Ablage/docs/WU/Semester_4/5255 Applications of Data Science/group_ass/final-project/docs/templates/evidence_note_template.md)
+- [docs/templates/evidence_note_template.md](../templates/evidence_note_template.md)

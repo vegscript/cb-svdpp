@@ -47,23 +47,25 @@ Only the completed run on commit `29bb460` is used below.
 
 ## Command
 
-The evidence run used a separate clean Git worktree at:
+The evidence run used a separate clean Git worktree. The local absolute
+worktree path is intentionally omitted from this public note; the clean
+worktree was pinned to commit `29bb460`.
 
 ```text
-G:/Meine Ablage/docs/WU/Semester_4/5255 Applications of Data Science/group_ass/final-project-g5-clean
+<clean-worktree>
 ```
 
 Environment:
 
 ```powershell
-$env:PYTHONPATH = "G:\Meine Ablage\docs\WU\Semester_4\5255 Applications of Data Science\group_ass\final-project-g5-clean\src"
+$env:PYTHONPATH = "<clean-worktree>\src"
 $env:RECSYS_CACHE_ROOT = "artifacts/local/g5_ml100k_tune_29bb460"
 ```
 
 Command:
 
 ```powershell
-G:\Meine Ablage\docs\WU\Semester_4\5255 Applications of Data Science\group_ass\final-project\.venv\Scripts\python.exe -m recsys_lab.cli.main tune-inner configs\experiments\tuning\ml100k_cb_svdpp_g5_bounded_alpha_cluster.yaml G:\Meine Ablage\docs\WU\Semester_4\5255 Applications of Data Science\group_ass\final-project\data\processed\ml100k\ml100k_benchmark_random_v1_explicit_v1_float32_manifest.json --runtime-config configs\runtime\base.yaml --device-config configs\runtime\devices\local_i5_2500k_24gb.yaml --split-cache enable --training-index-cache --cluster-artifact-cache
+<python> -m recsys_lab.cli.main tune-inner configs\experiments\tuning\ml100k_cb_svdpp_g5_bounded_alpha_cluster.yaml data\processed\ml100k\ml100k_benchmark_random_v1_explicit_v1_float32_manifest.json --runtime-config configs\runtime\base.yaml --device-config configs\runtime\devices\local_i5_2500k_24gb.yaml --split-cache enable --training-index-cache --cluster-artifact-cache
 ```
 
 The completed artifacts were copied unchanged from the clean worktree into the

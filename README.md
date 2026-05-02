@@ -24,6 +24,8 @@ claims only where the publish-readiness matrix explicitly allows them.
 - Project report: `docs/report/project_report.md`
 - Reproduction setup evidence:
   `docs/evidence/reproduction/2026-05-02_public_clean_import.md`
+- Public path hygiene evidence:
+  `docs/evidence/reproduction/2026-05-03_public_path_hygiene.md`
 
 This repository is not an unconstrained `paper-faithful` or `scalable`
 reproduction. The clustering-based models are documented as source-grounded
@@ -49,15 +51,17 @@ The current local reproduction evidence used:
 - `uv sync --extra dev --locked`
 - Ruff gate: `All checks passed!`
 - Mypy source gate: `Success: no issues found in 62 source files`
-- full test suite from the `uv` environment: `131 passed`
+- full test suite from the `uv` environment: `133 passed`
 
 Basic smoke checks:
 
 ```powershell
 .venv\Scripts\python.exe -m recsys_lab.cli.main bootstrap-check
-.venv\Scripts\python.exe -m recsys_lab.cli.main validate-manifest artifacts\runs\2026-04-24T181239Z_ml20m_cb_svdpp_local_i5_2500k_24gb_benchmark_random_v1_tr080_va010_s001_s001\run_manifest.json
 .venv\Scripts\python.exe -m pytest
 ```
+
+Manifest validation examples in the evidence notes require the corresponding
+local, ignored run or benchmark artifact to exist.
 
 ## Claimable Results
 

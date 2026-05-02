@@ -42,8 +42,8 @@ Der Report enthaelt nur:
 
 Die kanonischen Report-Dateien sind:
 
-- [docs/report/report_contract.md](G:/Meine Ablage/docs/WU/Semester_4/5255 Applications of Data Science/group_ass/final-project/docs/report/report_contract.md)
-- [docs/report/project_report.md](G:/Meine Ablage/docs/WU/Semester_4/5255 Applications of Data Science/group_ass/final-project/docs/report/project_report.md)
+- [docs/report/report_contract.md](report_contract.md)
+- [docs/report/project_report.md](project_report.md)
 
 Kein anderes Dokument darf still als parallel gepflegter zweiter Report wachsen.
 

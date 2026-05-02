@@ -77,9 +77,9 @@ Wichtig:
 
 Im ersten Implementierungspfad wird `w_uj` innerhalb eines inneren SGD-Schritts
 als detachierte Groesse behandelt. Siehe
-[docs/methodology/deviations_from_paper.md](G:/Meine Ablage/docs/WU/Semester_4/5255 Applications of Data Science/group_ass/final-project/docs/methodology/deviations_from_paper.md)
+[docs/methodology/deviations_from_paper.md](../methodology/deviations_from_paper.md)
 und
-[objective_functions.md](G:/Meine Ablage/docs/WU/Semester_4/5255 Applications of Data Science/group_ass/final-project/docs/math/objective_functions.md).
+[objective_functions.md](objective_functions.md).
 
 ## Cluster Notation
 

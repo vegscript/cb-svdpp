@@ -29,16 +29,16 @@ Wenn ein Schritt nicht belegt ist, ist er Hypothese, nicht Ergebnis.
 
 Vor groesseren Aenderungen kurz lesen:
 
-- [README.md](G:/Meine Ablage/docs/WU/Semester_4/5255 Applications of Data Science/group_ass/final-project/README.md)
-- [docs/project_master_plan.md](G:/Meine Ablage/docs/WU/Semester_4/5255 Applications of Data Science/group_ass/final-project/docs/project_master_plan.md)
-- [docs/repo_governance.md](G:/Meine Ablage/docs/WU/Semester_4/5255 Applications of Data Science/group_ass/final-project/docs/repo_governance.md)
-- [docs/environment_contract.md](G:/Meine Ablage/docs/WU/Semester_4/5255 Applications of Data Science/group_ass/final-project/docs/environment_contract.md)
-- [docs/data_and_split_contract.md](G:/Meine Ablage/docs/WU/Semester_4/5255 Applications of Data Science/group_ass/final-project/docs/data_and_split_contract.md)
-- [docs/evaluation_protocol.md](G:/Meine Ablage/docs/WU/Semester_4/5255 Applications of Data Science/group_ass/final-project/docs/evaluation_protocol.md)
-- [docs/naming_conventions.md](G:/Meine Ablage/docs/WU/Semester_4/5255 Applications of Data Science/group_ass/final-project/docs/naming_conventions.md)
-- [docs/manifest_contract.md](G:/Meine Ablage/docs/WU/Semester_4/5255 Applications of Data Science/group_ass/final-project/docs/manifest_contract.md)
-- [docs/report/report_contract.md](G:/Meine Ablage/docs/WU/Semester_4/5255 Applications of Data Science/group_ass/final-project/docs/report/report_contract.md)
-- [docs/methodology/deviations_from_paper.md](G:/Meine Ablage/docs/WU/Semester_4/5255 Applications of Data Science/group_ass/final-project/docs/methodology/deviations_from_paper.md)
+- [README.md](README.md)
+- [docs/project_master_plan.md](docs/project_master_plan.md)
+- [docs/repo_governance.md](docs/repo_governance.md)
+- [docs/environment_contract.md](docs/environment_contract.md)
+- [docs/data_and_split_contract.md](docs/data_and_split_contract.md)
+- [docs/evaluation_protocol.md](docs/evaluation_protocol.md)
+- [docs/naming_conventions.md](docs/naming_conventions.md)
+- [docs/manifest_contract.md](docs/manifest_contract.md)
+- [docs/report/report_contract.md](docs/report/report_contract.md)
+- [docs/methodology/deviations_from_paper.md](docs/methodology/deviations_from_paper.md)
 
 Wenn ein Task Modellmathematik oder Update-Regeln betrifft, muessen vor
 Implementierung zusaetzlich die einschlaegigen mathematischen Spezifikationen in

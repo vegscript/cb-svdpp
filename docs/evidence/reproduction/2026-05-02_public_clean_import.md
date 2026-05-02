@@ -61,6 +61,7 @@ Public-tree scans:
   payload files in the current index
 - no high-signal secret-pattern hits in the current tracked tree
 - no high-signal secret-pattern hits in the reachable pre-import Git history
+- no local absolute workstation path hits in the current tracked tree
 
 ## Claim Boundary
 

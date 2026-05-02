@@ -47,8 +47,8 @@ artifacts/benchmarks/<benchmark_dir>/benchmark_manifest.json
 
 Die maschinenlesbaren kanonischen Schemata liegen in:
 
-- [schema/reporting/run_manifest.schema.json](G:/Meine Ablage/docs/WU/Semester_4/5255 Applications of Data Science/group_ass/final-project/schema/reporting/run_manifest.schema.json)
-- [schema/reporting/benchmark_manifest.schema.json](G:/Meine Ablage/docs/WU/Semester_4/5255 Applications of Data Science/group_ass/final-project/schema/reporting/benchmark_manifest.schema.json)
+- [schema/reporting/run_manifest.schema.json](../schema/reporting/run_manifest.schema.json)
+- [schema/reporting/benchmark_manifest.schema.json](../schema/reporting/benchmark_manifest.schema.json)
 
 Wenn Text und Schema auseinanderlaufen, muss der Konflikt aufgeloest werden.
 
