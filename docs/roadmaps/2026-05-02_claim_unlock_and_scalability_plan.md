@@ -239,18 +239,24 @@ Status:
 
 Promotion contract:
 
-- status: `contract_ready_g5_to_g6_validation_grid`
+- status: `completed_g6_validation_only_selection`
 - evidence:
   `docs/evidence/reproduction/2026-05-03_cb_svdpp_g6_validation_grid_contract.md`
+- run evidence:
+  `docs/evidence/reproduction/2026-05-03_cb_svdpp_g6_validation_grid_run.md`
 - config:
   `configs/experiments/tuning/ml100k_cb_svdpp_g6_validation_grid.yaml`
 - decision: promote the bounded G5 winner into a larger validation-only
   `ml100k cb_svdpp` grid before any outer test rerun
 - planned scope: `12` candidates times `3` split seeds, all selected by
   validation RMSE only
-- no G6 tuning result, final quality claim, test-set claim, large-dataset
-  claim, speed claim, scalability claim, SOTA claim, production-readiness claim,
-  or paper-faithfulness claim is unlocked by this contract
+- selected candidate:
+  `rank032_uc100_ic100_a0000_lr0100_reg0020_e002`
+- frozen selected config:
+  `configs/models/tuned/ml100k_cb_svdpp_g6_validation_selected.yaml`
+- no final quality claim, test-set claim, large-dataset claim, speed claim,
+  scalability claim, SOTA claim, production-readiness claim, or
+  paper-faithfulness claim is unlocked by this selection evidence
 
 ### 7. `R_star` Decision Track
 
@@ -305,13 +311,12 @@ A stronger CB release requires all of these gates:
 
 ## Immediate Next Sequence
 
-1. Run the G6 `ml100k cb_svdpp` validation-only promotion grid only from a clean
-   worktree with explicit split, training-index, and cluster-artifact cache
-   controls.
-2. Freeze the selected G6 candidate before any outer test rerun.
-3. Keep `cb_asvdpp` hot-path remediation as separate work if profiling shows it
+1. Decide whether to run a clean outer `ml100k cb_svdpp` benchmark for the
+   frozen G6-selected config; do not use test data until this decision is
+   documented and the selected config is frozen.
+2. Keep `cb_asvdpp` hot-path remediation as separate work if profiling shows it
    is decision-critical.
-4. Reassess `ml10m` and `ml20m` only after the profiler and cache work produce
+3. Reassess `ml10m` and `ml20m` only after the profiler and cache work produce
    clean evidence.
 
 ## Current Progress Estimate
@@ -321,10 +326,11 @@ Approximate engineering readiness for a publishable, stronger CB-focused repo:
 
 This percentage is not a benchmark result. It is a planning estimate based on
 completed governance, data, model, benchmark scaffolding, runtime-profile
-preflight, stage profiling on `ml100k` and bounded `ml10m`, and leakage-safe
-cluster-cache plumbing, plus a measured `cb_svdpp` hot-path workbuffer
-remediation on `ml100k`, plus explicit tune-inner cache controls and one
-bounded validation-only `ml100k cb_svdpp` alpha/cluster selection probe, versus
-the still missing larger validation grid decision, `cb_asvdpp` hot-path decision
+preflight, stage profiling on `ml100k` and bounded `ml10m`, leakage-safe
+cluster-cache plumbing, a measured `cb_svdpp` hot-path workbuffer remediation
+on `ml100k`, explicit tune-inner cache controls, a bounded validation-only
+`ml100k cb_svdpp` alpha/cluster selection probe, and a completed G6
+validation-only `ml100k cb_svdpp` grid, versus the still missing outer
+benchmark decision for the frozen G6 selection, `cb_asvdpp` hot-path decision
 if needed, final large-dataset reassessment, and final release-claim gates
 above.

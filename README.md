@@ -28,6 +28,8 @@ claims only where the publish-readiness matrix explicitly allows them.
   `docs/evidence/reproduction/2026-05-03_public_path_hygiene.md`
 - Validation-grid contract evidence:
   `docs/evidence/reproduction/2026-05-03_cb_svdpp_g6_validation_grid_contract.md`
+- Validation-grid run evidence:
+  `docs/evidence/reproduction/2026-05-03_cb_svdpp_g6_validation_grid_run.md`
 
 This repository is not an unconstrained `paper-faithful` or `scalable`
 reproduction. The clustering-based models are documented as source-grounded

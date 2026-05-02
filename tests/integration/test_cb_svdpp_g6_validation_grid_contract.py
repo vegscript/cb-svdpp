@@ -10,6 +10,10 @@ CONFIG_PATH = REPO_ROOT / "configs" / "experiments" / "tuning" / "ml100k_cb_svdp
 EVIDENCE_PATH = (
     REPO_ROOT / "docs" / "evidence" / "reproduction" / "2026-05-03_cb_svdpp_g6_validation_grid_contract.md"
 )
+RUN_EVIDENCE_PATH = (
+    REPO_ROOT / "docs" / "evidence" / "reproduction" / "2026-05-03_cb_svdpp_g6_validation_grid_run.md"
+)
+SELECTED_CONFIG_PATH = REPO_ROOT / "configs" / "models" / "tuned" / "ml100k_cb_svdpp_g6_validation_selected.yaml"
 ROADMAP_PATH = REPO_ROOT / "docs" / "roadmaps" / "2026-05-02_claim_unlock_and_scalability_plan.md"
 
 
@@ -27,6 +31,8 @@ def _walk_mapping_values(value: Any) -> list[Any]:
 def test_g6_validation_grid_contract_is_validation_only_and_method_bounded() -> None:
     payload = load_yaml_file(CONFIG_PATH)
     evidence = EVIDENCE_PATH.read_text(encoding="utf-8")
+    run_evidence = RUN_EVIDENCE_PATH.read_text(encoding="utf-8")
+    selected_payload = load_yaml_file(SELECTED_CONFIG_PATH)
     roadmap = ROADMAP_PATH.read_text(encoding="utf-8")
 
     assert payload["metadata"]["status"] == "validation_grid_contract"
@@ -86,4 +92,29 @@ def test_g6_validation_grid_contract_is_validation_only_and_method_bounded() -> 
     assert "planned validation-only runs: `36`" in evidence
     assert "no test-set evaluation during selection" in evidence
     assert "no G6 tuning result yet" in evidence
-    assert "status: `contract_ready_g5_to_g6_validation_grid`" in roadmap
+
+    selected_metadata = selected_payload["metadata"]
+    selected_training = selected_payload["training"]
+    selected_clustering = selected_payload["clustering"]
+    assert selected_metadata["status"] == "validation_selected"
+    assert selected_metadata["provenance"]["selected_candidate_id"] == "rank032_uc100_ic100_a0000_lr0100_reg0020_e002"
+    assert selected_metadata["provenance"]["selection_objective"] == "validation_rmse_mean"
+    assert selected_metadata["provenance"]["selection_split_seeds"] == [1, 2, 3]
+    assert selected_training["latent_dim"] == 32
+    assert selected_training["epochs"] == 2
+    assert selected_training["learning_rate"] == 0.01
+    assert selected_clustering["n_user_clusters"] == 100
+    assert selected_clustering["n_item_clusters"] == 100
+    assert selected_clustering["alpha"] == 0.0
+    assert selected_clustering["algorithm"] == "kmeans"
+
+    assert "status: `pass_for_validation_only_selection`" in run_evidence
+    assert "candidate run count: `36`" in run_evidence
+    assert "non-null `test_rmse` count across candidate metrics: `0`" in run_evidence
+    assert "rank032_uc100_ic100_a0000_lr0100_reg0020_e002" in run_evidence
+    assert "validation RMSE mean: `0.9566122815305916`" in run_evidence
+    assert "configs/models/tuned/ml100k_cb_svdpp_g6_validation_selected.yaml" in run_evidence
+    assert "no final `ml100k cb_svdpp` quality claim" in run_evidence
+
+    assert "status: `completed_g6_validation_only_selection`" in roadmap
+    assert "docs/evidence/reproduction/2026-05-03_cb_svdpp_g6_validation_grid_run.md" in roadmap
