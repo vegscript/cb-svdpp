@@ -1,0 +1,40 @@
+metadata:
+  status: stage1_tuned
+  owner: repo
+  purpose: model_profile
+  provenance:
+    selected_from: artifacts/benchmarks/2026-04-15T074345Z_ml100k_inner_tuning_cb_svdpp_stage1_local_i5_2500k_24gb/summary.json
+    selection_stage: ml100k_inner_stage1
+
+model:
+  name: cb_svdpp
+  family: clustering_based_factorization
+  scope: paper_inspired
+
+training:
+  latent_dim: 64
+  epochs: 20
+  learning_rate: 0.0075
+  lambda_b: 0.025
+  lambda_p: 0.025
+  lambda_q: 0.025
+  lambda_y: 0.025
+  lambda_pC: 0.025
+  lambda_qC: 0.025
+  lambda_yC: 0.025
+  init_std: 0.1
+  dtype: float32
+  implicit_policy: ratings_as_implicit
+
+clustering:
+  n_user_clusters: 80
+  n_item_clusters: 80
+  alpha: 0.10
+  algorithm: kmeans
+  kmeans_n_init: 10
+
+notes:
+  - selected on paper_faithful_ml100k_inner_v1
+  - tuned on outer folds u1 and u2 only
+  - fit-time comparisons include cluster induction plus main training
+  - not benchmark-final

@@ -1,0 +1,18 @@
+metadata:
+  status: draft
+  owner: repo
+  purpose: dataset_contract
+
+dataset:
+  name: MovieLens 20M
+  short_name: ml20m
+  source_family: movielens
+  benchmark_eligible: true
+  format_family: modern_csv
+  raw_relpath: data/raw/ml20m/ml-20m
+  raw_manifest_relpath: data/raw/ml20m/download_manifest.json
+  interim_relpath: data/interim/ml20m
+  processed_relpath: data/processed/ml20m
+  default_split_family: benchmark_random_v1
+  explicit_feedback_only: true
+  default_implicit_policy: ratings_as_implicit

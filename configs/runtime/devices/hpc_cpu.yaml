@@ -1,0 +1,28 @@
+metadata:
+  status: draft
+  owner: repo
+  purpose: portable_hpc_cpu_profile_template
+
+device_profile:
+  name: hpc_cpu
+  compute_class: hpc_cpu
+  cpu_model: override_per_cluster
+  logical_threads: null
+  physical_cores: null
+  ram_gb: null
+  gpu_enabled: false
+
+storage:
+  cache_preference: local_scratch
+  archive_preference: shared_storage
+
+threading:
+  omp_num_threads: null
+  blas_threads: null
+
+resource_limits:
+  ram_guardrail_fraction: 0.8
+
+precision:
+  default_dtype: float32
+  reference_dtype: float64

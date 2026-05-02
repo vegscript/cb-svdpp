@@ -1,0 +1,18 @@
+metadata:
+  status: local_poc
+  owner: repo
+  purpose: local_poc_dataset_contract
+
+dataset:
+  name: MovieLens Latest Small
+  short_name: ml_latest_small
+  source_family: movielens
+  benchmark_eligible: false
+  note: local_poc_only_not_part_of_official_benchmark_ladder
+  raw_relpath: data/raw/ml_latest_small_2018/ml-latest-small
+  raw_manifest_relpath: data/raw/ml_latest_small_2018/download_manifest.json
+  interim_relpath: data/interim/ml_latest_small
+  processed_relpath: data/processed/ml_latest_small
+  default_split_family: benchmark_random_v1
+  explicit_feedback_only: true
+  default_implicit_policy: ratings_as_implicit

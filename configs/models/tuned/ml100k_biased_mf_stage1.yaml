@@ -1,0 +1,26 @@
+metadata:
+  status: stage1_tuned
+  owner: repo
+  purpose: model_profile
+  provenance:
+    selected_from: artifacts/benchmarks/2026-04-13T050523Z_ml100k_inner_tuning_biased_mf_stage1_local_i5_2500k_24gb/summary.json
+    selection_stage: ml100k_inner_stage1
+
+model:
+  name: biased_mf
+  family: matrix_factorization
+  scope: paper_inspired
+
+training:
+  latent_dim: 64
+  epochs: 25
+  learning_rate: 0.0075
+  lambda_b: 0.03
+  lambda_p: 0.03
+  lambda_q: 0.03
+  dtype: float32
+
+notes:
+  - selected on paper_faithful_ml100k_inner_v1
+  - tuned on outer folds u1 and u2 only
+  - not benchmark-final

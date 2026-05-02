@@ -1,0 +1,389 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://recsys-lab.local/schema/reporting/run_manifest.schema.json",
+  "title": "Run Manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "manifest_version",
+    "kind",
+    "generated_at_utc",
+    "run_id",
+    "status",
+    "command",
+    "cwd",
+    "git",
+    "dataset",
+    "model",
+    "runtime",
+    "seeds",
+    "artifacts"
+  ],
+  "properties": {
+    "manifest_version": {
+      "type": "string",
+      "pattern": "^v[0-9]+$"
+    },
+    "kind": {
+      "const": "run_manifest"
+    },
+    "generated_at_utc": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{6}Z$"
+    },
+    "run_id": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{6}Z_[a-z0-9_\\-]+$"
+    },
+    "status": {
+      "enum": ["started", "completed", "failed", "cancelled"]
+    },
+    "command": {
+      "type": "string",
+      "minLength": 1
+    },
+    "cwd": {
+      "type": "string",
+      "minLength": 1
+    },
+    "git": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["commit", "dirty"],
+      "properties": {
+        "commit": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{7,40}$"
+        },
+        "dirty": {
+          "type": "boolean"
+        },
+        "branch": {
+          "type": "string"
+        }
+      }
+    },
+    "dataset": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["short_name", "split_family"],
+      "properties": {
+        "short_name": {
+          "enum": ["ml100k", "ml1m", "ml10m", "ml20m", "ml_latest_small"]
+        },
+        "source": {
+          "type": "string"
+        },
+        "version": {
+          "type": "string"
+        },
+        "split_family": {
+          "type": "string",
+          "pattern": "^[a-z0-9_]+$"
+        },
+        "split_id": {
+          "type": "string"
+        },
+        "manifest_ref": {
+          "type": "string"
+        }
+      }
+    },
+    "model": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name"],
+      "properties": {
+        "name": {
+          "enum": [
+            "biased_mf",
+            "svdpp",
+            "asymmetric_svd",
+            "asvdpp",
+            "cb_svdpp",
+            "cb_asvdpp"
+          ]
+        },
+        "scope": {
+          "enum": ["paper_faithful", "paper_inspired", "extended"]
+        },
+        "config_ref": {
+          "type": "string"
+        }
+      }
+    },
+    "runtime": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["device_profile", "python_version", "dtype", "threading"],
+      "properties": {
+        "device_profile": {
+          "type": "string",
+          "pattern": "^[a-z0-9_\\-]+$"
+        },
+        "python_version": {
+          "type": "string"
+        },
+        "platform": {
+          "type": "string"
+        },
+        "hostname": {
+          "type": "string"
+        },
+        "processor": {
+          "type": "string"
+        },
+        "dtype": {
+          "enum": ["float32", "float64"]
+        },
+        "device_profile_contract": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "contract_version",
+            "profile_name",
+            "compute_class",
+            "metadata_status",
+            "claim_eligible",
+            "blocking_reasons",
+            "ram_guardrail_fraction"
+          ],
+          "properties": {
+            "contract_version": {
+              "type": "string"
+            },
+            "profile_name": {
+              "type": "string"
+            },
+            "compute_class": {
+              "type": "string"
+            },
+            "metadata_status": {
+              "type": "string"
+            },
+            "claim_eligible": {
+              "type": "boolean"
+            },
+            "blocking_reasons": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "ram_guardrail_fraction": {
+              "type": ["number", "null"],
+              "exclusiveMinimum": 0,
+              "maximum": 1
+            }
+          }
+        },
+        "cpu_logical_count": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "cpu_physical_count": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "cpu_affinity_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "cpu_affinity": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "threading": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["omp_num_threads", "blas_threads"],
+          "properties": {
+            "omp_num_threads": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "blas_threads": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "env_omp_num_threads": {
+              "type": ["string", "null"]
+            },
+            "env_mkl_num_threads": {
+              "type": ["string", "null"]
+            },
+            "env_openblas_num_threads": {
+              "type": ["string", "null"]
+            },
+            "env_numexpr_num_threads": {
+              "type": ["string", "null"]
+            }
+          }
+        },
+        "threadpools": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "user_api": {
+                "type": "string"
+              },
+              "internal_api": {
+                "type": "string"
+              },
+              "prefix": {
+                "type": "string"
+              },
+              "threading_layer": {
+                "type": "string"
+              },
+              "num_threads": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "version": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    },
+    "seeds": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "integer",
+        "minimum": 0
+      }
+    },
+    "dependencies": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "lockfile": {
+          "type": "string"
+        },
+        "environment_hash": {
+          "type": "string"
+        }
+      }
+    },
+    "profiling": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["profile_version", "stages", "stage_count", "total_profiled_wall_clock_seconds"],
+      "properties": {
+        "profile_version": {
+          "type": "string"
+        },
+        "stage_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "total_profiled_wall_clock_seconds": {
+          "type": "number",
+          "minimum": 0
+        },
+        "stages": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "name",
+              "status",
+              "wall_clock_seconds",
+              "rss_start_mb",
+              "rss_end_mb",
+              "rss_delta_mb",
+              "metadata"
+            ],
+            "properties": {
+              "name": {
+                "type": "string",
+                "minLength": 1
+              },
+              "status": {
+                "enum": ["completed", "failed"]
+              },
+              "wall_clock_seconds": {
+                "type": "number",
+                "minimum": 0
+              },
+              "rss_start_mb": {
+                "type": "number",
+                "minimum": 0
+              },
+              "rss_end_mb": {
+                "type": "number",
+                "minimum": 0
+              },
+              "rss_delta_mb": {
+                "type": "number"
+              },
+              "metadata": {
+                "type": "object"
+              },
+              "exception_type": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    },
+    "caches": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object"
+      }
+    },
+    "timing": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "started_at_utc": {
+          "type": "string",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{6}Z$"
+        },
+        "finished_at_utc": {
+          "type": "string",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{6}Z$"
+        }
+      }
+    },
+    "artifacts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["config_snapshot", "metrics", "stdout_log"],
+      "properties": {
+        "config_snapshot": {
+          "type": "string"
+        },
+        "metrics": {
+          "type": "string"
+        },
+        "stdout_log": {
+          "type": "string"
+        },
+        "weights": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "figures": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  }
+}

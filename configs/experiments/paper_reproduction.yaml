@@ -1,0 +1,30 @@
+metadata:
+  status: draft
+  owner: repo
+  purpose: experiment_profile
+
+experiment:
+  name: paper_reproduction
+  scope: paper_inspired
+  reportable: true
+
+datasets:
+  - ml100k
+
+models:
+  - biased_mf
+  - svdpp
+  - asymmetric_svd
+  - asvdpp
+  - cb_svdpp
+  - cb_asvdpp
+
+evaluation:
+  split_family: paper_faithful
+  seeds:
+    - 1
+    - 2
+    - 3
+    - 4
+    - 5
+  primary_metric: rmse

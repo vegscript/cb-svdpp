@@ -1,0 +1,37 @@
+metadata:
+  status: development_profile
+  owner: repo
+  purpose: stage_profile_smoke
+
+model:
+  name: cb_svdpp
+  family: clustering_based_factorization
+  scope: paper_inspired
+
+training:
+  latent_dim: 16
+  epochs: 1
+  learning_rate: 0.01
+  lambda_b: 0.02
+  lambda_p: 0.02
+  lambda_q: 0.02
+  lambda_y: 0.02
+  lambda_pC: 0.02
+  lambda_qC: 0.02
+  lambda_yC: 0.02
+  init_std: 0.1
+  dtype: float32
+  implicit_policy: ratings_as_implicit
+
+clustering:
+  n_user_clusters: 8
+  n_item_clusters: 8
+  alpha: 0.10
+  algorithm: kmeans
+  kmeans_n_init: 2
+
+notes:
+  - development-only profiling smoke profile
+  - not a tuning candidate
+  - not benchmark-final
+  - not quality-claim eligible

@@ -1,0 +1,53 @@
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# Virtual environments
+.venv/
+.venv*/
+
+# Build artifacts
+build/
+dist/
+*.egg-info/
+
+# Local OS/editor files
+.DS_Store
+Thumbs.db
+
+# Local runtime output
+*.log
+
+# Local/reference documents
+*.pdf
+
+# Data zones
+data/raw/*
+!data/raw/.gitkeep
+!data/raw/README.md
+data/interim/*
+!data/interim/.gitkeep
+!data/interim/README.md
+data/processed/*
+!data/processed/.gitkeep
+!data/processed/README.md
+
+# Artifact zones
+artifacts/runs/*
+!artifacts/runs/.gitkeep
+!artifacts/runs/README.md
+artifacts/benchmarks/*
+!artifacts/benchmarks/.gitkeep
+!artifacts/benchmarks/README.md
+artifacts/figures/*
+!artifacts/figures/.gitkeep
+!artifacts/figures/README.md
+artifacts/debug/*
+!artifacts/debug/.gitkeep
+!artifacts/debug/README.md
+artifacts/local/*
+!artifacts/local/.gitkeep
+!artifacts/local/README.md

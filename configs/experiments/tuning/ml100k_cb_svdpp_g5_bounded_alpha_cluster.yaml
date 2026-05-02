@@ -1,0 +1,133 @@
+metadata:
+  status: bounded_selection_probe
+  owner: repo
+  purpose: g5_validation_only_cache_and_tuning_probe
+
+tuning:
+  name: ml100k_cb_svdpp_g5_bounded_alpha_cluster
+  dataset_short_name: ml100k
+  split_family: benchmark_random_v1
+  selection_stage: g5_bounded_alpha_cluster
+  objective: validation_rmse_mean
+  train_ratio: 0.8
+  split_seeds:
+    - 1
+  validation_ratio: 0.1
+  model_seed: 1
+
+base_model_config: configs/models/development/ml100k_cb_svdpp_stage_profile_smoke.yaml
+
+candidates:
+  - candidate_id: rank032_uc064_ic064_a000_lr0100_reg0020_e002
+    overrides:
+      training:
+        latent_dim: 32
+        epochs: 2
+        learning_rate: 0.01
+        lambda_b: 0.02
+        lambda_p: 0.02
+        lambda_q: 0.02
+        lambda_y: 0.02
+        lambda_pC: 0.02
+        lambda_qC: 0.02
+        lambda_yC: 0.02
+      clustering:
+        n_user_clusters: 64
+        n_item_clusters: 64
+        alpha: 0.00
+
+  - candidate_id: rank032_uc064_ic064_a005_lr0100_reg0020_e002
+    overrides:
+      training:
+        latent_dim: 32
+        epochs: 2
+        learning_rate: 0.01
+        lambda_b: 0.02
+        lambda_p: 0.02
+        lambda_q: 0.02
+        lambda_y: 0.02
+        lambda_pC: 0.02
+        lambda_qC: 0.02
+        lambda_yC: 0.02
+      clustering:
+        n_user_clusters: 64
+        n_item_clusters: 64
+        alpha: 0.05
+
+  - candidate_id: rank032_uc064_ic064_a010_lr0100_reg0020_e002
+    overrides:
+      training:
+        latent_dim: 32
+        epochs: 2
+        learning_rate: 0.01
+        lambda_b: 0.02
+        lambda_p: 0.02
+        lambda_q: 0.02
+        lambda_y: 0.02
+        lambda_pC: 0.02
+        lambda_qC: 0.02
+        lambda_yC: 0.02
+      clustering:
+        n_user_clusters: 64
+        n_item_clusters: 64
+        alpha: 0.10
+
+  - candidate_id: rank032_uc064_ic064_a015_lr0100_reg0020_e002
+    overrides:
+      training:
+        latent_dim: 32
+        epochs: 2
+        learning_rate: 0.01
+        lambda_b: 0.02
+        lambda_p: 0.02
+        lambda_q: 0.02
+        lambda_y: 0.02
+        lambda_pC: 0.02
+        lambda_qC: 0.02
+        lambda_yC: 0.02
+      clustering:
+        n_user_clusters: 64
+        n_item_clusters: 64
+        alpha: 0.15
+
+  - candidate_id: rank032_uc032_ic032_a010_lr0100_reg0020_e002
+    overrides:
+      training:
+        latent_dim: 32
+        epochs: 2
+        learning_rate: 0.01
+        lambda_b: 0.02
+        lambda_p: 0.02
+        lambda_q: 0.02
+        lambda_y: 0.02
+        lambda_pC: 0.02
+        lambda_qC: 0.02
+        lambda_yC: 0.02
+      clustering:
+        n_user_clusters: 32
+        n_item_clusters: 32
+        alpha: 0.10
+
+  - candidate_id: rank032_uc080_ic080_a010_lr0100_reg0020_e002
+    overrides:
+      training:
+        latent_dim: 32
+        epochs: 2
+        learning_rate: 0.01
+        lambda_b: 0.02
+        lambda_p: 0.02
+        lambda_q: 0.02
+        lambda_y: 0.02
+        lambda_pC: 0.02
+        lambda_qC: 0.02
+        lambda_yC: 0.02
+      clustering:
+        n_user_clusters: 80
+        n_item_clusters: 80
+        alpha: 0.10
+
+notes:
+  - validation-only reduced-budget G5 probe
+  - one split seed only, not a final benchmark
+  - test data must not be evaluated during tune-inner selection
+  - cache controls must be explicit in the benchmark summary

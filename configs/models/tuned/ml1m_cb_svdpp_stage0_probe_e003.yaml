@@ -1,0 +1,40 @@
+metadata:
+  status: probe
+  owner: repo
+  purpose: model_profile
+  provenance:
+    derived_from: configs/models/tuned/ml1m_cb_svdpp_stage0_transfer.yaml
+    probe_stage: ml1m_stage0_feasibility
+
+model:
+  name: cb_svdpp
+  family: clustering_based_factorization
+  scope: paper_inspired
+
+training:
+  latent_dim: 64
+  epochs: 3
+  learning_rate: 0.0075
+  lambda_b: 0.025
+  lambda_p: 0.025
+  lambda_q: 0.025
+  lambda_y: 0.025
+  lambda_pC: 0.025
+  lambda_qC: 0.025
+  lambda_yC: 0.025
+  init_std: 0.1
+  dtype: float32
+  implicit_policy: ratings_as_implicit
+
+clustering:
+  n_user_clusters: 80
+  n_item_clusters: 80
+  alpha: 0.10
+  algorithm: kmeans
+  kmeans_n_init: 10
+
+notes:
+  - feasibility probe only
+  - derived from the ml1m stage0 transfer profile
+  - fit-time comparisons must include cluster induction plus main training
+  - not claimable as a benchmark-final profile

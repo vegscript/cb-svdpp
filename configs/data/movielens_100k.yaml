@@ -1,0 +1,18 @@
+metadata:
+  status: draft
+  owner: repo
+  purpose: dataset_contract
+
+dataset:
+  name: MovieLens 100K
+  short_name: ml100k
+  source_family: movielens
+  benchmark_eligible: true
+  raw_relpath: data/raw/ml100k/ml-100k
+  raw_manifest_relpath: data/raw/ml100k/download_manifest.json
+  interim_relpath: data/interim/ml100k
+  processed_relpath: data/processed/ml100k
+  default_split_family: benchmark_random_v1
+  format_family: legacy_100k
+  explicit_feedback_only: true
+  default_implicit_policy: ratings_as_implicit

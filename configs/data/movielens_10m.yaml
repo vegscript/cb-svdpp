@@ -1,0 +1,18 @@
+metadata:
+  status: draft
+  owner: repo
+  purpose: dataset_contract
+
+dataset:
+  name: MovieLens 10M
+  short_name: ml10m
+  source_family: movielens
+  benchmark_eligible: true
+  format_family: legacy_10m
+  raw_relpath: data/raw/ml10m/ml-10M100K
+  raw_manifest_relpath: data/raw/ml10m/download_manifest.json
+  interim_relpath: data/interim/ml10m
+  processed_relpath: data/processed/ml10m
+  default_split_family: benchmark_random_v1
+  explicit_feedback_only: true
+  default_implicit_policy: ratings_as_implicit
