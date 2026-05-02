@@ -237,6 +237,21 @@ Status:
 - no final quality, large-dataset, scalability, production-readiness, SOTA, or
   paper-faithfulness claim is unlocked
 
+Promotion contract:
+
+- status: `contract_ready_g5_to_g6_validation_grid`
+- evidence:
+  `docs/evidence/reproduction/2026-05-03_cb_svdpp_g6_validation_grid_contract.md`
+- config:
+  `configs/experiments/tuning/ml100k_cb_svdpp_g6_validation_grid.yaml`
+- decision: promote the bounded G5 winner into a larger validation-only
+  `ml100k cb_svdpp` grid before any outer test rerun
+- planned scope: `12` candidates times `3` split seeds, all selected by
+  validation RMSE only
+- no G6 tuning result, final quality claim, test-set claim, large-dataset
+  claim, speed claim, scalability claim, SOTA claim, production-readiness claim,
+  or paper-faithfulness claim is unlocked by this contract
+
 ### 7. `R_star` Decision Track
 
 `R_star` currently remains diagnostic in the repo-defined CB v1 pipeline. That
@@ -290,11 +305,13 @@ A stronger CB release requires all of these gates:
 
 ## Immediate Next Sequence
 
-1. Decide whether the bounded `ml100k cb_svdpp` G5 winner should be promoted
-   into a larger validation-only grid before any test rerun.
-2. Keep `cb_asvdpp` hot-path remediation as separate work if profiling shows it
+1. Run the G6 `ml100k cb_svdpp` validation-only promotion grid only from a clean
+   worktree with explicit split, training-index, and cluster-artifact cache
+   controls.
+2. Freeze the selected G6 candidate before any outer test rerun.
+3. Keep `cb_asvdpp` hot-path remediation as separate work if profiling shows it
    is decision-critical.
-3. Reassess `ml10m` and `ml20m` only after the profiler and cache work produce
+4. Reassess `ml10m` and `ml20m` only after the profiler and cache work produce
    clean evidence.
 
 ## Current Progress Estimate
