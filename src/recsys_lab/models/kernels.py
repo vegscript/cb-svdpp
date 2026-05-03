@@ -482,6 +482,12 @@ if njit is not None:
     ) -> None:
         latent_dim = item_factors.shape[1]
         one_minus_alpha = 1.0 - alpha
+        p_old = np.empty(latent_dim, dtype=user_factors.dtype)
+        p_cluster_old = np.empty(latent_dim, dtype=user_cluster_factors.dtype)
+        q_old = np.empty(latent_dim, dtype=item_factors.dtype)
+        q_cluster_old = np.empty(latent_dim, dtype=item_cluster_factors.dtype)
+        q_mix_old = np.empty(latent_dim, dtype=item_factors.dtype)
+        context = np.empty(latent_dim, dtype=item_factors.dtype)
 
         for position in range(order.shape[0]):
             idx = order[position]
@@ -493,13 +499,6 @@ if njit is not None:
             item_cluster_id = int(item_clusters[item_id])
             user_bias_old = user_bias[user_id]
             item_bias_old = item_bias[item_id]
-
-            p_old = np.empty(latent_dim, dtype=user_factors.dtype)
-            p_cluster_old = np.empty(latent_dim, dtype=user_cluster_factors.dtype)
-            q_old = np.empty(latent_dim, dtype=item_factors.dtype)
-            q_cluster_old = np.empty(latent_dim, dtype=item_cluster_factors.dtype)
-            q_mix_old = np.empty(latent_dim, dtype=item_factors.dtype)
-            context = np.empty(latent_dim, dtype=item_factors.dtype)
 
             for factor_idx in range(latent_dim):
                 p_old[factor_idx] = user_factors[user_id, factor_idx]
