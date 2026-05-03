@@ -32,6 +32,7 @@ REPRODUCTION_EVIDENCE_FILES = (
     REPO_ROOT / "docs" / "evidence" / "reproduction" / "2026-05-03_cb_svdpp_g6_outer_benchmark_run.md",
     REPO_ROOT / "docs" / "evidence" / "reproduction" / "2026-05-03_cb_asvdpp_hotpath_decision_g7.md",
     REPO_ROOT / "docs" / "evidence" / "reproduction" / "2026-05-03_cb_asvdpp_hotpath_remediation_contract_g8.md",
+    REPO_ROOT / "docs" / "evidence" / "reproduction" / "2026-05-03_cb_asvdpp_hotpath_prechange_baseline_g9.md",
 )
 EVIDENCE_PATH_RE = re.compile(r"docs/evidence/[A-Za-z0-9_./-]+\.md")
 MARKDOWN_LINK_RE = re.compile(r"\[[^\]]+\]\(([^)]+)\)")

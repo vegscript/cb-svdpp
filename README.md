@@ -38,6 +38,8 @@ claims only where the publish-readiness matrix explicitly allows them.
   `docs/evidence/reproduction/2026-05-03_cb_asvdpp_hotpath_decision_g7.md`
 - CB-ASVD++ hotpath remediation contract evidence:
   `docs/evidence/reproduction/2026-05-03_cb_asvdpp_hotpath_remediation_contract_g8.md`
+- CB-ASVD++ hotpath pre-change baseline evidence:
+  `docs/evidence/reproduction/2026-05-03_cb_asvdpp_hotpath_prechange_baseline_g9.md`
 
 This repository is not an unconstrained `paper-faithful` or `scalable`
 reproduction. The clustering-based models are documented as source-grounded
@@ -63,7 +65,7 @@ The current local reproduction evidence used:
 - `uv sync --extra dev --locked`
 - Ruff gate: `All checks passed!`
 - Mypy source gate: `Success: no issues found in 62 source files`
-- full test suite from the `uv` environment: `138 passed`
+- full test suite from the `uv` environment: `139 passed`
 
 Basic smoke checks:
 

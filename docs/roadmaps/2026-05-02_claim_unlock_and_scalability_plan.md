@@ -338,6 +338,24 @@ Remediation contract:
   SOTA claim, paper-faithfulness claim, large-dataset claim, or quality claim is
   unlocked by this contract alone
 
+Pre-change baseline:
+
+- status: `pass_for_clean_prechange_baseline`
+- evidence:
+  `docs/evidence/reproduction/2026-05-03_cb_asvdpp_hotpath_prechange_baseline_g9.md`
+- run artifact:
+  `artifacts/runs/2026-05-03T123549Z_ml100k_cb_asvdpp_local_i5_2500k_24gb_benchmark_random_v1_tr080_va010_s001_s001/run_manifest.json`
+- git commit: `bc966e42f4fc2cf3d09c7f7194e17a81c93617cc`
+- git dirty: `false`
+- `main_training_wall_clock_seconds`: `122.91284980002092`
+- train RMSE: `0.6848969434499206`
+- validation RMSE: `0.9134162708331054`
+- test RMSE: `0.9102128098774724`
+- cache status: cluster artifact cache `hit`, user-cluster history cache `hit`
+- no code change, speed claim, scalability claim, production-readiness claim,
+  SOTA claim, paper-faithfulness claim, large-dataset claim, or quality claim is
+  unlocked by this baseline alone
+
 ### 7. `R_star` Decision Track
 
 `R_star` currently remains diagnostic in the repo-defined CB v1 pipeline. That
@@ -391,17 +409,18 @@ A stronger CB release requires all of these gates:
 
 ## Immediate Next Sequence
 
-1. Run the fresh clean pre-change `cb_asvdpp` baseline required by the
-   remediation contract.
-2. Implement the exact `cb_asvdpp` Numba work-buffer remediation only after the
-   baseline artifact exists on the clean contract commit.
-3. Reassess `ml10m` and `ml20m` only after the profiler and cache work produce
+1. Implement the exact `cb_asvdpp` Numba work-buffer remediation under the G8
+   contract.
+2. Run exactness tests and full repository gates.
+3. On the clean remediation commit, rerun the same `cb_asvdpp` benchmark
+   command and compare only against the G9 pre-change baseline.
+4. Reassess `ml10m` and `ml20m` only after the profiler and cache work produce
    clean evidence.
 
 ## Current Progress Estimate
 
 Approximate engineering readiness for a publishable, stronger CB-focused repo:
-`91%`.
+`92%`.
 
 This percentage is not a benchmark result. It is a planning estimate based on
 completed governance, data, model, benchmark scaffolding, runtime-profile
@@ -414,6 +433,6 @@ contract for the frozen G6 selection, and a completed clean outer benchmark
 readout for that frozen profile, and a `cb_asvdpp` profiling decision that
 prioritizes hot-path remediation without claiming improvement, and a
 `cb_asvdpp` exact-remediation contract with explicit equivalence and
-before/after gates, versus the still missing fresh pre-change baseline,
-implementation, post-change benchmark evidence, final large-dataset
-reassessment, and final release-claim gates above.
+before/after gates, and a clean pre-change baseline for that contract, versus
+the still missing implementation, post-change benchmark evidence, final
+large-dataset reassessment, and final release-claim gates above.
