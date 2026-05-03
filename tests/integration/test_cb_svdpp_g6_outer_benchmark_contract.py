@@ -8,6 +8,13 @@ CONTRACT_PATH = (
     / "reproduction"
     / "2026-05-03_cb_svdpp_g6_outer_benchmark_contract.md"
 )
+RUN_EVIDENCE_PATH = (
+    REPO_ROOT
+    / "docs"
+    / "evidence"
+    / "reproduction"
+    / "2026-05-03_cb_svdpp_g6_outer_benchmark_run.md"
+)
 ROADMAP_PATH = REPO_ROOT / "docs" / "roadmaps" / "2026-05-02_claim_unlock_and_scalability_plan.md"
 READINESS_MATRIX_PATH = REPO_ROOT / "docs" / "publish_readiness_matrix.md"
 README_PATH = REPO_ROOT / "README.md"
@@ -64,13 +71,40 @@ def test_g6_outer_benchmark_contract_freezes_inputs_and_claim_boundary() -> None
 
     assert "approved_for_clean_outer_benchmark_contract" in roadmap
     assert "commit this contract first" in roadmap
-    assert "execution and aggregation of that outer benchmark" in roadmap
-    assert "`86%`" in roadmap
+    assert "completed_g6_clean_outer_benchmark" in roadmap
+    assert "`89%`" in roadmap
 
-    assert "documented outer benchmark contract but no outer test rerun yet" in matrix
-    assert "2026-05-03_cb_svdpp_g6_outer_benchmark_contract.md" in matrix
-    assert "benchmark_evidence_ready_selection_contract_pending_outer_rerun" in matrix
-    assert "documented clean outer benchmark contract is executed and aggregated" in matrix
+    assert "completed clean outer benchmark readout under `benchmark_random_v1`" in matrix
+    assert "2026-05-03_cb_svdpp_g6_outer_benchmark_run.md" in matrix
+    assert "benchmark_evidence_ready_g6_outer_anchor_documented" in matrix
+    assert "the G6 `cb_svdpp` outer benchmark may be used only as its own" in matrix
 
     assert "G6 outer benchmark contract evidence" in readme
     assert "2026-05-03_cb_svdpp_g6_outer_benchmark_contract.md" in readme
+
+
+def test_g6_outer_benchmark_run_records_clean_aggregate_without_broad_claims() -> None:
+    run_evidence = RUN_EVIDENCE_PATH.read_text(encoding="utf-8")
+    matrix = READINESS_MATRIX_PATH.read_text(encoding="utf-8")
+    readme = README_PATH.read_text(encoding="utf-8")
+
+    assert "status: `pass_for_clean_outer_benchmark`" in run_evidence
+    assert "git commit: `67570ed8fde4c158848ab80494524ab203b40df5`" in run_evidence
+    assert "git dirty: `false`" in run_evidence
+    assert "measured sample count: `3`" in run_evidence
+    assert "split seeds: `1,2,3`" in run_evidence
+    assert "model seed: `1`" in run_evidence
+    assert "device profile claim eligible: `true`" in run_evidence
+    assert "validation RMSE | `0.9566122815305916`" in run_evidence
+    assert "test RMSE | `0.9595668222022953`" in run_evidence
+    assert "training wall-clock seconds | `4.767408333330725`" in run_evidence
+    assert "peak memory MB | `237.70703125`" in run_evidence
+    assert "SOTA, scalability, speed" in run_evidence
+    assert "paper-faithfulness claim" in run_evidence
+    assert "comparison against the older `paper_faithful_ml100k_v1`" in run_evidence
+    assert "Pytest: `136 passed`" in run_evidence
+
+    assert "pass_for_current_anchor_set_plus_g6_outer_benchmark" in matrix
+    assert "test RMSE mean `0.9595668222022953`" in matrix
+    assert "paper_faithful_ml100k_v1` anchor rows" in matrix
+    assert "G6 outer benchmark run evidence" in readme

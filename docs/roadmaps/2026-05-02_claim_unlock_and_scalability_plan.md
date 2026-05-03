@@ -275,6 +275,27 @@ Outer benchmark contract:
   claim, SOTA claim, production-readiness claim, or paper-faithfulness claim is
   unlocked by this contract alone
 
+Outer benchmark run:
+
+- status: `completed_g6_clean_outer_benchmark`
+- evidence:
+  `docs/evidence/reproduction/2026-05-03_cb_svdpp_g6_outer_benchmark_run.md`
+- benchmark artifact:
+  `artifacts/benchmarks/2026-05-03T120906Z_ml100k_benchmark_random_v1_cb_svdpp_multiseed_s001_s002_s003_modelseed_s001_local_i5_2500k_24gb/benchmark_manifest.json`
+- git commit: `67570ed8fde4c158848ab80494524ab203b40df5`
+- git dirty: `false`
+- split seeds: `1,2,3`
+- model seed: `1`
+- validation RMSE mean: `0.9566122815305916`
+- validation RMSE std: `0.002372317660216579`
+- test RMSE mean: `0.9595668222022953`
+- test RMSE std: `0.011253690215412724`
+- allowed claim: clean outer `ml100k cb_svdpp` benchmark readout for this
+  frozen G6-selected profile under `benchmark_random_v1`
+- no cross-split-family comparison, speed claim, scalability claim, SOTA claim,
+  production-readiness claim, paper-faithfulness claim, or large-dataset claim
+  is unlocked by this run
+
 ### 7. `R_star` Decision Track
 
 `R_star` currently remains diagnostic in the repo-defined CB v1 pipeline. That
@@ -328,18 +349,15 @@ A stronger CB release requires all of these gates:
 
 ## Immediate Next Sequence
 
-1. Run the three planned outer split-seed runs and aggregate them on the same
-   clean contract commit, without editing configs or benchmark code after
-   seeing any outer test metric.
-2. Keep `cb_asvdpp` hot-path remediation as separate work if profiling shows it
+1. Keep `cb_asvdpp` hot-path remediation as separate work if profiling shows it
    is decision-critical.
-3. Reassess `ml10m` and `ml20m` only after the profiler and cache work produce
+2. Reassess `ml10m` and `ml20m` only after the profiler and cache work produce
    clean evidence.
 
 ## Current Progress Estimate
 
 Approximate engineering readiness for a publishable, stronger CB-focused repo:
-`86%`.
+`89%`.
 
 This percentage is not a benchmark result. It is a planning estimate based on
 completed governance, data, model, benchmark scaffolding, runtime-profile
@@ -347,8 +365,8 @@ preflight, stage profiling on `ml100k` and bounded `ml10m`, leakage-safe
 cluster-cache plumbing, a measured `cb_svdpp` hot-path workbuffer remediation
 on `ml100k`, explicit tune-inner cache controls, a bounded validation-only
 `ml100k cb_svdpp` alpha/cluster selection probe, and a completed G6
-validation-only `ml100k cb_svdpp` grid, and a documented clean outer
-benchmark contract for the frozen G6 selection, versus the still missing
-execution and aggregation of that outer benchmark, `cb_asvdpp` hot-path
+validation-only `ml100k cb_svdpp` grid, a documented clean outer benchmark
+contract for the frozen G6 selection, and a completed clean outer benchmark
+readout for that frozen profile, versus the still missing `cb_asvdpp` hot-path
 decision if needed, final large-dataset reassessment, and final release-claim
 gates above.

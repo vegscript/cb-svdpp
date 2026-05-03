@@ -147,6 +147,13 @@ G6_OUTER_BENCHMARK_CONTRACT = (
     / "reproduction"
     / "2026-05-03_cb_svdpp_g6_outer_benchmark_contract.md"
 )
+G6_OUTER_BENCHMARK_RUN = (
+    REPO_ROOT
+    / "docs"
+    / "evidence"
+    / "reproduction"
+    / "2026-05-03_cb_svdpp_g6_outer_benchmark_run.md"
+)
 
 
 def _single_line(text: str) -> str:
@@ -219,12 +226,15 @@ def test_master_plan_tracks_claim_unlock_scalability_backlog() -> None:
     assert "Do not call current CB large-dataset behavior `scalable`" in roadmap
     assert "Do not replace KMeans with MiniBatchKMeans without a new config" in roadmap
     assert "Do not claim `R_star` is optimized unless a new objective" in roadmap
-    assert "`86%`" in roadmap
+    assert "`89%`" in roadmap
     assert "completed_g6_validation_only_selection" in roadmap
     assert "docs/evidence/reproduction/2026-05-03_cb_svdpp_g6_validation_grid_run.md" in roadmap
     assert "configs/models/tuned/ml100k_cb_svdpp_g6_validation_selected.yaml" in roadmap
     assert "approved_for_clean_outer_benchmark_contract" in roadmap
     assert "docs/evidence/reproduction/2026-05-03_cb_svdpp_g6_outer_benchmark_contract.md" in roadmap
+    assert "completed_g6_clean_outer_benchmark" in roadmap
+    assert "docs/evidence/reproduction/2026-05-03_cb_svdpp_g6_outer_benchmark_run.md" in roadmap
+    assert "test RMSE mean: `0.9595668222022953`" in roadmap
 
     g1_evidence = G1_RUNTIME_PROFILE_EVIDENCE.read_text(encoding="utf-8")
     assert "status: `pass`" in g1_evidence
@@ -310,6 +320,13 @@ def test_master_plan_tracks_claim_unlock_scalability_backlog() -> None:
     assert "same git commit as the aggregation process" in g6_outer_contract
     assert "the outer run has not been executed yet" in g6_outer_contract
 
+    g6_outer_run = G6_OUTER_BENCHMARK_RUN.read_text(encoding="utf-8")
+    assert "status: `pass_for_clean_outer_benchmark`" in g6_outer_run
+    assert "git dirty: `false`" in g6_outer_run
+    assert "test RMSE | `0.9595668222022953`" in g6_outer_run
+    assert "validation RMSE | `0.9566122815305916`" in g6_outer_run
+    assert "SOTA, scalability, speed" in g6_outer_run
+
 
 def test_publish_readiness_matrix_tracks_gates_scope_and_current_blockers() -> None:
     matrix = READINESS_MATRIX.read_text(encoding="utf-8")
@@ -326,7 +343,7 @@ def test_publish_readiness_matrix_tracks_gates_scope_and_current_blockers() -> N
     assert "## Feasibility And Selection Evidence" in matrix
     assert (
         "| `ml100k` | `in_scope` | `pass` | `pass` | "
-        "`pass_for_current_anchor_set_plus_g6_selection_and_outer_contract` |"
+        "`pass_for_current_anchor_set_plus_g6_outer_benchmark` |"
     ) in matrix
     assert "| `ml10m` | `in_scope` | `pass` | `pass` | `matched_biased_mf_cb_svdpp_anchor` |" in matrix
     assert (
@@ -337,8 +354,9 @@ def test_publish_readiness_matrix_tracks_gates_scope_and_current_blockers() -> N
     assert "test RMSE mean `0.916839`" in matrix
     assert "`ml100k` | `cb_svdpp g6_validation_selected`" in matrix
     assert "selected validation RMSE mean `0.9566122815305916`" in matrix
+    assert "test RMSE mean `0.9595668222022953`" in matrix
     assert "non-null `test_rmse` count `0`" in matrix
-    assert "not a final `ml100k cb_svdpp` quality claim" in matrix
+    assert "Not itself a benchmark anchor" in matrix
     assert "`ml1m` | `cb_svdpp stage0_transfer`" in matrix
     assert "test RMSE mean `0.857365`" in matrix
     assert "`ml10m` | `biased_mf stage0_transfer`" in matrix
@@ -358,8 +376,8 @@ def test_publish_readiness_matrix_tracks_gates_scope_and_current_blockers() -> N
     assert "Keep `uv.lock` versioned" in matrix
     assert "release marker `submission-2026-05-02-r10`" in matrix
     assert "Post-Release Work Queue" in matrix
-    assert "frozen G6 `ml100k cb_svdpp` selected config" in matrix
-    assert "documented outer benchmark contract but no outer test rerun yet" in matrix
+    assert "frozen G6-selected two-epoch profile" in matrix
+    assert "completed clean outer benchmark readout under `benchmark_random_v1`" in matrix
     assert "do not reintroduce chronological work-log sections" in matrix
     assert "`ml1m cb_asvdpp` is not a benchmark anchor" in matrix
     assert "G6 `ml100k cb_svdpp` is validation-only selection evidence" in matrix

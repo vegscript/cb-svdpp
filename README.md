@@ -32,6 +32,8 @@ claims only where the publish-readiness matrix explicitly allows them.
   `docs/evidence/reproduction/2026-05-03_cb_svdpp_g6_validation_grid_run.md`
 - G6 outer benchmark contract evidence:
   `docs/evidence/reproduction/2026-05-03_cb_svdpp_g6_outer_benchmark_contract.md`
+- G6 outer benchmark run evidence:
+  `docs/evidence/reproduction/2026-05-03_cb_svdpp_g6_outer_benchmark_run.md`
 
 This repository is not an unconstrained `paper-faithful` or `scalable`
 reproduction. The clustering-based models are documented as source-grounded
@@ -57,7 +59,7 @@ The current local reproduction evidence used:
 - `uv sync --extra dev --locked`
 - Ruff gate: `All checks passed!`
 - Mypy source gate: `Success: no issues found in 62 source files`
-- full test suite from the `uv` environment: `135 passed`
+- full test suite from the `uv` environment: `136 passed`
 
 Basic smoke checks:
 
@@ -78,7 +80,7 @@ Current clean benchmark anchors:
 
 | Dataset | Claimable Scope |
 | --- | --- |
-| `ml100k` | Clean multi-seed anchors for `biased_mf`, `svdpp`, `cb_svdpp`, and `cb_asvdpp`. |
+| `ml100k` | Clean multi-seed anchors for `biased_mf`, `svdpp`, `cb_svdpp`, and `cb_asvdpp`; additionally, a clean outer `benchmark_random_v1` readout exists for the frozen G6-selected `cb_svdpp` profile. |
 | `ml1m` | Clean matched multi-seed comparison for `biased_mf` vs `cb_svdpp`. |
 | `ml10m` | Clean matched multi-seed comparison for the documented `biased_mf` vs `cb_svdpp` transfer profiles. |
 | `ml20m` | Clean multi-seed `biased_mf` baseline anchor plus `cb_svdpp` feasibility and negative resource evidence; no final model-comparison claim. |
