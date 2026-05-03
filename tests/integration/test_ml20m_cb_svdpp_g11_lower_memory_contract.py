@@ -105,6 +105,8 @@ def test_ml20m_g11_lower_memory_contract_is_validation_only_and_resource_gated()
 
     assert "contract_ready_g11_ml20m_lower_memory_validation_reassessment" in evidence
     assert "planned validation-only runs: `16`" in evidence
+    assert "--runtime-config configs\\runtime\\base.yaml" in evidence
+    assert "--device-config configs\\runtime\\devices\\local_i5_2500k_24gb.yaml" in evidence
     assert "test-set evaluation during selection: not allowed" in evidence
     assert "The `tune-inner` path now reads `resource_gate`" in evidence
     assert "excluded from validation-RMSE" in evidence

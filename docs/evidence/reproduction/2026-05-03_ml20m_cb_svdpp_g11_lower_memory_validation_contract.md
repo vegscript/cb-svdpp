@@ -27,8 +27,8 @@ promotion attempt under the same risk profile.
 .venv\Scripts\python.exe -m recsys_lab.cli.main tune-inner `
   configs\experiments\tuning\ml20m_cb_svdpp_g11_lower_memory_validation_grid.yaml `
   data\processed\ml20m\ml20m_benchmark_random_v1_explicit_v1_float32_manifest.json `
-  configs\runtime\base.yaml `
-  configs\runtime\devices\local_i5_2500k_24gb.yaml `
+  --runtime-config configs\runtime\base.yaml `
+  --device-config configs\runtime\devices\local_i5_2500k_24gb.yaml `
   --split-cache auto `
   --training-index-cache `
   --cluster-artifact-cache
