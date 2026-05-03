@@ -356,6 +356,27 @@ Pre-change baseline:
   SOTA claim, paper-faithfulness claim, large-dataset claim, or quality claim is
   unlocked by this baseline alone
 
+Post-change benchmark:
+
+- status: `pass_for_exact_workbuffer_remediation_context`
+- evidence:
+  `docs/evidence/reproduction/2026-05-03_cb_asvdpp_hotpath_postchange_benchmark_g10.md`
+- run artifact:
+  `artifacts/runs/2026-05-03T124801Z_ml100k_cb_asvdpp_local_i5_2500k_24gb_benchmark_random_v1_tr080_va010_s001_s001/run_manifest.json`
+- git commit: `e6b77c7f9bc5a87259a5e18e618dc18941a3a9e3`
+- git dirty: `false`
+- `main_training_wall_clock_seconds`: `113.81238390004728`
+- required post-change threshold: `121.68372130202071`
+- observed main-training wall-clock change: `-7.403998780257792%`
+- train RMSE drift: `0.0`
+- validation RMSE drift: `0.0`
+- test RMSE drift: `0.0`
+- allowed claim: only this exact `ml100k cb_asvdpp` benchmark context ran
+  faster in the `main_training` stage after exact work-buffer remediation
+- no broad speed claim, scalability claim, production-readiness claim, SOTA
+  claim, paper-faithfulness claim, large-dataset claim, or cross-device claim is
+  unlocked
+
 ### 7. `R_star` Decision Track
 
 `R_star` currently remains diagnostic in the repo-defined CB v1 pipeline. That
@@ -409,18 +430,14 @@ A stronger CB release requires all of these gates:
 
 ## Immediate Next Sequence
 
-1. Implement the exact `cb_asvdpp` Numba work-buffer remediation under the G8
-   contract.
-2. Run exactness tests and full repository gates.
-3. On the clean remediation commit, rerun the same `cb_asvdpp` benchmark
-   command and compare only against the G9 pre-change baseline.
-4. Reassess `ml10m` and `ml20m` only after the profiler and cache work produce
+1. Keep the G10 `cb_asvdpp` speed claim limited to its exact benchmark context.
+2. Reassess `ml10m` and `ml20m` only after the profiler and cache work produce
    clean evidence.
 
 ## Current Progress Estimate
 
 Approximate engineering readiness for a publishable, stronger CB-focused repo:
-`92%`.
+`94%`.
 
 This percentage is not a benchmark result. It is a planning estimate based on
 completed governance, data, model, benchmark scaffolding, runtime-profile
@@ -430,9 +447,9 @@ on `ml100k`, explicit tune-inner cache controls, a bounded validation-only
 `ml100k cb_svdpp` alpha/cluster selection probe, and a completed G6
 validation-only `ml100k cb_svdpp` grid, a documented clean outer benchmark
 contract for the frozen G6 selection, and a completed clean outer benchmark
-readout for that frozen profile, and a `cb_asvdpp` profiling decision that
-prioritizes hot-path remediation without claiming improvement, and a
-`cb_asvdpp` exact-remediation contract with explicit equivalence and
-before/after gates, and a clean pre-change baseline for that contract, versus
-the still missing implementation, post-change benchmark evidence, final
-large-dataset reassessment, and final release-claim gates above.
+readout for that frozen profile, and a `cb_asvdpp` profiling decision,
+exact-remediation contract, clean pre-change baseline, exact work-buffer
+implementation, equivalence guard, and clean post-change benchmark that passed
+the G8 metric-drift and wall-clock gates in the exact `ml100k cb_asvdpp`
+context, versus the still missing final large-dataset reassessment and final
+release-claim gates above.

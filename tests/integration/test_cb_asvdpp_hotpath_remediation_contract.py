@@ -50,9 +50,9 @@ def test_cb_asvdpp_hotpath_remediation_contract_has_exact_gates() -> None:
 
     assert "approved_for_exact_remediation_contract" in roadmap
     assert "pass_for_clean_prechange_baseline" in roadmap
-    assert "`92%`" in roadmap
+    assert "`94%`" in roadmap
 
-    assert "clean pre-change baseline but no post-change remediation evidence yet" in matrix
+    assert "clean post-change work-buffer benchmark" in matrix
     assert "unlocks no speed claim" in matrix
 
     assert "CB-ASVD++ hotpath remediation contract evidence" in readme

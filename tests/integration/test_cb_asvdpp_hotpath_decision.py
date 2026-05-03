@@ -37,11 +37,11 @@ def test_cb_asvdpp_hotpath_decision_is_profile_bound_and_non_claiming() -> None:
 
     assert "pass_for_hotpath_prioritization_not_remediation" in roadmap
     assert "main_training` share: about `92.44%`" in roadmap
-    assert "`92%`" in roadmap
+    assert "`94%`" in roadmap
     assert "approved_for_exact_remediation_contract" in roadmap
 
     assert "bounded hot-path profiling decision" in matrix
-    assert "clean pre-change baseline but no post-change remediation evidence yet" in matrix
+    assert "clean post-change work-buffer benchmark" in matrix
     assert "hot-path decision may support only prioritization" in matrix
 
     assert "CB-ASVD++ hotpath decision evidence" in readme

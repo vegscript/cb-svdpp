@@ -171,6 +171,13 @@ CB_ASVDPP_HOTPATH_PRECHANGE_BASELINE = (
     / "reproduction"
     / "2026-05-03_cb_asvdpp_hotpath_prechange_baseline_g9.md"
 )
+CB_ASVDPP_HOTPATH_POSTCHANGE_BENCHMARK = (
+    REPO_ROOT
+    / "docs"
+    / "evidence"
+    / "reproduction"
+    / "2026-05-03_cb_asvdpp_hotpath_postchange_benchmark_g10.md"
+)
 
 
 def _single_line(text: str) -> str:
@@ -243,7 +250,7 @@ def test_master_plan_tracks_claim_unlock_scalability_backlog() -> None:
     assert "Do not call current CB large-dataset behavior `scalable`" in roadmap
     assert "Do not replace KMeans with MiniBatchKMeans without a new config" in roadmap
     assert "Do not claim `R_star` is optimized unless a new objective" in roadmap
-    assert "`92%`" in roadmap
+    assert "`94%`" in roadmap
     assert "completed_g6_validation_only_selection" in roadmap
     assert "docs/evidence/reproduction/2026-05-03_cb_svdpp_g6_validation_grid_run.md" in roadmap
     assert "configs/models/tuned/ml100k_cb_svdpp_g6_validation_selected.yaml" in roadmap
@@ -260,6 +267,9 @@ def test_master_plan_tracks_claim_unlock_scalability_backlog() -> None:
     assert "pass_for_clean_prechange_baseline" in roadmap
     assert "docs/evidence/reproduction/2026-05-03_cb_asvdpp_hotpath_prechange_baseline_g9.md" in roadmap
     assert "main_training_wall_clock_seconds`: `122.91284980002092`" in roadmap
+    assert "pass_for_exact_workbuffer_remediation_context" in roadmap
+    assert "docs/evidence/reproduction/2026-05-03_cb_asvdpp_hotpath_postchange_benchmark_g10.md" in roadmap
+    assert "observed main-training wall-clock change: `-7.403998780257792%`" in roadmap
 
     g1_evidence = G1_RUNTIME_PROFILE_EVIDENCE.read_text(encoding="utf-8")
     assert "status: `pass`" in g1_evidence
@@ -367,6 +377,12 @@ def test_master_plan_tracks_claim_unlock_scalability_backlog() -> None:
     assert "main training wall-clock seconds: `122.91284980002092`" in cb_asvdpp_prechange_baseline
     assert "no claim that a remediation has already improved runtime" in cb_asvdpp_prechange_baseline
 
+    cb_asvdpp_postchange_benchmark = CB_ASVDPP_HOTPATH_POSTCHANGE_BENCHMARK.read_text(encoding="utf-8")
+    assert "status: `pass_for_exact_workbuffer_remediation_context`" in cb_asvdpp_postchange_benchmark
+    assert "main training wall-clock seconds: `113.81238390004728`" in cb_asvdpp_postchange_benchmark
+    assert "`-7.403998780257792%`" in cb_asvdpp_postchange_benchmark
+    assert "no broad or unqualified speed claim" in cb_asvdpp_postchange_benchmark
+
 
 def test_publish_readiness_matrix_tracks_gates_scope_and_current_blockers() -> None:
     matrix = READINESS_MATRIX.read_text(encoding="utf-8")
@@ -392,8 +408,8 @@ def test_publish_readiness_matrix_tracks_gates_scope_and_current_blockers() -> N
     ) in matrix
     assert "`ml100k` | `cb_asvdpp stage1_tuned`" in matrix
     assert "test RMSE mean `0.916839`" in matrix
-    assert "clean_multiseed_anchor_plus_hotpath_decision_only" in matrix
-    assert "clean pre-change baseline but no post-change remediation evidence yet" in matrix
+    assert "clean_multiseed_anchor_plus_g10_context_speed_readout" in matrix
+    assert "clean post-change work-buffer benchmark" in matrix
     assert "`ml100k` | `cb_svdpp g6_validation_selected`" in matrix
     assert "selected validation RMSE mean `0.9566122815305916`" in matrix
     assert "test RMSE mean `0.9595668222022953`" in matrix

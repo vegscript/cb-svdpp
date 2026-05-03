@@ -25,7 +25,7 @@ Status vocabulary:
 | --- | --- | --- | --- |
 | Gate 1: Scope Freeze | `pass` | Official scope is fixed as `ml100k`, `ml1m`, `ml10m`, and `ml20m`; `ml10m` and `ml20m` may not be silently removed. | Keep this scope visible in README, report, and final claim matrix. |
 | Gate 2: Dataset Evidence | `pass` | `ml100k`, `ml1m`, `ml10m`, and `ml20m` have processed manifests and data evidence. | Keep dataset evidence links visible in the final claim matrix and report appendix. |
-| Gate 3: Benchmark Evidence | `partial` | Clean benchmark anchors exist for `ml100k`; `ml100k cb_svdpp` also has a completed G6 validation-only selection, a frozen selected config, and a completed clean outer benchmark readout under `benchmark_random_v1`; clean `ml1m` anchors exist for `biased_mf` and `cb_svdpp`; `ml1m cb_asvdpp` is selection-only; `ml100k cb_asvdpp` has a bounded hot-path profiling decision, an exact-remediation contract, and a clean pre-change baseline but no post-change remediation evidence yet; `ml10m` has matched clean `biased_mf` and `cb_svdpp` multi-split-seed anchors; `ml20m` has a clean `biased_mf` baseline anchor plus `cb_svdpp` feasibility and a local matched-campaign attempt that breached the memory guardrail. | Keep final `ml20m` model-comparison claims blocked until a stronger device profile or lower-memory matched profile has clean evidence; restrict `ml10m` claims to the documented `biased_mf` vs `cb_svdpp` profile comparison; keep the new G6 `ml100k cb_svdpp` readout separate from older `paper_faithful_ml100k_v1` anchors; implement `cb_asvdpp` remediation only under the exactness and before/after gates. |
+| Gate 3: Benchmark Evidence | `partial` | Clean benchmark anchors exist for `ml100k`; `ml100k cb_svdpp` also has a completed G6 validation-only selection, a frozen selected config, and a completed clean outer benchmark readout under `benchmark_random_v1`; clean `ml1m` anchors exist for `biased_mf` and `cb_svdpp`; `ml1m cb_asvdpp` is selection-only; `ml100k cb_asvdpp` has a bounded hot-path profiling decision, an exact-remediation contract, a clean pre-change baseline, and a clean post-change work-buffer benchmark that passed the G8 metric-drift and wall-clock gates for this exact context; `ml10m` has matched clean `biased_mf` and `cb_svdpp` multi-split-seed anchors; `ml20m` has a clean `biased_mf` baseline anchor plus `cb_svdpp` feasibility and a local matched-campaign attempt that breached the memory guardrail. | Keep final `ml20m` model-comparison claims blocked until a stronger device profile or lower-memory matched profile has clean evidence; restrict `ml10m` claims to the documented `biased_mf` vs `cb_svdpp` profile comparison; keep the new G6 `ml100k cb_svdpp` readout separate from older `paper_faithful_ml100k_v1` anchors; keep the `cb_asvdpp` speed claim limited to the exact G10 benchmark context. |
 | Gate 4: Claim Freeze | `pass` | The final claim matrix exists below and separates benchmark anchors from selection and feasibility evidence. | Keep the matrix synchronized whenever new evidence is added; the report may only use claims explicitly allowed below. |
 | Gate 5: Report Ready | `pass` | Report is condensed around final claim boundaries, clean benchmark anchors, feasibility evidence, limitations, and an evidence map. | Keep future report edits integrated into the existing sections; do not reintroduce chronological work-log sections. |
 | Gate 6: Reproduction Ready | `pass` | Current `main` is clean; `uv.lock` is present; `uv sync --extra dev --locked` completed after dev type-stub updates; Ruff, Mypy, focused regression tests, and the full test suite pass from the `uv` environment. | Keep `uv.lock` versioned and rerun the same setup/smoke/quality sequence before final tagging if dependencies change. |
@@ -44,7 +44,7 @@ Status vocabulary:
 
 | Dataset | `biased_mf` | `svdpp` | `cb_svdpp` | `cb_asvdpp` | Claim Boundary |
 | --- | --- | --- | --- | --- | --- |
-| `ml100k` | `clean_multiseed_anchor` | `clean_multiseed_anchor` | `clean_multiseed_anchor_plus_g6_outer_readout` | `clean_multiseed_anchor_plus_hotpath_decision_only` | Final claims may use the existing clean anchors if seed count and evidence links are stated; the G6 `cb_svdpp` readout must stay under `benchmark_random_v1`; the `cb_asvdpp` hot-path note is profiling evidence only, not remediation evidence. |
+| `ml100k` | `clean_multiseed_anchor` | `clean_multiseed_anchor` | `clean_multiseed_anchor_plus_g6_outer_readout` | `clean_multiseed_anchor_plus_g10_context_speed_readout` | Final claims may use the existing clean anchors if seed count and evidence links are stated; the G6 `cb_svdpp` readout must stay under `benchmark_random_v1`; the G10 `cb_asvdpp` work-buffer result may support only the exact `ml100k cb_asvdpp` benchmark-context speed statement. |
 | `ml1m` | `clean_multiseed_anchor` | `missing_anchor` | `clean_multiseed_anchor` | `clean_selection_only` | Final cross-model claims are currently valid only for matched `biased_mf` vs `cb_svdpp`; `cb_asvdpp` is not benchmark-final. |
 | `ml10m` | `clean_multiseed_baseline_anchor` | `missing` | `clean_multiseed_matched_anchor` | `missing` | Bounded matched `biased_mf` vs `cb_svdpp` comparison is allowed for the documented `stage0_transfer` profiles only. |
 | `ml20m` | `clean_multiseed_baseline_anchor` | `missing` | `guardrail_breached_local_campaign` | `missing` | Baseline-only `biased_mf` statements are allowed; no final model-comparison claim is allowed because the local CB matched-campaign attempt breached the memory guardrail. |
@@ -120,6 +120,11 @@ They must not be mixed into final model-ranking tables.
   is not remediation evidence and unlocks no speed claim.
 - The `cb_asvdpp` pre-change baseline is comparison evidence only. It is not
   post-change remediation evidence and unlocks no speed claim.
+- The G10 `cb_asvdpp` post-change benchmark unlocks only a narrow speed claim
+  for the exact `ml100k cb_asvdpp` context that passed the G8 drift and
+  wall-clock gates. It does not unlock broad speed, scalability,
+  production-readiness, SOTA, paper-faithfulness, large-dataset, or cross-device
+  claims.
 
 ## Post-Release Work Queue
 
@@ -129,9 +134,8 @@ They must not be mixed into final model-ranking tables.
 2. Keep the documented G6 outer readout separate from older
    `paper_faithful_ml100k_v1` anchor comparisons unless the split-family
    difference is explicit.
-3. Implement the `cb_asvdpp` exact work-buffer remediation only under the G8
-   contract, then compare the post-change run against the G9 pre-change
-   baseline.
+3. Keep the G10 `cb_asvdpp` remediation readout claim-limited and do not
+   generalize it without fresh benchmark evidence.
 
 ## Current Non-Claims
 
