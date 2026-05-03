@@ -392,6 +392,9 @@ Status:
   validation-only
 - resource gate: reject any candidate with a run above `19660.8 MB` peak memory
   on `local_i5_2500k_24gb`
+- operational enforcement: `tune-inner` records per-run peak memory, excludes
+  breached candidates from selection, and stops a candidate after the first
+  breach when `reject_candidate_on_any_guardrail_breach=true`
 - selection rule: select by `validation_rmse_mean` only after all candidate
   runs pass the resource gate
 - no test-set evaluation, final `ml20m cb_svdpp` benchmark claim, model
@@ -462,7 +465,7 @@ A stronger CB release requires all of these gates:
 ## Current Progress Estimate
 
 Approximate engineering readiness for a publishable, stronger CB-focused repo:
-`95%`.
+`96%`.
 
 This percentage is not a benchmark result. It is a planning estimate based on
 completed governance, data, model, benchmark scaffolding, runtime-profile
@@ -477,5 +480,6 @@ exact-remediation contract, clean pre-change baseline, exact work-buffer
 implementation, equivalence guard, and clean post-change benchmark that passed
 the G8 metric-drift and wall-clock gates in the exact `ml100k cb_asvdpp`
 context, plus a G11 lower-memory validation contract for `ml20m cb_svdpp`,
+and operational `tune-inner` resource-gate enforcement for that contract,
 versus the still missing G11 execution, final large-dataset reassessment, and
 final release-claim gates above.

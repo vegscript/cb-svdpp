@@ -69,7 +69,7 @@ The current local reproduction evidence used:
 - `uv sync --extra dev --locked`
 - Ruff gate: `All checks passed!`
 - Mypy source gate: `Success: no issues found in 62 source files`
-- full test suite from the `uv` environment: `142 passed`
+- full test suite from the `uv` environment: `143 passed`
 
 Basic smoke checks:
 

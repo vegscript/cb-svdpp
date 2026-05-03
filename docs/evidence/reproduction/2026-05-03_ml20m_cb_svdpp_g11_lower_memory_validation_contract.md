@@ -76,6 +76,18 @@ resource evidence. It must not be converted into a quality, speed,
 scalability, production-readiness, SOTA, paper-faithfulness, or large-dataset
 CB claim.
 
+## Operational Enforcement
+
+The `tune-inner` path now reads `resource_gate` from the tuning config. For each
+candidate run it records `system_metrics.peak_memory_mb`, compares it with
+`max_peak_memory_mb`, and stores the per-run resource-gate readout in the
+summary.
+
+If `reject_candidate_on_any_guardrail_breach=true`, a candidate is stopped
+after its first resource-gate breach and excluded from validation-RMSE
+selection. The best candidate is selected only from candidates that completed
+all planned selection units without a resource-gate breach.
+
 ## Promotion Gate
 
 This contract can produce only selection evidence. A final or comparison-ready
@@ -119,10 +131,12 @@ This contract is claimable as a contract only after:
 - its config loads through the repo YAML loader
 - guardrail tests confirm validation-only scope, no test metric references, no
   `MiniBatchKMeans`, explicit `kmeans`, and explicit RAM rejection semantics
+- integration tests confirm `tune-inner` excludes breached candidates from
+  selection and keeps the lower-memory candidate eligible
 - Ruff, Mypy, and the full test suite pass
 
 Executed after documenting this contract:
 
 - Ruff: `All checks passed!`
 - Mypy: `Success: no issues found in 62 source files`
-- Pytest: `142 passed`
+- Pytest: `143 passed`

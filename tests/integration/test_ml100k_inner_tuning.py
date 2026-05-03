@@ -235,6 +235,149 @@ def test_run_ml100k_inner_tuning_aggregates_candidates(
     assert observed_train_ratios == [0.9, 0.9, 0.9, 0.9]
 
 
+def test_run_inner_tuning_excludes_resource_gate_breaches(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    actual_repo_root = Path(__file__).resolve().parents[2]
+    (
+        repo_root,
+        tuning_config_path,
+        processed_manifest_path,
+        runtime_config_path,
+        device_config_path,
+    ) = _prepare_synthetic_tuning_repo(tmp_path, actual_repo_root)
+    _write_text(
+        tuning_config_path,
+        "tuning:\n  name: ml100k_biased_mf_resource_gate\n  dataset_short_name: ml100k\n"
+        "  split_family: paper_faithful_ml100k_inner_v1\n  selection_stage: resource_gate\n"
+        "  objective: validation_rmse_mean\n  folds:\n    - 1\n    - 2\n  validation_ratio: 0.1\n"
+        "  inner_seed: 17\n  model_seed: 1\n"
+        "resource_gate:\n"
+        "  device_profile: local_test\n"
+        "  max_peak_memory_mb: 150.0\n"
+        "  reject_candidate_on_any_guardrail_breach: true\n"
+        "base_model_config: configs/models/biased_mf.yaml\n"
+        "candidates:\n"
+        "  - candidate_id: low_rmse_high_memory\n"
+        "    overrides:\n      training:\n        learning_rate: 0.01\n"
+        "  - candidate_id: higher_rmse_low_memory\n"
+        "    overrides:\n      training:\n        learning_rate: 0.02\n",
+    )
+
+    monkeypatch.setattr(
+        "recsys_lab.experiments.ml100k_inner_tuning.git_snapshot",
+        lambda _repo_root: {"commit": "abcdef1234567", "branch": "main", "dirty": False},
+    )
+
+    call_index = {"value": 0}
+    observed_candidates: list[str] = []
+
+    def _fake_runner(**kwargs):
+        call_index["value"] += 1
+        candidate_name = Path(kwargs["model_config_path"]).stem
+        observed_candidates.append(candidate_name)
+        fold_index = int(kwargs["split_config"].seed)
+        run_id = f"2026-04-13T40000{call_index['value']}Z_ml100k_biased_mf_local_test_s001"
+        run_dir = repo_root / "artifacts" / "runs" / run_id
+        run_dir.mkdir(parents=True, exist_ok=True)
+        metrics_path = run_dir / "metrics.json"
+        config_snapshot_path = run_dir / "config_snapshot.yaml"
+        stdout_log_path = run_dir / "stdout.log"
+        run_manifest_path = run_dir / "run_manifest.json"
+
+        breaches_gate = candidate_name == "low_rmse_high_memory"
+        validation_rmse = 0.80 if breaches_gate else 0.85
+        peak_memory_mb = 200.0 if breaches_gate else 100.0
+        _write_text(config_snapshot_path, "candidate: test\n")
+        _write_text(stdout_log_path, f"run_id={run_id}\n")
+        _write_text(
+            metrics_path,
+            json.dumps(
+                {
+                    "run_id": run_id,
+                    "metrics": {
+                        "train_rmse": validation_rmse - 0.1,
+                        "validation_rmse": validation_rmse + fold_index * 0.001,
+                        "test_rmse": None,
+                    },
+                    "timing": {
+                        "training_wall_clock_seconds": 10.0 + fold_index,
+                    },
+                    "system_metrics": {
+                        "peak_memory_mb": peak_memory_mb,
+                    },
+                },
+                indent=2,
+            ),
+        )
+        _write_text(
+            run_manifest_path,
+            json.dumps(
+                {
+                    "manifest_version": "v1",
+                    "kind": "run_manifest",
+                    "generated_at_utc": "2026-04-13T400000Z",
+                    "run_id": run_id,
+                    "status": "completed",
+                    "command": "recsys-lab tune-inner --synthetic-resource-gate",
+                    "cwd": ".",
+                    "git": {
+                        "commit": "abcdef1234567",
+                        "branch": "main",
+                        "dirty": False,
+                    },
+                    "dataset": {
+                        "short_name": "ml100k",
+                        "split_family": "paper_faithful_ml100k_inner_v1",
+                    },
+                    "model": {
+                        "name": "biased_mf",
+                        "scope": "paper_inspired",
+                        "config_ref": str(Path(kwargs["model_config_path"]).relative_to(repo_root)).replace("\\", "/"),
+                    },
+                    "runtime": {
+                        "device_profile": "local_test",
+                        "python_version": "3.11.9",
+                        "dtype": "float32",
+                        "threading": {"omp_num_threads": 1, "blas_threads": 1},
+                    },
+                    "seeds": [1],
+                    "artifacts": {
+                        "config_snapshot": str(config_snapshot_path.relative_to(repo_root)).replace("\\", "/"),
+                        "metrics": str(metrics_path.relative_to(repo_root)).replace("\\", "/"),
+                        "stdout_log": str(stdout_log_path.relative_to(repo_root)).replace("\\", "/"),
+                    },
+                },
+                indent=2,
+            ),
+        )
+        return {"run_manifest": str(run_manifest_path)}
+
+    monkeypatch.setattr(
+        "recsys_lab.experiments.ml100k_inner_tuning._runner_for_model",
+        lambda _model_name: _fake_runner,
+    )
+
+    payload = run_inner_tuning(
+        tuning_config_path=tuning_config_path,
+        processed_manifest_path=processed_manifest_path,
+        runtime_config_path=runtime_config_path,
+        device_config_path=device_config_path,
+        repo_root=repo_root,
+        command="recsys-lab tune-inner --synthetic-resource-gate",
+    )
+
+    summary = json.loads((Path(payload["benchmark_dir"]) / "summary.json").read_text(encoding="utf-8"))
+
+    assert payload["best_candidate"] == "higher_rmse_low_memory"
+    assert [candidate["candidate_id"] for candidate in summary["candidates"]] == ["higher_rmse_low_memory"]
+    assert summary["all_candidates"][0]["resource_gate"]["passed"] is False
+    assert summary["all_candidates"][0]["resource_gate"]["breaches"][0]["peak_memory_mb"] == 200.0
+    assert summary["all_candidates"][1]["resource_gate"]["passed"] is True
+    assert observed_candidates == ["low_rmse_high_memory", "higher_rmse_low_memory", "higher_rmse_low_memory"]
+
+
 def test_run_ml100k_inner_tuning_passes_split_cache_override_to_supported_models(
     tmp_path: Path,
     monkeypatch,

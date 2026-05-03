@@ -106,14 +106,16 @@ def test_ml20m_g11_lower_memory_contract_is_validation_only_and_resource_gated()
     assert "contract_ready_g11_ml20m_lower_memory_validation_reassessment" in evidence
     assert "planned validation-only runs: `16`" in evidence
     assert "test-set evaluation during selection: not allowed" in evidence
+    assert "The `tune-inner` path now reads `resource_gate`" in evidence
+    assert "excluded from validation-RMSE" in evidence
     assert "no final `ml20m cb_svdpp` benchmark claim" in evidence
     assert "no scalability claim from this contract" in evidence
 
     assert "status: `contract_ready_g11_ml20m_lower_memory_validation_reassessment`" in roadmap
     assert "docs/evidence/reproduction/2026-05-03_ml20m_cb_svdpp_g11_lower_memory_validation_contract.md" in roadmap
-    assert "`95%`" in roadmap
+    assert "`96%`" in roadmap
 
-    assert "G11 lower-memory validation contract exists" in matrix
+    assert "G11 lower-memory validation contract and operative `tune-inner` resource-gate" in matrix
     assert "no final `ml20m cb_svdpp` benchmark claim" in matrix
 
     assert "ML20M CB-SVD++ G11 lower-memory validation contract evidence" in readme

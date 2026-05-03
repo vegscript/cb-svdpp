@@ -35,7 +35,7 @@ def test_cb_asvdpp_prechange_baseline_is_clean_and_non_claiming() -> None:
 
     assert "pass_for_clean_prechange_baseline" in roadmap
     assert "main_training_wall_clock_seconds`: `122.91284980002092`" in roadmap
-    assert "`95%`" in roadmap
+    assert "`96%`" in roadmap
     assert "pass_for_exact_workbuffer_remediation_context" in roadmap
 
     assert "clean post-change work-buffer benchmark" in matrix

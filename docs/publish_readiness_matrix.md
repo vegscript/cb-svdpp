@@ -125,9 +125,10 @@ They must not be mixed into final model-ranking tables.
   wall-clock gates. It does not unlock broad speed, scalability,
   production-readiness, SOTA, paper-faithfulness, large-dataset, or cross-device
   claims.
-- G11 lower-memory validation contract exists for `ml20m cb_svdpp`, but it is
-  a run contract only. It unlocks no final `ml20m cb_svdpp` benchmark claim, no
-  `ml20m` model-comparison claim, no test-set claim, and no scalability claim.
+- G11 lower-memory validation contract and operative `tune-inner` resource-gate
+  enforcement exist for `ml20m cb_svdpp`, but they are not run evidence. They
+  unlock no final `ml20m cb_svdpp` benchmark claim, no `ml20m`
+  model-comparison claim, no test-set claim, and no scalability claim.
 
 ## Post-Release Work Queue
 
@@ -151,8 +152,9 @@ They must not be mixed into final model-ranking tables.
 - `ml20m` has a clean `biased_mf` baseline anchor, but its local `cb_svdpp`
   matched-campaign attempt is negative resource evidence, not final
   model-comparison evidence.
-- G11 is only a lower-memory validation contract for `ml20m cb_svdpp`; there is
-  no G11 run evidence yet and no final `ml20m cb_svdpp` benchmark claim.
+- G11 is only a lower-memory validation contract with operative resource-gate
+  enforcement for `ml20m cb_svdpp`; there is no G11 run evidence yet and no
+  final `ml20m cb_svdpp` benchmark claim.
 - `ml1m cb_asvdpp` is not a benchmark anchor.
 - G6 `ml100k cb_svdpp` is validation-only selection evidence, not a final
   benchmark anchor.

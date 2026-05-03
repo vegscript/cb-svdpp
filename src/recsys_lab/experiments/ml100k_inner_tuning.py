@@ -77,6 +77,13 @@ def _fit_seconds(metrics: dict[str, Any]) -> float:
     return fit_seconds
 
 
+def _peak_memory_mb(metrics: dict[str, Any]) -> float | None:
+    peak_memory_mb = metrics.get("system_metrics", {}).get("peak_memory_mb")
+    if peak_memory_mb is None:
+        return None
+    return float(peak_memory_mb)
+
+
 def _candidate_sort_key(candidate_summary: dict[str, Any]) -> tuple[float, float, float]:
     aggregate = candidate_summary["aggregate"]
     return (
@@ -183,6 +190,19 @@ def run_inner_tuning(
     benchmark_scope = "_".join(["tuning", dataset_short_name, requested_split_family, model_name, selection_stage])
 
     device_profile_name = str(device_config_payload["device_profile"]["name"])
+    raw_resource_gate = tuning_payload.get("resource_gate")
+    resource_gate_payload: dict[str, Any] | None = None
+    max_peak_memory_mb: float | None = None
+    reject_candidate_on_guardrail_breach = False
+    if raw_resource_gate is not None:
+        resource_gate_payload = dict(raw_resource_gate)
+        expected_device_profile = resource_gate_payload.get("device_profile")
+        if expected_device_profile is not None and str(expected_device_profile) != device_profile_name:
+            raise ValueError("resource_gate.device_profile must match the selected device config")
+        max_peak_memory_mb = float(resource_gate_payload["max_peak_memory_mb"])
+        reject_candidate_on_guardrail_breach = bool(
+            resource_gate_payload.get("reject_candidate_on_any_guardrail_breach", False)
+        )
     timestamp, benchmark_id, benchmark_dir = reserve_timestamped_artifact_dir(
         artifacts_root=root / "artifacts" / "benchmarks",
         id_from_timestamp=lambda reserved_timestamp: "_".join(
@@ -299,6 +319,7 @@ def run_inner_tuning(
                 "runtime_config": repo_path_string(runtime_config_path, repo_root=root),
                 "device_config": repo_path_string(device_config_path, repo_root=root),
                 "cache_policy": cache_policy_payload,
+                "resource_gate": resource_gate_payload,
                 "loaded_configs": {
                     "tuning": tuning_payload,
                     "processed_manifest": processed_manifest,
@@ -341,6 +362,7 @@ def run_inner_tuning(
                 dump_yaml_file(candidate_config_path, effective_model_config)
 
                 fold_results: list[dict[str, Any]] = []
+                resource_gate_breaches: list[dict[str, Any]] = []
                 for selection_unit, selection_label in zip(selection_units, selection_labels, strict=True):
                     runner_kwargs = {
                         "processed_manifest_path": processed_manifest_path,
@@ -372,6 +394,11 @@ def run_inner_tuning(
                     run_manifest_path = Path(str(payload["run_manifest"])).resolve()
                     run_manifest_paths.append(run_manifest_path)
                     metrics = _read_run_metrics(run_manifest_path, repo_root=root)
+                    peak_memory_mb = _peak_memory_mb(metrics)
+                    resource_gate_passed = (
+                        max_peak_memory_mb is None
+                        or (peak_memory_mb is not None and peak_memory_mb <= max_peak_memory_mb)
+                    )
                     fold_results.append(
                         {
                             "selection_unit": selection_label,
@@ -380,12 +407,30 @@ def run_inner_tuning(
                             "train_rmse": float(metrics["metrics"]["train_rmse"]),
                             "validation_rmse": float(metrics["metrics"]["validation_rmse"]),
                             "training_wall_clock_seconds": _fit_seconds(metrics),
+                            "resource_gate": {
+                                "enabled": resource_gate_payload is not None,
+                                "passed": resource_gate_passed,
+                                "peak_memory_mb": peak_memory_mb,
+                                "max_peak_memory_mb": max_peak_memory_mb,
+                            },
                         }
                     )
+                    if not resource_gate_passed:
+                        resource_gate_breaches.append(
+                            {
+                                "selection_unit": selection_label,
+                                "run_id": str(metrics["run_id"]),
+                                "peak_memory_mb": peak_memory_mb,
+                                "max_peak_memory_mb": max_peak_memory_mb,
+                            }
+                        )
+                        if reject_candidate_on_guardrail_breach:
+                            break
 
                 validation_values = [item["validation_rmse"] for item in fold_results]
                 train_values = [item["train_rmse"] for item in fold_results]
                 training_values = [item["training_wall_clock_seconds"] for item in fold_results]
+                resource_gate_passed = not resource_gate_breaches and len(fold_results) == len(selection_units)
                 candidate_summaries.append(
                     {
                         "candidate_id": candidate_id,
@@ -393,6 +438,11 @@ def run_inner_tuning(
                         "measurement": measurement,
                         "folds": fold_results,
                         "selection_unit_kind": selection_unit_kind,
+                        "resource_gate": {
+                            "enabled": resource_gate_payload is not None,
+                            "passed": resource_gate_passed,
+                            "breaches": resource_gate_breaches,
+                        },
                         "aggregate": {
                             "validation_rmse": summarize_scalar_samples(validation_values),
                             "train_rmse": summarize_scalar_samples(train_values),
@@ -401,7 +451,14 @@ def run_inner_tuning(
                     }
                 )
 
-            ordered_candidates = sorted(candidate_summaries, key=_candidate_sort_key)
+            eligible_candidates = [
+                candidate_summary
+                for candidate_summary in candidate_summaries
+                if candidate_summary["resource_gate"]["passed"]
+            ]
+            if resource_gate_payload is not None and not eligible_candidates:
+                raise ValueError("no tuning candidate satisfied the configured resource gate")
+            ordered_candidates = sorted(eligible_candidates, key=_candidate_sort_key)
             best_candidate = ordered_candidates[0]
 
             summary_payload: dict[str, Any] = {
@@ -419,10 +476,12 @@ def run_inner_tuning(
                 "inner_seed": inner_seed,
                 "model_seed": model_seed,
                 "cache_policy": cache_policy_payload,
+                "resource_gate": resource_gate_payload,
                 "measurement": measurement,
                 "objective": "validation_rmse_mean",
                 "best_candidate": best_candidate,
                 "candidates": ordered_candidates,
+                "all_candidates": candidate_summaries,
             }
             write_json(summary_path, summary_payload)
 
@@ -445,12 +504,23 @@ def run_inner_tuning(
                 f"- cluster_artifact_cache: `{use_cluster_artifact_cache}`",
                 f"- warmup_policy: `{measurement['warmup_policy']}`",
                 f"- measured_sample_count: `{measurement['measured_sample_count']}`",
-                "",
-                "## Candidates",
-                "",
-                "| Rank | Candidate | Validation RMSE Mean | Validation RMSE Std | Train Time Mean (s) |",
-                "| --- | --- | ---: | ---: | ---: |",
             ]
+            if resource_gate_payload is not None:
+                markdown_lines.extend(
+                    [
+                        "- resource_gate_enabled: `true`",
+                        f"- max_peak_memory_mb: `{max_peak_memory_mb}`",
+                    ]
+                )
+            markdown_lines.extend(
+                [
+                    "",
+                    "## Candidates",
+                    "",
+                    "| Rank | Candidate | Validation RMSE Mean | Validation RMSE Std | Train Time Mean (s) |",
+                    "| --- | --- | ---: | ---: | ---: |",
+                ]
+            )
             for rank, candidate_summary in enumerate(ordered_candidates, start=1):
                 aggregate = candidate_summary["aggregate"]
                 markdown_lines.append(
