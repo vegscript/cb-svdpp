@@ -30,6 +30,8 @@ claims only where the publish-readiness matrix explicitly allows them.
   `docs/evidence/reproduction/2026-05-03_cb_svdpp_g6_validation_grid_contract.md`
 - Validation-grid run evidence:
   `docs/evidence/reproduction/2026-05-03_cb_svdpp_g6_validation_grid_run.md`
+- G6 outer benchmark contract evidence:
+  `docs/evidence/reproduction/2026-05-03_cb_svdpp_g6_outer_benchmark_contract.md`
 
 This repository is not an unconstrained `paper-faithful` or `scalable`
 reproduction. The clustering-based models are documented as source-grounded
@@ -55,7 +57,7 @@ The current local reproduction evidence used:
 - `uv sync --extra dev --locked`
 - Ruff gate: `All checks passed!`
 - Mypy source gate: `Success: no issues found in 62 source files`
-- full test suite from the `uv` environment: `134 passed`
+- full test suite from the `uv` environment: `135 passed`
 
 Basic smoke checks:
 

@@ -140,6 +140,13 @@ G5_TUNE_INNER_CACHE_EVIDENCE = (
 G6_VALIDATION_GRID_EVIDENCE = (
     REPO_ROOT / "docs" / "evidence" / "reproduction" / "2026-05-03_cb_svdpp_g6_validation_grid_run.md"
 )
+G6_OUTER_BENCHMARK_CONTRACT = (
+    REPO_ROOT
+    / "docs"
+    / "evidence"
+    / "reproduction"
+    / "2026-05-03_cb_svdpp_g6_outer_benchmark_contract.md"
+)
 
 
 def _single_line(text: str) -> str:
@@ -212,10 +219,12 @@ def test_master_plan_tracks_claim_unlock_scalability_backlog() -> None:
     assert "Do not call current CB large-dataset behavior `scalable`" in roadmap
     assert "Do not replace KMeans with MiniBatchKMeans without a new config" in roadmap
     assert "Do not claim `R_star` is optimized unless a new objective" in roadmap
-    assert "`84%`" in roadmap
+    assert "`86%`" in roadmap
     assert "completed_g6_validation_only_selection" in roadmap
     assert "docs/evidence/reproduction/2026-05-03_cb_svdpp_g6_validation_grid_run.md" in roadmap
     assert "configs/models/tuned/ml100k_cb_svdpp_g6_validation_selected.yaml" in roadmap
+    assert "approved_for_clean_outer_benchmark_contract" in roadmap
+    assert "docs/evidence/reproduction/2026-05-03_cb_svdpp_g6_outer_benchmark_contract.md" in roadmap
 
     g1_evidence = G1_RUNTIME_PROFILE_EVIDENCE.read_text(encoding="utf-8")
     assert "status: `pass`" in g1_evidence
@@ -292,6 +301,15 @@ def test_master_plan_tracks_claim_unlock_scalability_backlog() -> None:
     assert "no final `ml100k cb_svdpp` quality claim" in g6_evidence
     assert "no test-set result or test-set comparison" in g6_evidence
 
+    g6_outer_contract = G6_OUTER_BENCHMARK_CONTRACT.read_text(encoding="utf-8")
+    assert "status: `approved_for_clean_outer_benchmark_contract`" in g6_outer_contract
+    assert "run contract, not a benchmark result" in g6_outer_contract
+    assert "selected by `validation_rmse_mean`" in g6_outer_contract
+    assert "`0` non-null `test_rmse` values" in g6_outer_contract
+    assert "contract must already be committed before the first outer run starts" in g6_outer_contract
+    assert "same git commit as the aggregation process" in g6_outer_contract
+    assert "the outer run has not been executed yet" in g6_outer_contract
+
 
 def test_publish_readiness_matrix_tracks_gates_scope_and_current_blockers() -> None:
     matrix = READINESS_MATRIX.read_text(encoding="utf-8")
@@ -306,7 +324,10 @@ def test_publish_readiness_matrix_tracks_gates_scope_and_current_blockers() -> N
     assert "| Gate 7: Release Hygiene | `pass` |" in matrix
     assert "## Final Claim Matrix" in matrix
     assert "## Feasibility And Selection Evidence" in matrix
-    assert "| `ml100k` | `in_scope` | `pass` | `pass` | `pass_for_current_anchor_set_plus_g6_selection` |" in matrix
+    assert (
+        "| `ml100k` | `in_scope` | `pass` | `pass` | "
+        "`pass_for_current_anchor_set_plus_g6_selection_and_outer_contract` |"
+    ) in matrix
     assert "| `ml10m` | `in_scope` | `pass` | `pass` | `matched_biased_mf_cb_svdpp_anchor` |" in matrix
     assert (
         "| `ml20m` | `in_scope` | `pass` | `pass` | "
@@ -338,6 +359,7 @@ def test_publish_readiness_matrix_tracks_gates_scope_and_current_blockers() -> N
     assert "release marker `submission-2026-05-02-r10`" in matrix
     assert "Post-Release Work Queue" in matrix
     assert "frozen G6 `ml100k cb_svdpp` selected config" in matrix
+    assert "documented outer benchmark contract but no outer test rerun yet" in matrix
     assert "do not reintroduce chronological work-log sections" in matrix
     assert "`ml1m cb_asvdpp` is not a benchmark anchor" in matrix
     assert "G6 `ml100k cb_svdpp` is validation-only selection evidence" in matrix

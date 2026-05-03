@@ -258,6 +258,23 @@ Promotion contract:
   scalability claim, SOTA claim, production-readiness claim, or
   paper-faithfulness claim is unlocked by this selection evidence
 
+Outer benchmark contract:
+
+- status: `approved_for_clean_outer_benchmark_contract`
+- evidence:
+  `docs/evidence/reproduction/2026-05-03_cb_svdpp_g6_outer_benchmark_contract.md`
+- decision: run one clean outer `ml100k cb_svdpp` benchmark for the frozen
+  G6-selected config
+- selected config:
+  `configs/models/tuned/ml100k_cb_svdpp_g6_validation_selected.yaml`
+- planned scope: split seeds `1,2,3`, model seed `1`, split family
+  `benchmark_random_v1`
+- required order: commit this contract first, then run the three outer runs
+  and aggregate on the same clean commit
+- no outer benchmark result, final quality claim, speed claim, scalability
+  claim, SOTA claim, production-readiness claim, or paper-faithfulness claim is
+  unlocked by this contract alone
+
 ### 7. `R_star` Decision Track
 
 `R_star` currently remains diagnostic in the repo-defined CB v1 pipeline. That
@@ -311,9 +328,9 @@ A stronger CB release requires all of these gates:
 
 ## Immediate Next Sequence
 
-1. Decide whether to run a clean outer `ml100k cb_svdpp` benchmark for the
-   frozen G6-selected config; do not use test data until this decision is
-   documented and the selected config is frozen.
+1. Run the three planned outer split-seed runs and aggregate them on the same
+   clean contract commit, without editing configs or benchmark code after
+   seeing any outer test metric.
 2. Keep `cb_asvdpp` hot-path remediation as separate work if profiling shows it
    is decision-critical.
 3. Reassess `ml10m` and `ml20m` only after the profiler and cache work produce
@@ -322,7 +339,7 @@ A stronger CB release requires all of these gates:
 ## Current Progress Estimate
 
 Approximate engineering readiness for a publishable, stronger CB-focused repo:
-`84%`.
+`86%`.
 
 This percentage is not a benchmark result. It is a planning estimate based on
 completed governance, data, model, benchmark scaffolding, runtime-profile
@@ -330,7 +347,8 @@ preflight, stage profiling on `ml100k` and bounded `ml10m`, leakage-safe
 cluster-cache plumbing, a measured `cb_svdpp` hot-path workbuffer remediation
 on `ml100k`, explicit tune-inner cache controls, a bounded validation-only
 `ml100k cb_svdpp` alpha/cluster selection probe, and a completed G6
-validation-only `ml100k cb_svdpp` grid, versus the still missing outer
-benchmark decision for the frozen G6 selection, `cb_asvdpp` hot-path decision
-if needed, final large-dataset reassessment, and final release-claim gates
-above.
+validation-only `ml100k cb_svdpp` grid, and a documented clean outer
+benchmark contract for the frozen G6 selection, versus the still missing
+execution and aggregation of that outer benchmark, `cb_asvdpp` hot-path
+decision if needed, final large-dataset reassessment, and final release-claim
+gates above.
