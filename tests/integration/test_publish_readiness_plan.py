@@ -157,6 +157,13 @@ G6_OUTER_BENCHMARK_RUN = (
 CB_ASVDPP_HOTPATH_DECISION = (
     REPO_ROOT / "docs" / "evidence" / "reproduction" / "2026-05-03_cb_asvdpp_hotpath_decision_g7.md"
 )
+CB_ASVDPP_HOTPATH_REMEDIATION_CONTRACT = (
+    REPO_ROOT
+    / "docs"
+    / "evidence"
+    / "reproduction"
+    / "2026-05-03_cb_asvdpp_hotpath_remediation_contract_g8.md"
+)
 
 
 def _single_line(text: str) -> str:
@@ -229,7 +236,7 @@ def test_master_plan_tracks_claim_unlock_scalability_backlog() -> None:
     assert "Do not call current CB large-dataset behavior `scalable`" in roadmap
     assert "Do not replace KMeans with MiniBatchKMeans without a new config" in roadmap
     assert "Do not claim `R_star` is optimized unless a new objective" in roadmap
-    assert "`90%`" in roadmap
+    assert "`91%`" in roadmap
     assert "completed_g6_validation_only_selection" in roadmap
     assert "docs/evidence/reproduction/2026-05-03_cb_svdpp_g6_validation_grid_run.md" in roadmap
     assert "configs/models/tuned/ml100k_cb_svdpp_g6_validation_selected.yaml" in roadmap
@@ -241,6 +248,8 @@ def test_master_plan_tracks_claim_unlock_scalability_backlog() -> None:
     assert "pass_for_hotpath_prioritization_not_remediation" in roadmap
     assert "docs/evidence/reproduction/2026-05-03_cb_asvdpp_hotpath_decision_g7.md" in roadmap
     assert "main_training` share: about `92.44%`" in roadmap
+    assert "approved_for_exact_remediation_contract" in roadmap
+    assert "docs/evidence/reproduction/2026-05-03_cb_asvdpp_hotpath_remediation_contract_g8.md" in roadmap
 
     g1_evidence = G1_RUNTIME_PROFILE_EVIDENCE.read_text(encoding="utf-8")
     assert "status: `pass`" in g1_evidence
@@ -338,6 +347,11 @@ def test_master_plan_tracks_claim_unlock_scalability_backlog() -> None:
     assert "main_training` | `115.10358980001183` | `92.44%`" in cb_asvdpp_hotpath_decision
     assert "no claim that a remediation has already improved runtime" in cb_asvdpp_hotpath_decision
 
+    cb_asvdpp_remediation_contract = CB_ASVDPP_HOTPATH_REMEDIATION_CONTRACT.read_text(encoding="utf-8")
+    assert "status: `approved_for_exact_remediation_contract`" in cb_asvdpp_remediation_contract
+    assert "fresh pre-change baseline" in cb_asvdpp_remediation_contract
+    assert "main_training_wall_clock_seconds` must decrease by at least `1.0%`" in cb_asvdpp_remediation_contract
+
 
 def test_publish_readiness_matrix_tracks_gates_scope_and_current_blockers() -> None:
     matrix = READINESS_MATRIX.read_text(encoding="utf-8")
@@ -364,6 +378,7 @@ def test_publish_readiness_matrix_tracks_gates_scope_and_current_blockers() -> N
     assert "`ml100k` | `cb_asvdpp stage1_tuned`" in matrix
     assert "test RMSE mean `0.916839`" in matrix
     assert "clean_multiseed_anchor_plus_hotpath_decision_only" in matrix
+    assert "exact-remediation contract but no before/after remediation evidence yet" in matrix
     assert "`ml100k` | `cb_svdpp g6_validation_selected`" in matrix
     assert "selected validation RMSE mean `0.9566122815305916`" in matrix
     assert "test RMSE mean `0.9595668222022953`" in matrix

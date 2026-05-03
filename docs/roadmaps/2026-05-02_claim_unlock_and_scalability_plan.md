@@ -318,6 +318,26 @@ Status:
 - no speed, scalability, production-readiness, SOTA, paper-faithfulness,
   large-dataset, or quality claim is unlocked by this profiling decision
 
+Remediation contract:
+
+- status: `approved_for_exact_remediation_contract`
+- evidence:
+  `docs/evidence/reproduction/2026-05-03_cb_asvdpp_hotpath_remediation_contract_g8.md`
+- target:
+  `src/recsys_lab/models/kernels.py::train_cb_asvdpp_epoch_numba`
+- approved first target: fixed-size work-buffer reuse inside the exact Numba
+  epoch kernel
+- exactness gate: deterministic toy comparison against current Python fallback
+  semantics with tolerance `1e-6` absolute and relative on all trainable arrays
+- benchmark gate: fresh clean pre-change baseline on the committed contract,
+  then same-command post-change benchmark after remediation
+- acceptance rule: at least `1.0%` lower `main_training_wall_clock_seconds`
+  with `train_rmse`, `validation_rmse`, and `test_rmse` absolute drift at most
+  `1e-6`
+- no code change, speed claim, scalability claim, production-readiness claim,
+  SOTA claim, paper-faithfulness claim, large-dataset claim, or quality claim is
+  unlocked by this contract alone
+
 ### 7. `R_star` Decision Track
 
 `R_star` currently remains diagnostic in the repo-defined CB v1 pipeline. That
@@ -371,16 +391,17 @@ A stronger CB release requires all of these gates:
 
 ## Immediate Next Sequence
 
-1. Write the `cb_asvdpp` hot-path remediation contract before any code change.
-   The contract must define exactness tests, metric-drift bounds, and a clean
-   before/after benchmark gate.
-2. Reassess `ml10m` and `ml20m` only after the profiler and cache work produce
+1. Run the fresh clean pre-change `cb_asvdpp` baseline required by the
+   remediation contract.
+2. Implement the exact `cb_asvdpp` Numba work-buffer remediation only after the
+   baseline artifact exists on the clean contract commit.
+3. Reassess `ml10m` and `ml20m` only after the profiler and cache work produce
    clean evidence.
 
 ## Current Progress Estimate
 
 Approximate engineering readiness for a publishable, stronger CB-focused repo:
-`90%`.
+`91%`.
 
 This percentage is not a benchmark result. It is a planning estimate based on
 completed governance, data, model, benchmark scaffolding, runtime-profile
@@ -391,6 +412,8 @@ on `ml100k`, explicit tune-inner cache controls, a bounded validation-only
 validation-only `ml100k cb_svdpp` grid, a documented clean outer benchmark
 contract for the frozen G6 selection, and a completed clean outer benchmark
 readout for that frozen profile, and a `cb_asvdpp` profiling decision that
-prioritizes hot-path remediation without claiming improvement, versus the still
-missing `cb_asvdpp` remediation contract and before/after evidence, final
-large-dataset reassessment, and final release-claim gates above.
+prioritizes hot-path remediation without claiming improvement, and a
+`cb_asvdpp` exact-remediation contract with explicit equivalence and
+before/after gates, versus the still missing fresh pre-change baseline,
+implementation, post-change benchmark evidence, final large-dataset
+reassessment, and final release-claim gates above.
