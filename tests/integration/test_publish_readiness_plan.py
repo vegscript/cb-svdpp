@@ -250,7 +250,7 @@ def test_master_plan_tracks_claim_unlock_scalability_backlog() -> None:
     assert "Do not call current CB large-dataset behavior `scalable`" in roadmap
     assert "Do not replace KMeans with MiniBatchKMeans without a new config" in roadmap
     assert "Do not claim `R_star` is optimized unless a new objective" in roadmap
-    assert "`94%`" in roadmap
+    assert "`95%`" in roadmap
     assert "completed_g6_validation_only_selection" in roadmap
     assert "docs/evidence/reproduction/2026-05-03_cb_svdpp_g6_validation_grid_run.md" in roadmap
     assert "configs/models/tuned/ml100k_cb_svdpp_g6_validation_selected.yaml" in roadmap
@@ -404,7 +404,7 @@ def test_publish_readiness_matrix_tracks_gates_scope_and_current_blockers() -> N
     assert "| `ml10m` | `in_scope` | `pass` | `pass` | `matched_biased_mf_cb_svdpp_anchor` |" in matrix
     assert (
         "| `ml20m` | `in_scope` | `pass` | `pass` | "
-        "`partial_baseline_anchor_plus_cb_negative_resource_evidence` |"
+        "`partial_baseline_anchor_plus_cb_negative_resource_evidence_plus_g11_contract` |"
     ) in matrix
     assert "`ml100k` | `cb_asvdpp stage1_tuned`" in matrix
     assert "test RMSE mean `0.916839`" in matrix
@@ -428,6 +428,8 @@ def test_publish_readiness_matrix_tracks_gates_scope_and_current_blockers() -> N
     assert "docs/evidence/benchmarking/2026-04-24_large_cb_svdpp_deeper_run_deferral.md" in matrix
     assert "docs/evidence/benchmarking/2026-04-30_large_cb_svdpp_matched_campaign_contract.md" in matrix
     assert "Further local `ml20m cb_svdpp` promotion attempts require" in matrix
+    assert "G11 lower-memory validation contract exists" in matrix
+    assert "no final `ml20m cb_svdpp` benchmark claim" in matrix
     assert "`uv sync --extra dev --locked` completed" in matrix
     assert "Ruff, Mypy, focused regression tests, and the full test suite pass" in matrix
     assert "full test suite pass from the `uv` environment" in matrix

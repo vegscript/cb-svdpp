@@ -1,0 +1,141 @@
+metadata:
+  status: validation_grid_contract
+  owner: repo
+  purpose: g11_ml20m_lower_memory_reassessment
+
+tuning:
+  name: ml20m_cb_svdpp_g11_lower_memory_validation_grid
+  dataset_short_name: ml20m
+  split_family: benchmark_random_v1
+  selection_stage: g11_lower_memory_validation_grid
+  objective: validation_rmse_mean
+  motivated_by:
+    guardrail_evidence: docs/evidence/models/cb_svdpp/2026-05-02_ml20m_cb_svdpp_stage0_transfer_seed3_guardrail_breach.md
+    campaign_contract: docs/evidence/benchmarking/2026-04-30_large_cb_svdpp_matched_campaign_contract.md
+  train_ratio: 0.8
+  split_seeds:
+    - 1
+    - 2
+  validation_ratio: 0.1
+  model_seed: 1
+
+resource_gate:
+  device_profile: local_i5_2500k_24gb
+  ram_guardrail_fraction: 0.8
+  max_peak_memory_mb: 19660.8
+  reject_candidate_on_any_guardrail_breach: true
+  selection_rule: validation_rmse_mean_only_after_all_candidate_runs_pass_resource_gate
+
+base_model_config: configs/models/cb_svdpp.yaml
+
+candidates:
+  - candidate_id: rank016_uc032_ic032_a0000_lr0100_reg0020_e001
+    overrides:
+      training: &rank016_lr0100_reg0020_e001
+        latent_dim: 16
+        epochs: 1
+        learning_rate: 0.01
+        lambda_b: 0.02
+        lambda_p: 0.02
+        lambda_q: 0.02
+        lambda_y: 0.02
+        lambda_pC: 0.02
+        lambda_qC: 0.02
+        lambda_yC: 0.02
+      clustering:
+        n_user_clusters: 32
+        n_item_clusters: 32
+        alpha: 0.000
+        algorithm: kmeans
+        kmeans_n_init: 10
+
+  - candidate_id: rank016_uc032_ic032_a0025_lr0100_reg0020_e001
+    overrides:
+      training: *rank016_lr0100_reg0020_e001
+      clustering:
+        n_user_clusters: 32
+        n_item_clusters: 32
+        alpha: 0.025
+        algorithm: kmeans
+        kmeans_n_init: 10
+
+  - candidate_id: rank016_uc064_ic064_a0000_lr0100_reg0020_e001
+    overrides:
+      training: *rank016_lr0100_reg0020_e001
+      clustering:
+        n_user_clusters: 64
+        n_item_clusters: 64
+        alpha: 0.000
+        algorithm: kmeans
+        kmeans_n_init: 10
+
+  - candidate_id: rank016_uc064_ic064_a0025_lr0100_reg0020_e001
+    overrides:
+      training: *rank016_lr0100_reg0020_e001
+      clustering:
+        n_user_clusters: 64
+        n_item_clusters: 64
+        alpha: 0.025
+        algorithm: kmeans
+        kmeans_n_init: 10
+
+  - candidate_id: rank032_uc032_ic032_a0000_lr0100_reg0020_e001
+    overrides:
+      training: &rank032_lr0100_reg0020_e001
+        latent_dim: 32
+        epochs: 1
+        learning_rate: 0.01
+        lambda_b: 0.02
+        lambda_p: 0.02
+        lambda_q: 0.02
+        lambda_y: 0.02
+        lambda_pC: 0.02
+        lambda_qC: 0.02
+        lambda_yC: 0.02
+      clustering:
+        n_user_clusters: 32
+        n_item_clusters: 32
+        alpha: 0.000
+        algorithm: kmeans
+        kmeans_n_init: 10
+
+  - candidate_id: rank032_uc032_ic032_a0025_lr0100_reg0020_e001
+    overrides:
+      training: *rank032_lr0100_reg0020_e001
+      clustering:
+        n_user_clusters: 32
+        n_item_clusters: 32
+        alpha: 0.025
+        algorithm: kmeans
+        kmeans_n_init: 10
+
+  - candidate_id: rank032_uc064_ic064_a0000_lr0100_reg0020_e001
+    overrides:
+      training: *rank032_lr0100_reg0020_e001
+      clustering:
+        n_user_clusters: 64
+        n_item_clusters: 64
+        alpha: 0.000
+        algorithm: kmeans
+        kmeans_n_init: 10
+
+  - candidate_id: rank032_uc064_ic064_a0025_lr0100_reg0020_e001
+    overrides:
+      training: *rank032_lr0100_reg0020_e001
+      clustering:
+        n_user_clusters: 64
+        n_item_clusters: 64
+        alpha: 0.025
+        algorithm: kmeans
+        kmeans_n_init: 10
+
+notes:
+  - validation-only lower-memory reassessment after the local ml20m guardrail breach
+  - two split seeds, model seed 1, no test-set evaluation during selection
+  - 8 candidates times 2 split seeds equals 16 validation-only runs
+  - every candidate must stay below the local 80 percent RAM guardrail on every run
+  - KMeans remains the configured clustering algorithm; no MiniBatchKMeans substitution
+  - R_star remains diagnostic-only and is not a tuning objective or coefficient
+  - cache controls must be explicit in the execution command and summary
+  - selection evidence only; not a final benchmark and not a quality claim
+  - any promotion requires a separate clean outer benchmark contract with split seeds 1,2,3

@@ -40,7 +40,7 @@ def test_cb_asvdpp_postchange_benchmark_is_clean_exact_and_claim_limited() -> No
     assert "pass_for_exact_workbuffer_remediation_context" in roadmap
     assert "docs/evidence/reproduction/2026-05-03_cb_asvdpp_hotpath_postchange_benchmark_g10.md" in roadmap
     assert "observed main-training wall-clock change: `-7.403998780257792%`" in roadmap
-    assert "`94%`" in roadmap
+    assert "`95%`" in roadmap
 
     assert "clean post-change work-buffer benchmark" in matrix
     assert "G10 `cb_asvdpp` post-change benchmark unlocks only a narrow speed claim" in matrix

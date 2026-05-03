@@ -72,7 +72,7 @@ def test_g6_outer_benchmark_contract_freezes_inputs_and_claim_boundary() -> None
     assert "approved_for_clean_outer_benchmark_contract" in roadmap
     assert "commit this contract first" in roadmap
     assert "completed_g6_clean_outer_benchmark" in roadmap
-    assert "`94%`" in roadmap
+    assert "`95%`" in roadmap
 
     assert "completed clean outer benchmark readout under `benchmark_random_v1`" in matrix
     assert "2026-05-03_cb_svdpp_g6_outer_benchmark_run.md" in matrix

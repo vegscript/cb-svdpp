@@ -377,6 +377,27 @@ Post-change benchmark:
   claim, paper-faithfulness claim, large-dataset claim, or cross-device claim is
   unlocked
 
+### 6.2. `ml20m cb_svdpp` Lower-Memory Reassessment Contract
+
+Status:
+
+- status: `contract_ready_g11_ml20m_lower_memory_validation_reassessment`
+- evidence:
+  `docs/evidence/reproduction/2026-05-03_ml20m_cb_svdpp_g11_lower_memory_validation_contract.md`
+- config:
+  `configs/experiments/tuning/ml20m_cb_svdpp_g11_lower_memory_validation_grid.yaml`
+- purpose: define the next allowed local `ml20m cb_svdpp` reassessment after
+  the previous full `stage0_transfer` campaign breached the local RAM guardrail
+- planned scope: `8` lower-memory candidates times split seeds `1,2`, all
+  validation-only
+- resource gate: reject any candidate with a run above `19660.8 MB` peak memory
+  on `local_i5_2500k_24gb`
+- selection rule: select by `validation_rmse_mean` only after all candidate
+  runs pass the resource gate
+- no test-set evaluation, final `ml20m cb_svdpp` benchmark claim, model
+  comparison claim, speed claim, scalability claim, production-readiness claim,
+  SOTA claim, or paper-faithfulness claim is unlocked by this contract
+
 ### 7. `R_star` Decision Track
 
 `R_star` currently remains diagnostic in the repo-defined CB v1 pipeline. That
@@ -431,13 +452,17 @@ A stronger CB release requires all of these gates:
 ## Immediate Next Sequence
 
 1. Keep the G10 `cb_asvdpp` speed claim limited to its exact benchmark context.
-2. Reassess `ml10m` and `ml20m` only after the profiler and cache work produce
-   clean evidence.
+2. Run the G11 `ml20m cb_svdpp` lower-memory validation grid only from a clean
+   committed state, with explicit cache controls and resource-gate readout.
+3. If G11 passes, freeze one selected config and write a separate outer
+   benchmark contract before any test-set or comparison claim.
+4. If G11 breaches the RAM guardrail, document negative resource evidence and
+   keep final `ml20m cb_svdpp` claims blocked locally.
 
 ## Current Progress Estimate
 
 Approximate engineering readiness for a publishable, stronger CB-focused repo:
-`94%`.
+`95%`.
 
 This percentage is not a benchmark result. It is a planning estimate based on
 completed governance, data, model, benchmark scaffolding, runtime-profile
@@ -451,5 +476,6 @@ readout for that frozen profile, and a `cb_asvdpp` profiling decision,
 exact-remediation contract, clean pre-change baseline, exact work-buffer
 implementation, equivalence guard, and clean post-change benchmark that passed
 the G8 metric-drift and wall-clock gates in the exact `ml100k cb_asvdpp`
-context, versus the still missing final large-dataset reassessment and final
-release-claim gates above.
+context, plus a G11 lower-memory validation contract for `ml20m cb_svdpp`,
+versus the still missing G11 execution, final large-dataset reassessment, and
+final release-claim gates above.

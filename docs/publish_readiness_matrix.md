@@ -25,7 +25,7 @@ Status vocabulary:
 | --- | --- | --- | --- |
 | Gate 1: Scope Freeze | `pass` | Official scope is fixed as `ml100k`, `ml1m`, `ml10m`, and `ml20m`; `ml10m` and `ml20m` may not be silently removed. | Keep this scope visible in README, report, and final claim matrix. |
 | Gate 2: Dataset Evidence | `pass` | `ml100k`, `ml1m`, `ml10m`, and `ml20m` have processed manifests and data evidence. | Keep dataset evidence links visible in the final claim matrix and report appendix. |
-| Gate 3: Benchmark Evidence | `partial` | Clean benchmark anchors exist for `ml100k`; `ml100k cb_svdpp` also has a completed G6 validation-only selection, a frozen selected config, and a completed clean outer benchmark readout under `benchmark_random_v1`; clean `ml1m` anchors exist for `biased_mf` and `cb_svdpp`; `ml1m cb_asvdpp` is selection-only; `ml100k cb_asvdpp` has a bounded hot-path profiling decision, an exact-remediation contract, a clean pre-change baseline, and a clean post-change work-buffer benchmark that passed the G8 metric-drift and wall-clock gates for this exact context; `ml10m` has matched clean `biased_mf` and `cb_svdpp` multi-split-seed anchors; `ml20m` has a clean `biased_mf` baseline anchor plus `cb_svdpp` feasibility and a local matched-campaign attempt that breached the memory guardrail. | Keep final `ml20m` model-comparison claims blocked until a stronger device profile or lower-memory matched profile has clean evidence; restrict `ml10m` claims to the documented `biased_mf` vs `cb_svdpp` profile comparison; keep the new G6 `ml100k cb_svdpp` readout separate from older `paper_faithful_ml100k_v1` anchors; keep the `cb_asvdpp` speed claim limited to the exact G10 benchmark context. |
+| Gate 3: Benchmark Evidence | `partial` | Clean benchmark anchors exist for `ml100k`; `ml100k cb_svdpp` also has a completed G6 validation-only selection, a frozen selected config, and a completed clean outer benchmark readout under `benchmark_random_v1`; clean `ml1m` anchors exist for `biased_mf` and `cb_svdpp`; `ml1m cb_asvdpp` is selection-only; `ml100k cb_asvdpp` has a bounded hot-path profiling decision, an exact-remediation contract, a clean pre-change baseline, and a clean post-change work-buffer benchmark that passed the G8 metric-drift and wall-clock gates for this exact context; `ml10m` has matched clean `biased_mf` and `cb_svdpp` multi-split-seed anchors; `ml20m` has a clean `biased_mf` baseline anchor plus `cb_svdpp` feasibility, a local matched-campaign attempt that breached the memory guardrail, and a G11 lower-memory validation contract but no G11 run evidence yet. | Keep final `ml20m` model-comparison claims blocked until a stronger device profile or lower-memory matched profile has clean evidence; restrict `ml10m` claims to the documented `biased_mf` vs `cb_svdpp` profile comparison; keep the new G6 `ml100k cb_svdpp` readout separate from older `paper_faithful_ml100k_v1` anchors; keep the `cb_asvdpp` speed claim limited to the exact G10 benchmark context; execute G11 only as validation-only selection evidence. |
 | Gate 4: Claim Freeze | `pass` | The final claim matrix exists below and separates benchmark anchors from selection and feasibility evidence. | Keep the matrix synchronized whenever new evidence is added; the report may only use claims explicitly allowed below. |
 | Gate 5: Report Ready | `pass` | Report is condensed around final claim boundaries, clean benchmark anchors, feasibility evidence, limitations, and an evidence map. | Keep future report edits integrated into the existing sections; do not reintroduce chronological work-log sections. |
 | Gate 6: Reproduction Ready | `pass` | Current `main` is clean; `uv.lock` is present; `uv sync --extra dev --locked` completed after dev type-stub updates; Ruff, Mypy, focused regression tests, and the full test suite pass from the `uv` environment. | Keep `uv.lock` versioned and rerun the same setup/smoke/quality sequence before final tagging if dependencies change. |
@@ -38,7 +38,7 @@ Status vocabulary:
 | `ml100k` | `in_scope` | `pass` | `pass` | `pass_for_current_anchor_set_plus_g6_outer_benchmark` | `benchmark_evidence_ready_g6_outer_anchor_documented` | Keep current clean anchors for final claims; the G6 `cb_svdpp` outer benchmark may be used only as its own `benchmark_random_v1` readout and must not be merged into older `paper_faithful_ml100k_v1` comparisons. |
 | `ml1m` | `in_scope` | `pass` | `pass` | `partial` | `benchmark_evidence_partial` | Keep `biased_mf` and `cb_svdpp` as clean anchors; keep `cb_asvdpp` selection-only unless an outer benchmark is run. |
 | `ml10m` | `in_scope` | `pass` | `pass` | `matched_biased_mf_cb_svdpp_anchor` | `matched_profile_comparison_ready` | Data evidence: `docs/evidence/data/2026-04-24_ml10m_processed_ingestion.md`; baseline evidence: `docs/evidence/models/biased_mf/2026-04-30_ml10m_biased_mf_stage0_transfer_clean_multiseed_benchmark.md`; matched CB evidence: `docs/evidence/models/cb_svdpp/2026-05-01_ml10m_cb_svdpp_stage0_transfer_clean_multiseed_benchmark.md`; historical CB feasibility: `docs/evidence/models/cb_svdpp/2026-04-24_ml10m_cb_svdpp_stage0_probe_e001_feasibility.md`. |
-| `ml20m` | `in_scope` | `pass` | `pass` | `partial_baseline_anchor_plus_cb_negative_resource_evidence` | `baseline_anchor_ready_model_comparison_blocked` | Data evidence: `docs/evidence/data/2026-04-24_ml20m_official_ingestion.md`; baseline evidence: `docs/evidence/models/biased_mf/2026-04-30_ml20m_biased_mf_stage0_transfer_clean_multiseed_benchmark.md`; CB feasibility: `docs/evidence/models/cb_svdpp/2026-04-24_ml20m_cb_svdpp_stage0_probe_e001_feasibility.md`; CB guardrail breach: `docs/evidence/models/cb_svdpp/2026-05-02_ml20m_cb_svdpp_stage0_transfer_seed3_guardrail_breach.md`; campaign contract: `docs/evidence/benchmarking/2026-04-30_large_cb_svdpp_matched_campaign_contract.md`. |
+| `ml20m` | `in_scope` | `pass` | `pass` | `partial_baseline_anchor_plus_cb_negative_resource_evidence_plus_g11_contract` | `baseline_anchor_ready_model_comparison_blocked` | Data evidence: `docs/evidence/data/2026-04-24_ml20m_official_ingestion.md`; baseline evidence: `docs/evidence/models/biased_mf/2026-04-30_ml20m_biased_mf_stage0_transfer_clean_multiseed_benchmark.md`; CB feasibility: `docs/evidence/models/cb_svdpp/2026-04-24_ml20m_cb_svdpp_stage0_probe_e001_feasibility.md`; CB guardrail breach: `docs/evidence/models/cb_svdpp/2026-05-02_ml20m_cb_svdpp_stage0_transfer_seed3_guardrail_breach.md`; campaign contract: `docs/evidence/benchmarking/2026-04-30_large_cb_svdpp_matched_campaign_contract.md`; G11 lower-memory validation contract: `docs/evidence/reproduction/2026-05-03_ml20m_cb_svdpp_g11_lower_memory_validation_contract.md`. |
 
 ## Model Benchmark Matrix
 
@@ -125,6 +125,9 @@ They must not be mixed into final model-ranking tables.
   wall-clock gates. It does not unlock broad speed, scalability,
   production-readiness, SOTA, paper-faithfulness, large-dataset, or cross-device
   claims.
+- G11 lower-memory validation contract exists for `ml20m cb_svdpp`, but it is
+  a run contract only. It unlocks no final `ml20m cb_svdpp` benchmark claim, no
+  `ml20m` model-comparison claim, no test-set claim, and no scalability claim.
 
 ## Post-Release Work Queue
 
@@ -136,6 +139,9 @@ They must not be mixed into final model-ranking tables.
    difference is explicit.
 3. Keep the G10 `cb_asvdpp` remediation readout claim-limited and do not
    generalize it without fresh benchmark evidence.
+4. Execute the G11 `ml20m cb_svdpp` lower-memory grid only as validation-only
+   selection evidence; write a separate outer benchmark contract before any
+   final test-set or model-comparison claim.
 
 ## Current Non-Claims
 
@@ -145,6 +151,8 @@ They must not be mixed into final model-ranking tables.
 - `ml20m` has a clean `biased_mf` baseline anchor, but its local `cb_svdpp`
   matched-campaign attempt is negative resource evidence, not final
   model-comparison evidence.
+- G11 is only a lower-memory validation contract for `ml20m cb_svdpp`; there is
+  no G11 run evidence yet and no final `ml20m cb_svdpp` benchmark claim.
 - `ml1m cb_asvdpp` is not a benchmark anchor.
 - G6 `ml100k cb_svdpp` is validation-only selection evidence, not a final
   benchmark anchor.
