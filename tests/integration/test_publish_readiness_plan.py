@@ -154,6 +154,9 @@ G6_OUTER_BENCHMARK_RUN = (
     / "reproduction"
     / "2026-05-03_cb_svdpp_g6_outer_benchmark_run.md"
 )
+CB_ASVDPP_HOTPATH_DECISION = (
+    REPO_ROOT / "docs" / "evidence" / "reproduction" / "2026-05-03_cb_asvdpp_hotpath_decision_g7.md"
+)
 
 
 def _single_line(text: str) -> str:
@@ -226,7 +229,7 @@ def test_master_plan_tracks_claim_unlock_scalability_backlog() -> None:
     assert "Do not call current CB large-dataset behavior `scalable`" in roadmap
     assert "Do not replace KMeans with MiniBatchKMeans without a new config" in roadmap
     assert "Do not claim `R_star` is optimized unless a new objective" in roadmap
-    assert "`89%`" in roadmap
+    assert "`90%`" in roadmap
     assert "completed_g6_validation_only_selection" in roadmap
     assert "docs/evidence/reproduction/2026-05-03_cb_svdpp_g6_validation_grid_run.md" in roadmap
     assert "configs/models/tuned/ml100k_cb_svdpp_g6_validation_selected.yaml" in roadmap
@@ -235,6 +238,9 @@ def test_master_plan_tracks_claim_unlock_scalability_backlog() -> None:
     assert "completed_g6_clean_outer_benchmark" in roadmap
     assert "docs/evidence/reproduction/2026-05-03_cb_svdpp_g6_outer_benchmark_run.md" in roadmap
     assert "test RMSE mean: `0.9595668222022953`" in roadmap
+    assert "pass_for_hotpath_prioritization_not_remediation" in roadmap
+    assert "docs/evidence/reproduction/2026-05-03_cb_asvdpp_hotpath_decision_g7.md" in roadmap
+    assert "main_training` share: about `92.44%`" in roadmap
 
     g1_evidence = G1_RUNTIME_PROFILE_EVIDENCE.read_text(encoding="utf-8")
     assert "status: `pass`" in g1_evidence
@@ -327,6 +333,11 @@ def test_master_plan_tracks_claim_unlock_scalability_backlog() -> None:
     assert "validation RMSE | `0.9566122815305916`" in g6_outer_run
     assert "SOTA, scalability, speed" in g6_outer_run
 
+    cb_asvdpp_hotpath_decision = CB_ASVDPP_HOTPATH_DECISION.read_text(encoding="utf-8")
+    assert "status: `pass_for_hotpath_prioritization_not_remediation`" in cb_asvdpp_hotpath_decision
+    assert "main_training` | `115.10358980001183` | `92.44%`" in cb_asvdpp_hotpath_decision
+    assert "no claim that a remediation has already improved runtime" in cb_asvdpp_hotpath_decision
+
 
 def test_publish_readiness_matrix_tracks_gates_scope_and_current_blockers() -> None:
     matrix = READINESS_MATRIX.read_text(encoding="utf-8")
@@ -352,6 +363,7 @@ def test_publish_readiness_matrix_tracks_gates_scope_and_current_blockers() -> N
     ) in matrix
     assert "`ml100k` | `cb_asvdpp stage1_tuned`" in matrix
     assert "test RMSE mean `0.916839`" in matrix
+    assert "clean_multiseed_anchor_plus_hotpath_decision_only" in matrix
     assert "`ml100k` | `cb_svdpp g6_validation_selected`" in matrix
     assert "selected validation RMSE mean `0.9566122815305916`" in matrix
     assert "test RMSE mean `0.9595668222022953`" in matrix

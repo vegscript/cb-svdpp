@@ -296,6 +296,28 @@ Outer benchmark run:
   production-readiness claim, paper-faithfulness claim, or large-dataset claim
   is unlocked by this run
 
+### 6.1. `cb_asvdpp` Hotpath Decision
+
+Status:
+
+- status: `pass_for_hotpath_prioritization_not_remediation`
+- evidence:
+  `docs/evidence/reproduction/2026-05-03_cb_asvdpp_hotpath_decision_g7.md`
+- run artifact:
+  `artifacts/runs/2026-05-03T121942Z_ml100k_cb_asvdpp_local_i5_2500k_24gb_benchmark_random_v1_tr080_va010_s001_s001/run_manifest.json`
+- git commit: `2edc8a3be8f64c657df9519befc371d9e7accfd3`
+- git dirty: `false`
+- profile: `ml100k cb_asvdpp`, `benchmark_random_v1`, split seed `1`,
+  model seed `1`
+- `main_training`: `115.10358980001183` seconds
+- total profiled wall-clock: `124.51294220011914` seconds
+- `main_training` share: about `92.44%`
+- decision: `cb_asvdpp` hot-path remediation is justified as a separate work
+  item, but no code change may be made before a remediation contract defines
+  equivalence tests, metric-drift bounds, and a clean before/after benchmark
+- no speed, scalability, production-readiness, SOTA, paper-faithfulness,
+  large-dataset, or quality claim is unlocked by this profiling decision
+
 ### 7. `R_star` Decision Track
 
 `R_star` currently remains diagnostic in the repo-defined CB v1 pipeline. That
@@ -349,15 +371,16 @@ A stronger CB release requires all of these gates:
 
 ## Immediate Next Sequence
 
-1. Keep `cb_asvdpp` hot-path remediation as separate work if profiling shows it
-   is decision-critical.
+1. Write the `cb_asvdpp` hot-path remediation contract before any code change.
+   The contract must define exactness tests, metric-drift bounds, and a clean
+   before/after benchmark gate.
 2. Reassess `ml10m` and `ml20m` only after the profiler and cache work produce
    clean evidence.
 
 ## Current Progress Estimate
 
 Approximate engineering readiness for a publishable, stronger CB-focused repo:
-`89%`.
+`90%`.
 
 This percentage is not a benchmark result. It is a planning estimate based on
 completed governance, data, model, benchmark scaffolding, runtime-profile
@@ -367,6 +390,7 @@ on `ml100k`, explicit tune-inner cache controls, a bounded validation-only
 `ml100k cb_svdpp` alpha/cluster selection probe, and a completed G6
 validation-only `ml100k cb_svdpp` grid, a documented clean outer benchmark
 contract for the frozen G6 selection, and a completed clean outer benchmark
-readout for that frozen profile, versus the still missing `cb_asvdpp` hot-path
-decision if needed, final large-dataset reassessment, and final release-claim
-gates above.
+readout for that frozen profile, and a `cb_asvdpp` profiling decision that
+prioritizes hot-path remediation without claiming improvement, versus the still
+missing `cb_asvdpp` remediation contract and before/after evidence, final
+large-dataset reassessment, and final release-claim gates above.
