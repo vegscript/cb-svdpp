@@ -137,6 +137,9 @@ G4_CLUSTER_CACHE_EVIDENCE = (
 G5_TUNE_INNER_CACHE_EVIDENCE = (
     REPO_ROOT / "docs" / "evidence" / "reproduction" / "2026-05-02_tune_inner_cache_controls_g5.md"
 )
+G6_VALIDATION_GRID_EVIDENCE = (
+    REPO_ROOT / "docs" / "evidence" / "reproduction" / "2026-05-03_cb_svdpp_g6_validation_grid_run.md"
+)
 
 
 def _single_line(text: str) -> str:
@@ -151,6 +154,10 @@ def test_master_plan_contains_publish_readiness_gates_and_full_dataset_scope() -
     assert "MovieLens 20M" in master_plan
     assert "`ml10m` und `ml20m`" in master_plan
     assert "duerfen nicht stillschweigend aus dem finalen Scope entfernt werden" in master_plan
+    assert "G6" in master_plan
+    assert "validation-only Selection" in master_plan
+    assert "cleanen Outer-Benchmark" in master_plan
+    assert "RAM-Guardrail-Grenze" in master_plan
 
     for gate in (
         "Gate 1: Scope Freeze",
@@ -205,7 +212,10 @@ def test_master_plan_tracks_claim_unlock_scalability_backlog() -> None:
     assert "Do not call current CB large-dataset behavior `scalable`" in roadmap
     assert "Do not replace KMeans with MiniBatchKMeans without a new config" in roadmap
     assert "Do not claim `R_star` is optimized unless a new objective" in roadmap
-    assert "`80%`" in roadmap
+    assert "`84%`" in roadmap
+    assert "completed_g6_validation_only_selection" in roadmap
+    assert "docs/evidence/reproduction/2026-05-03_cb_svdpp_g6_validation_grid_run.md" in roadmap
+    assert "configs/models/tuned/ml100k_cb_svdpp_g6_validation_selected.yaml" in roadmap
 
     g1_evidence = G1_RUNTIME_PROFILE_EVIDENCE.read_text(encoding="utf-8")
     assert "status: `pass`" in g1_evidence
@@ -271,6 +281,17 @@ def test_master_plan_tracks_claim_unlock_scalability_backlog() -> None:
     assert "no final `ml100k` quality claim" in g5_evidence
     assert "no `ml10m` or `ml20m` tuning claim" in g5_evidence
 
+    g6_evidence = G6_VALIDATION_GRID_EVIDENCE.read_text(encoding="utf-8")
+    assert "status: `pass_for_validation_only_selection`" in g6_evidence
+    assert "git dirty: `false`" in g6_evidence
+    assert "candidate run count: `36`" in g6_evidence
+    assert "non-null `test_rmse` count across candidate metrics: `0`" in g6_evidence
+    assert "rank032_uc100_ic100_a0000_lr0100_reg0020_e002" in g6_evidence
+    assert "validation RMSE mean: `0.9566122815305916`" in g6_evidence
+    assert "configs/models/tuned/ml100k_cb_svdpp_g6_validation_selected.yaml" in g6_evidence
+    assert "no final `ml100k cb_svdpp` quality claim" in g6_evidence
+    assert "no test-set result or test-set comparison" in g6_evidence
+
 
 def test_publish_readiness_matrix_tracks_gates_scope_and_current_blockers() -> None:
     matrix = READINESS_MATRIX.read_text(encoding="utf-8")
@@ -285,6 +306,7 @@ def test_publish_readiness_matrix_tracks_gates_scope_and_current_blockers() -> N
     assert "| Gate 7: Release Hygiene | `pass` |" in matrix
     assert "## Final Claim Matrix" in matrix
     assert "## Feasibility And Selection Evidence" in matrix
+    assert "| `ml100k` | `in_scope` | `pass` | `pass` | `pass_for_current_anchor_set_plus_g6_selection` |" in matrix
     assert "| `ml10m` | `in_scope` | `pass` | `pass` | `matched_biased_mf_cb_svdpp_anchor` |" in matrix
     assert (
         "| `ml20m` | `in_scope` | `pass` | `pass` | "
@@ -292,6 +314,10 @@ def test_publish_readiness_matrix_tracks_gates_scope_and_current_blockers() -> N
     ) in matrix
     assert "`ml100k` | `cb_asvdpp stage1_tuned`" in matrix
     assert "test RMSE mean `0.916839`" in matrix
+    assert "`ml100k` | `cb_svdpp g6_validation_selected`" in matrix
+    assert "selected validation RMSE mean `0.9566122815305916`" in matrix
+    assert "non-null `test_rmse` count `0`" in matrix
+    assert "not a final `ml100k cb_svdpp` quality claim" in matrix
     assert "`ml1m` | `cb_svdpp stage0_transfer`" in matrix
     assert "test RMSE mean `0.857365`" in matrix
     assert "`ml10m` | `biased_mf stage0_transfer`" in matrix
@@ -311,8 +337,10 @@ def test_publish_readiness_matrix_tracks_gates_scope_and_current_blockers() -> N
     assert "Keep `uv.lock` versioned" in matrix
     assert "release marker `submission-2026-05-02-r10`" in matrix
     assert "Post-Release Work Queue" in matrix
+    assert "frozen G6 `ml100k cb_svdpp` selected config" in matrix
     assert "do not reintroduce chronological work-log sections" in matrix
     assert "`ml1m cb_asvdpp` is not a benchmark anchor" in matrix
+    assert "G6 `ml100k cb_svdpp` is validation-only selection evidence" in matrix
     assert "No final `ml20m` model-comparison claim is allowed" in matrix
     assert "### 7.1 Clean Benchmark Anchors" in report
     assert "### 7.2 Feasibility, Selection, And Deferral Evidence" in report

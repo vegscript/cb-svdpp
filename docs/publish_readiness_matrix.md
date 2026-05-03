@@ -1,6 +1,6 @@
 # Publish Readiness Matrix
 
-- last_assessed: `2026-05-01`
+- last_assessed: `2026-05-03`
 - canonical_plan: `docs/project_master_plan.md`
 - status: `release_candidate_claim_limited`
 - current_branch_requirement: `main`
@@ -25,7 +25,7 @@ Status vocabulary:
 | --- | --- | --- | --- |
 | Gate 1: Scope Freeze | `pass` | Official scope is fixed as `ml100k`, `ml1m`, `ml10m`, and `ml20m`; `ml10m` and `ml20m` may not be silently removed. | Keep this scope visible in README, report, and final claim matrix. |
 | Gate 2: Dataset Evidence | `pass` | `ml100k`, `ml1m`, `ml10m`, and `ml20m` have processed manifests and data evidence. | Keep dataset evidence links visible in the final claim matrix and report appendix. |
-| Gate 3: Benchmark Evidence | `partial` | Clean benchmark anchors exist for `ml100k`; clean `ml1m` anchors exist for `biased_mf` and `cb_svdpp`; `ml1m cb_asvdpp` is selection-only; `ml10m` now has matched clean `biased_mf` and `cb_svdpp` multi-split-seed anchors; `ml20m` has a clean `biased_mf` baseline anchor plus `cb_svdpp` feasibility and a local matched-campaign attempt that breached the memory guardrail. | Keep final `ml20m` model-comparison claims blocked until a stronger device profile or lower-memory matched profile has clean evidence; restrict `ml10m` claims to the documented `biased_mf` vs `cb_svdpp` profile comparison. |
+| Gate 3: Benchmark Evidence | `partial` | Clean benchmark anchors exist for `ml100k`; `ml100k cb_svdpp` also has a completed G6 validation-only selection with a frozen selected config but no outer test rerun; clean `ml1m` anchors exist for `biased_mf` and `cb_svdpp`; `ml1m cb_asvdpp` is selection-only; `ml10m` has matched clean `biased_mf` and `cb_svdpp` multi-split-seed anchors; `ml20m` has a clean `biased_mf` baseline anchor plus `cb_svdpp` feasibility and a local matched-campaign attempt that breached the memory guardrail. | Decide whether the frozen G6 `ml100k cb_svdpp` selected config may enter a clean outer benchmark; keep final `ml20m` model-comparison claims blocked until a stronger device profile or lower-memory matched profile has clean evidence; restrict `ml10m` claims to the documented `biased_mf` vs `cb_svdpp` profile comparison. |
 | Gate 4: Claim Freeze | `pass` | The final claim matrix exists below and separates benchmark anchors from selection and feasibility evidence. | Keep the matrix synchronized whenever new evidence is added; the report may only use claims explicitly allowed below. |
 | Gate 5: Report Ready | `pass` | Report is condensed around final claim boundaries, clean benchmark anchors, feasibility evidence, limitations, and an evidence map. | Keep future report edits integrated into the existing sections; do not reintroduce chronological work-log sections. |
 | Gate 6: Reproduction Ready | `pass` | Current `main` is clean; `uv.lock` is present; `uv sync --extra dev --locked` completed after dev type-stub updates; Ruff, Mypy, focused regression tests, and the full test suite pass from the `uv` environment. | Keep `uv.lock` versioned and rerun the same setup/smoke/quality sequence before final tagging if dependencies change. |
@@ -35,7 +35,7 @@ Status vocabulary:
 
 | Dataset | Publish Scope | Processed Manifest | Data Evidence | Benchmark Evidence | Current Publish Status | Next Action |
 | --- | --- | --- | --- | --- | --- | --- |
-| `ml100k` | `in_scope` | `pass` | `pass` | `pass_for_current_anchor_set` | `benchmark_evidence_ready` | Keep as primary validated anchor dataset; ensure final report only uses clean anchors for final claims. |
+| `ml100k` | `in_scope` | `pass` | `pass` | `pass_for_current_anchor_set_plus_g6_selection` | `benchmark_evidence_ready_selection_pending_outer_rerun` | Keep current clean anchors for final claims; treat G6 `cb_svdpp` as selection evidence only unless a clean outer benchmark is run. |
 | `ml1m` | `in_scope` | `pass` | `pass` | `partial` | `benchmark_evidence_partial` | Keep `biased_mf` and `cb_svdpp` as clean anchors; keep `cb_asvdpp` selection-only unless an outer benchmark is run. |
 | `ml10m` | `in_scope` | `pass` | `pass` | `matched_biased_mf_cb_svdpp_anchor` | `matched_profile_comparison_ready` | Data evidence: `docs/evidence/data/2026-04-24_ml10m_processed_ingestion.md`; baseline evidence: `docs/evidence/models/biased_mf/2026-04-30_ml10m_biased_mf_stage0_transfer_clean_multiseed_benchmark.md`; matched CB evidence: `docs/evidence/models/cb_svdpp/2026-05-01_ml10m_cb_svdpp_stage0_transfer_clean_multiseed_benchmark.md`; historical CB feasibility: `docs/evidence/models/cb_svdpp/2026-04-24_ml10m_cb_svdpp_stage0_probe_e001_feasibility.md`. |
 | `ml20m` | `in_scope` | `pass` | `pass` | `partial_baseline_anchor_plus_cb_negative_resource_evidence` | `baseline_anchor_ready_model_comparison_blocked` | Data evidence: `docs/evidence/data/2026-04-24_ml20m_official_ingestion.md`; baseline evidence: `docs/evidence/models/biased_mf/2026-04-30_ml20m_biased_mf_stage0_transfer_clean_multiseed_benchmark.md`; CB feasibility: `docs/evidence/models/cb_svdpp/2026-04-24_ml20m_cb_svdpp_stage0_probe_e001_feasibility.md`; CB guardrail breach: `docs/evidence/models/cb_svdpp/2026-05-02_ml20m_cb_svdpp_stage0_transfer_seed3_guardrail_breach.md`; campaign contract: `docs/evidence/benchmarking/2026-04-30_large_cb_svdpp_matched_campaign_contract.md`. |
@@ -44,7 +44,7 @@ Status vocabulary:
 
 | Dataset | `biased_mf` | `svdpp` | `cb_svdpp` | `cb_asvdpp` | Claim Boundary |
 | --- | --- | --- | --- | --- | --- |
-| `ml100k` | `clean_multiseed_anchor` | `clean_multiseed_anchor` | `clean_multiseed_anchor` | `clean_multiseed_anchor` | Final claims may use these anchors if seed count and evidence links are stated. |
+| `ml100k` | `clean_multiseed_anchor` | `clean_multiseed_anchor` | `clean_multiseed_anchor_plus_g6_selection_only` | `clean_multiseed_anchor` | Final claims may use the existing clean anchors if seed count and evidence links are stated; G6 `cb_svdpp` remains selection-only until a clean outer benchmark is run. |
 | `ml1m` | `clean_multiseed_anchor` | `missing_anchor` | `clean_multiseed_anchor` | `clean_selection_only` | Final cross-model claims are currently valid only for matched `biased_mf` vs `cb_svdpp`; `cb_asvdpp` is not benchmark-final. |
 | `ml10m` | `clean_multiseed_baseline_anchor` | `missing` | `clean_multiseed_matched_anchor` | `missing` | Bounded matched `biased_mf` vs `cb_svdpp` comparison is allowed for the documented `stage0_transfer` profiles only. |
 | `ml20m` | `clean_multiseed_baseline_anchor` | `missing` | `guardrail_breached_local_campaign` | `missing` | Baseline-only `biased_mf` statements are allowed; no final model-comparison claim is allowed because the local CB matched-campaign attempt breached the memory guardrail. |
@@ -82,6 +82,7 @@ They must not be mixed into final model-ranking tables.
 | Dataset | Model Profile | Split / Seeds | Git State | Central Metrics | Evidence | Allowed Claim | Explicit Non-Claims |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | `ml1m` | `cb_asvdpp stage0` inner tuning | `benchmark_random_v1`, split seeds `1,2`, model seed `1`, `2` epochs | `e515d20`, clean | best validation RMSE margin `0.000040`; selected candidate is not promoted | `docs/evidence/models/cb_asvdpp/2026-04-21_ml1m_cb_asvdpp_inner_tuning_stage0.md` | Clean reduced-budget selection evidence only. | Not a benchmark anchor and not a final `ml1m cb_asvdpp` quality claim. |
+| `ml100k` | `cb_svdpp g6_validation_selected` | `benchmark_random_v1`, split seeds `1,2,3`, model seed `1`, `12` candidates, `2` epochs | `9a48336`, clean | selected validation RMSE mean `0.9566122815305916`, validation RMSE std `0.002372317660216579`, non-null `test_rmse` count `0` | `docs/evidence/reproduction/2026-05-03_cb_svdpp_g6_validation_grid_run.md` | Clean validation-only selection evidence; selected config is frozen at `configs/models/tuned/ml100k_cb_svdpp_g6_validation_selected.yaml`. | Not a final benchmark anchor, not a test-set result, not a final `ml100k cb_svdpp` quality claim, and not a speed or scalability claim. |
 | `ml10m` | `cb_svdpp stage0_probe_e001` | `benchmark_random_v1`, split seed `1`, model seed `1`, `1` epoch | `c1d2e1d`, clean | validation RMSE `0.872094`, test RMSE `0.871385`, effective fit time `500.849191s`, peak memory `12730.062500 MB` | `docs/evidence/models/cb_svdpp/2026-04-24_ml10m_cb_svdpp_stage0_probe_e001_feasibility.md` | Historical single-epoch `ml10m` clustering feasibility/resource readout; superseded for final `ml10m cb_svdpp` anchoring by the clean 2026-05-01 matched benchmark. | Not a final result row and not comparable to full-budget anchors. |
 | `ml20m` | `cb_svdpp stage0_probe_e001` | `benchmark_random_v1`, split seed `1`, model seed `1`, `1` epoch | `6ccef25`, clean | validation RMSE `0.863001`, test RMSE `0.863991`, effective fit time `1178.225090s`, peak memory `17876.066406 MB` | `docs/evidence/models/cb_svdpp/2026-04-24_ml20m_cb_svdpp_stage0_probe_e001_feasibility.md` | Clean single-epoch `ml20m` clustering feasibility/resource readout on the local 24 GB profile. | Not comparable to the `biased_mf` baseline quality because the epoch and budget are unmatched; not a final CB benchmark. |
 | `ml20m` | `cb_svdpp stage0_transfer` seed-3 guardrail readout | `benchmark_random_v1`, split seed `3`, model seed `1`, `20` epochs | `1cb39de`, clean | validation RMSE `0.781010`, test RMSE `0.781511`, fit time `20365.517578s`, peak memory `19898.871094 MB` | `docs/evidence/models/cb_svdpp/2026-05-02_ml20m_cb_svdpp_stage0_transfer_seed3_guardrail_breach.md` | Negative resource evidence for the local 24 GB profile; the run completed but crossed the 80 percent RAM guardrail. | Not a final benchmark anchor, not a final `ml20m` model-comparison claim, and not eligible for final aggregation under the current campaign contract. |
@@ -107,12 +108,17 @@ They must not be mixed into final model-ranking tables.
   `docs/evidence/benchmarking/2026-04-30_large_cb_svdpp_matched_campaign_contract.md`.
 - No final claim may use dirty, cancelled, exploratory, or selection-only runs
   as benchmark anchors.
+- The G6 `ml100k cb_svdpp` validation grid is selection evidence only. Its
+  frozen selected config may not support final quality claims until a separate
+  clean outer benchmark exists.
 
 ## Post-Release Work Queue
 
 1. If dependencies, data evidence, benchmarks, or claim boundaries change after
    the release marker `submission-2026-05-02-r10`, rerun the affected gates and
    move the release marker.
+2. Decide whether the frozen G6 `ml100k cb_svdpp` selected config should enter a
+   clean outer benchmark; document the decision before any test-set rerun.
 
 ## Current Non-Claims
 
@@ -123,6 +129,8 @@ They must not be mixed into final model-ranking tables.
   matched-campaign attempt is negative resource evidence, not final
   model-comparison evidence.
 - `ml1m cb_asvdpp` is not a benchmark anchor.
+- G6 `ml100k cb_svdpp` is validation-only selection evidence, not a final
+  benchmark anchor.
 - No final `ml20m` model-comparison claim is allowed.
 - No `faster`, `scalable`, or `ready` claim is allowed beyond the specific
   evidence-backed benchmark context where it is explicitly documented.

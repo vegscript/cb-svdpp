@@ -42,10 +42,14 @@ Zum aktuellen Stand sind:
   `biased_mf` und `cb_svdpp` auf derselben kanonischen Random-Split-Basis
 - fuer `ml1m` existiert fuer `cb_asvdpp` jetzt ein clean reduced-budget
   Stage0-Selection-Benchmark, aber noch kein Benchmark-Anker
-- fuer `ml10m` existiert jetzt ein clean drei-Split-Seed-Baseline-Anker fuer
-  `biased_mf`; `cb_svdpp` bleibt dort aktuell auf single-epoch feasibility
+- fuer `ml10m` existieren clean drei-Split-Seed-Anker fuer `biased_mf` und
+  `cb_svdpp` auf derselben kanonischen Random-Split-Basis
 - fuer `ml20m` existiert jetzt ein clean drei-Split-Seed-Baseline-Anker fuer
-  `biased_mf`; `cb_svdpp` bleibt dort aktuell auf single-epoch feasibility
+  `biased_mf`; `cb_svdpp` hat feasibility- und negative Ressourcenevidence,
+  aber keinen claim-faehigen Modellvergleich
+- fuer `ml100k cb_svdpp` existiert jetzt eine abgeschlossene G6
+  validation-only Selection mit eingefrorener ausgewaehlter Config; ein
+  sauberer Outer-Benchmark fuer diese Config steht noch aus
 - ein kanonischer Multiseed-Aggregator fuer `benchmark_random_v1` ist
   vorhanden, sodass spaetere clean `ml1m`-Runs ohne Ad-hoc-Auswertung
   zusammengezogen werden koennen
@@ -55,8 +59,10 @@ Zum aktuellen Stand sind:
 
 Noch offen sind vor allem:
 
-- die Ausweitung derselben Evidenzdisziplin auf `ml10m` und `ml20m`
-  `cb_svdpp`
+- die Entscheidung, ob die eingefrorene `ml100k cb_svdpp` G6-Selection in einen
+  cleanen Outer-Benchmark gehen darf
+- die weitere Behandlung von `ml20m cb_svdpp` nach der dokumentierten lokalen
+  RAM-Guardrail-Grenze
 - die Verdichtung der finalen Ergebnisdarstellung im Projektbericht
 
 ## 2. Feststehende Entscheidungen
