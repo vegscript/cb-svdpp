@@ -1,0 +1,51 @@
+﻿metadata:
+  status: validation_selected
+  owner: repo
+  purpose: g6_validation_selected_model_profile
+  provenance:
+    selected_from: artifacts/benchmarks/2026-05-02T223510Z_ml100k_inner_tuning_cb_svdpp_g6_validation_grid_local_i5_2500k_24gb/summary.json
+    selection_evidence: docs/evidence/reproduction/current/2026-05-03_cb_svdpp_g6_validation_grid_run.md
+    selection_stage: g6_validation_grid
+    selection_objective: validation_rmse_mean
+    selection_split_family: benchmark_random_v1
+    selection_split_seeds:
+      - 1
+      - 2
+      - 3
+    selected_candidate_id: rank032_uc100_ic100_a0000_lr0100_reg0020_e002
+    selected_validation_rmse_mean: 0.9566122815305916
+    selected_validation_rmse_std: 0.002372317660216579
+
+model:
+  name: cb_svdpp
+  family: clustering_based_factorization
+  scope: paper_inspired
+
+training:
+  latent_dim: 32
+  epochs: 2
+  learning_rate: 0.01
+  lambda_b: 0.02
+  lambda_p: 0.02
+  lambda_q: 0.02
+  lambda_y: 0.02
+  lambda_pC: 0.02
+  lambda_qC: 0.02
+  lambda_yC: 0.02
+  init_std: 0.1
+  dtype: float32
+  implicit_policy: ratings_as_implicit
+
+clustering:
+  n_user_clusters: 100
+  n_item_clusters: 100
+  alpha: 0.00
+  algorithm: kmeans
+  kmeans_n_init: 10
+
+notes:
+  - selected by validation RMSE only in the G6 validation grid
+  - test data was not evaluated during selection
+  - selection evidence only until an outer benchmark run is executed cleanly
+  - not a final quality claim
+  - not a speed, scalability, SOTA, production-readiness, or paper-faithfulness claim

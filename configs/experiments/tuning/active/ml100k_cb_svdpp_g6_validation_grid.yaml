@@ -1,0 +1,140 @@
+﻿metadata:
+  status: validation_grid_contract
+  owner: repo
+  purpose: g5_to_g6_validation_only_promotion
+
+tuning:
+  name: ml100k_cb_svdpp_g6_validation_grid
+  dataset_short_name: ml100k
+  split_family: benchmark_random_v1
+  selection_stage: g6_validation_grid
+  objective: validation_rmse_mean
+  promoted_from:
+    config: configs/experiments/tuning/archive/ml100k_cb_svdpp_g5_bounded_alpha_cluster.yaml
+    evidence: docs/evidence/reproduction/current/2026-05-02_tune_inner_cache_controls_g5.md
+    candidate_id: rank032_uc064_ic064_a000_lr0100_reg0020_e002
+  train_ratio: 0.8
+  split_seeds:
+    - 1
+    - 2
+    - 3
+  validation_ratio: 0.1
+  model_seed: 1
+
+base_model_config: configs/models/cb_svdpp.yaml
+
+candidates:
+  - candidate_id: rank032_uc032_ic032_a0000_lr0100_reg0020_e002
+    overrides:
+      training: &rank032_lr0100_reg0020_e002
+        latent_dim: 32
+        epochs: 2
+        learning_rate: 0.01
+        lambda_b: 0.02
+        lambda_p: 0.02
+        lambda_q: 0.02
+        lambda_y: 0.02
+        lambda_pC: 0.02
+        lambda_qC: 0.02
+        lambda_yC: 0.02
+      clustering:
+        n_user_clusters: 32
+        n_item_clusters: 32
+        alpha: 0.000
+
+  - candidate_id: rank032_uc032_ic032_a0025_lr0100_reg0020_e002
+    overrides:
+      training: *rank032_lr0100_reg0020_e002
+      clustering:
+        n_user_clusters: 32
+        n_item_clusters: 32
+        alpha: 0.025
+
+  - candidate_id: rank032_uc032_ic032_a0050_lr0100_reg0020_e002
+    overrides:
+      training: *rank032_lr0100_reg0020_e002
+      clustering:
+        n_user_clusters: 32
+        n_item_clusters: 32
+        alpha: 0.050
+
+  - candidate_id: rank032_uc064_ic064_a0000_lr0100_reg0020_e002
+    overrides:
+      training: *rank032_lr0100_reg0020_e002
+      clustering:
+        n_user_clusters: 64
+        n_item_clusters: 64
+        alpha: 0.000
+
+  - candidate_id: rank032_uc064_ic064_a0025_lr0100_reg0020_e002
+    overrides:
+      training: *rank032_lr0100_reg0020_e002
+      clustering:
+        n_user_clusters: 64
+        n_item_clusters: 64
+        alpha: 0.025
+
+  - candidate_id: rank032_uc064_ic064_a0050_lr0100_reg0020_e002
+    overrides:
+      training: *rank032_lr0100_reg0020_e002
+      clustering:
+        n_user_clusters: 64
+        n_item_clusters: 64
+        alpha: 0.050
+
+  - candidate_id: rank032_uc080_ic080_a0000_lr0100_reg0020_e002
+    overrides:
+      training: *rank032_lr0100_reg0020_e002
+      clustering:
+        n_user_clusters: 80
+        n_item_clusters: 80
+        alpha: 0.000
+
+  - candidate_id: rank032_uc080_ic080_a0025_lr0100_reg0020_e002
+    overrides:
+      training: *rank032_lr0100_reg0020_e002
+      clustering:
+        n_user_clusters: 80
+        n_item_clusters: 80
+        alpha: 0.025
+
+  - candidate_id: rank032_uc080_ic080_a0050_lr0100_reg0020_e002
+    overrides:
+      training: *rank032_lr0100_reg0020_e002
+      clustering:
+        n_user_clusters: 80
+        n_item_clusters: 80
+        alpha: 0.050
+
+  - candidate_id: rank032_uc100_ic100_a0000_lr0100_reg0020_e002
+    overrides:
+      training: *rank032_lr0100_reg0020_e002
+      clustering:
+        n_user_clusters: 100
+        n_item_clusters: 100
+        alpha: 0.000
+
+  - candidate_id: rank032_uc100_ic100_a0025_lr0100_reg0020_e002
+    overrides:
+      training: *rank032_lr0100_reg0020_e002
+      clustering:
+        n_user_clusters: 100
+        n_item_clusters: 100
+        alpha: 0.025
+
+  - candidate_id: rank032_uc100_ic100_a0050_lr0100_reg0020_e002
+    overrides:
+      training: *rank032_lr0100_reg0020_e002
+      clustering:
+        n_user_clusters: 100
+        n_item_clusters: 100
+        alpha: 0.050
+
+notes:
+  - validation-only promotion grid around the G5 bounded-selection winner
+  - three split seeds, model seed 1, no test-set evaluation during selection
+  - 12 candidates times 3 split seeds equals 36 validation-only runs
+  - KMeans remains the configured clustering algorithm; no MiniBatchKMeans substitution
+  - R_star remains diagnostic-only and is not a tuning objective or coefficient
+  - cache controls must be explicit in the execution command and summary
+  - selection evidence only; not a final benchmark and not a quality claim

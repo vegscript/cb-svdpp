@@ -1,0 +1,45 @@
+﻿metadata:
+  status: stage0_transfer
+  owner: repo
+  purpose: model_profile
+  provenance:
+    transferred_from: configs/models/selected/ml100k/ml100k_cb_asvdpp_stage1.yaml
+    transfer_stage: ml1m_stage0
+
+model:
+  name: cb_asvdpp
+  family: clustering_based_factorization
+  scope: paper_inspired
+
+training:
+  latent_dim: 64
+  epochs: 20
+  learning_rate: 0.0075
+  lambda_b: 0.025
+  lambda_p: 0.025
+  lambda_q: 0.025
+  lambda_x: 0.025
+  lambda_y: 0.025
+  lambda_pC: 0.025
+  lambda_qC: 0.025
+  lambda_xC: 0.025
+  lambda_yC: 0.025
+  init_std: 0.1
+  dtype: float32
+  implicit_policy: ratings_as_implicit
+  residual_weight_contract: detached
+
+clustering:
+  n_user_clusters: 80
+  n_item_clusters: 80
+  alpha: 0.10
+  algorithm: kmeans
+  kmeans_n_init: 10
+
+notes:
+  - transferred from the clean ml100k stage1 tuned profile
+  - not tuned on ml1m
+  - fit-time comparisons must include cluster induction plus main training
+  - uses the accepted detached explicit residual contract
+  - first scaling readout only
+  - not benchmark-final

@@ -6,6 +6,7 @@ EVIDENCE_PATH = (
     / "docs"
     / "evidence"
     / "reproduction"
+    / "current"
     / "2026-05-03_cb_asvdpp_hotpath_prechange_baseline_g9.md"
 )
 ROADMAP_PATH = REPO_ROOT / "docs" / "roadmaps" / "2026-05-02_claim_unlock_and_scalability_plan.md"
@@ -41,4 +42,4 @@ def test_cb_asvdpp_prechange_baseline_is_clean_and_non_claiming() -> None:
     assert "clean post-change work-buffer benchmark" in matrix
     assert "pre-change baseline is comparison evidence only" in matrix
 
-    assert "CB-ASVD++ hotpath pre-change baseline evidence" in readme
+    assert "docs/evidence/current_evidence_index.md" in readme

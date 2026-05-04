@@ -1,4 +1,4 @@
-from pathlib import Path
+﻿from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 READINESS_MATRIX = REPO_ROOT / "docs" / "publish_readiness_matrix.md"
@@ -117,34 +117,47 @@ ML20M_CB_SVDPP_SEED3_BREACH_READOUT = (
     / "2026-05-02_ml20m_cb_svdpp_stage0_transfer_seed3_guardrail_breach.md"
 )
 REPRODUCTION_SMOKE_EVIDENCE = (
-    REPO_ROOT / "docs" / "evidence" / "reproduction" / "2026-05-01_quality_gate_reproduction.md"
+    REPO_ROOT / "docs" / "evidence" / "reproduction" / "archive" / "2026-05-01_quality_gate_reproduction.md"
 )
 RELEASE_HYGIENE_EVIDENCE = REPO_ROOT / "docs" / "evidence" / "release" / "2026-05-01_release_hygiene.md"
 CLAIM_UNLOCK_ROADMAP = REPO_ROOT / "docs" / "roadmaps" / "2026-05-02_claim_unlock_and_scalability_plan.md"
 G1_RUNTIME_PROFILE_EVIDENCE = (
-    REPO_ROOT / "docs" / "evidence" / "reproduction" / "2026-05-02_runtime_profile_contract_g1.md"
+    REPO_ROOT / "docs" / "evidence" / "reproduction" / "current" / "2026-05-02_runtime_profile_contract_g1.md"
 )
-G2_STAGE_PROFILE_EVIDENCE = REPO_ROOT / "docs" / "evidence" / "reproduction" / "2026-05-02_cb_stage_profile_g2.md"
+G2_STAGE_PROFILE_EVIDENCE = (
+    REPO_ROOT / "docs" / "evidence" / "reproduction" / "current" / "2026-05-02_cb_stage_profile_g2.md"
+)
 G2_LARGE_STAGE_PROFILE_EVIDENCE = (
-    REPO_ROOT / "docs" / "evidence" / "reproduction" / "2026-05-02_ml10m_cb_svdpp_large_stage_profile_g2.md"
+    REPO_ROOT
+    / "docs"
+    / "evidence"
+    / "reproduction"
+    / "current"
+    / "2026-05-02_ml10m_cb_svdpp_large_stage_profile_g2.md"
 )
 G3_CB_SVDPP_HOTPATH_EVIDENCE = (
-    REPO_ROOT / "docs" / "evidence" / "reproduction" / "2026-05-02_cb_svdpp_hotpath_g3.md"
+    REPO_ROOT / "docs" / "evidence" / "reproduction" / "current" / "2026-05-02_cb_svdpp_hotpath_g3.md"
 )
 G4_CLUSTER_CACHE_EVIDENCE = (
-    REPO_ROOT / "docs" / "evidence" / "reproduction" / "2026-05-02_cluster_artifact_cache_g4.md"
+    REPO_ROOT / "docs" / "evidence" / "reproduction" / "current" / "2026-05-02_cluster_artifact_cache_g4.md"
 )
 G5_TUNE_INNER_CACHE_EVIDENCE = (
-    REPO_ROOT / "docs" / "evidence" / "reproduction" / "2026-05-02_tune_inner_cache_controls_g5.md"
+    REPO_ROOT / "docs" / "evidence" / "reproduction" / "current" / "2026-05-02_tune_inner_cache_controls_g5.md"
 )
 G6_VALIDATION_GRID_EVIDENCE = (
-    REPO_ROOT / "docs" / "evidence" / "reproduction" / "2026-05-03_cb_svdpp_g6_validation_grid_run.md"
+    REPO_ROOT
+    / "docs"
+    / "evidence"
+    / "reproduction"
+    / "current"
+    / "2026-05-03_cb_svdpp_g6_validation_grid_run.md"
 )
 G6_OUTER_BENCHMARK_CONTRACT = (
     REPO_ROOT
     / "docs"
     / "evidence"
     / "reproduction"
+    / "current"
     / "2026-05-03_cb_svdpp_g6_outer_benchmark_contract.md"
 )
 G6_OUTER_BENCHMARK_RUN = (
@@ -152,16 +165,23 @@ G6_OUTER_BENCHMARK_RUN = (
     / "docs"
     / "evidence"
     / "reproduction"
+    / "current"
     / "2026-05-03_cb_svdpp_g6_outer_benchmark_run.md"
 )
 CB_ASVDPP_HOTPATH_DECISION = (
-    REPO_ROOT / "docs" / "evidence" / "reproduction" / "2026-05-03_cb_asvdpp_hotpath_decision_g7.md"
+    REPO_ROOT
+    / "docs"
+    / "evidence"
+    / "reproduction"
+    / "current"
+    / "2026-05-03_cb_asvdpp_hotpath_decision_g7.md"
 )
 CB_ASVDPP_HOTPATH_REMEDIATION_CONTRACT = (
     REPO_ROOT
     / "docs"
     / "evidence"
     / "reproduction"
+    / "current"
     / "2026-05-03_cb_asvdpp_hotpath_remediation_contract_g8.md"
 )
 CB_ASVDPP_HOTPATH_PRECHANGE_BASELINE = (
@@ -169,6 +189,7 @@ CB_ASVDPP_HOTPATH_PRECHANGE_BASELINE = (
     / "docs"
     / "evidence"
     / "reproduction"
+    / "current"
     / "2026-05-03_cb_asvdpp_hotpath_prechange_baseline_g9.md"
 )
 CB_ASVDPP_HOTPATH_POSTCHANGE_BENCHMARK = (
@@ -176,6 +197,7 @@ CB_ASVDPP_HOTPATH_POSTCHANGE_BENCHMARK = (
     / "docs"
     / "evidence"
     / "reproduction"
+    / "current"
     / "2026-05-03_cb_asvdpp_hotpath_postchange_benchmark_g10.md"
 )
 
@@ -229,21 +251,21 @@ def test_master_plan_tracks_claim_unlock_scalability_backlog() -> None:
     assert "Change" in roadmap
     assert "Implement" in roadmap
     assert "Concrete HPC And Runtime Contract" in roadmap
-    assert "evidence: `docs/evidence/reproduction/2026-05-02_runtime_profile_contract_g1.md`" in roadmap
+    assert "evidence: `docs/evidence/reproduction/current/2026-05-02_runtime_profile_contract_g1.md`" in roadmap
     assert "Stage-Level CB Profiler" in roadmap
-    assert "evidence: `docs/evidence/reproduction/2026-05-02_cb_stage_profile_g2.md`" in roadmap
+    assert "evidence: `docs/evidence/reproduction/current/2026-05-02_cb_stage_profile_g2.md`" in roadmap
     assert "implemented_g2_instrumentation_ml100k_and_ml10m_profile" in roadmap
-    assert "docs/evidence/reproduction/2026-05-02_ml10m_cb_svdpp_large_stage_profile_g2.md" in roadmap
+    assert "docs/evidence/reproduction/current/2026-05-02_ml10m_cb_svdpp_large_stage_profile_g2.md" in roadmap
     assert "CB Training Hot-Path Remediation" in roadmap
     assert "implemented_g3_cb_svdpp_workbuffer_ml100k" in roadmap
-    assert "docs/evidence/reproduction/2026-05-02_cb_svdpp_hotpath_g3.md" in roadmap
+    assert "docs/evidence/reproduction/current/2026-05-02_cb_svdpp_hotpath_g3.md" in roadmap
     assert "Algorithmic Acceleration Track" in roadmap
     assert "Leakage-Safe Cluster Artifact Cache" in roadmap
     assert "status: `implemented_g4_cluster_artifact_cache`" in roadmap
-    assert "docs/evidence/reproduction/2026-05-02_cluster_artifact_cache_g4.md" in roadmap
+    assert "docs/evidence/reproduction/current/2026-05-02_cluster_artifact_cache_g4.md" in roadmap
     assert "Methodical Hyperparameter Tuning" in roadmap
     assert "implemented_g5_bounded_validation_only_selection_probe" in roadmap
-    assert "docs/evidence/reproduction/2026-05-02_tune_inner_cache_controls_g5.md" in roadmap
+    assert "docs/evidence/reproduction/current/2026-05-02_tune_inner_cache_controls_g5.md" in roadmap
     assert "`R_star` Decision Track" in roadmap
     assert "Do Not Do" in roadmap
     assert "Do not tune on test data" in roadmap
@@ -252,23 +274,23 @@ def test_master_plan_tracks_claim_unlock_scalability_backlog() -> None:
     assert "Do not claim `R_star` is optimized unless a new objective" in roadmap
     assert "`96%`" in roadmap
     assert "completed_g6_validation_only_selection" in roadmap
-    assert "docs/evidence/reproduction/2026-05-03_cb_svdpp_g6_validation_grid_run.md" in roadmap
-    assert "configs/models/tuned/ml100k_cb_svdpp_g6_validation_selected.yaml" in roadmap
+    assert "docs/evidence/reproduction/current/2026-05-03_cb_svdpp_g6_validation_grid_run.md" in roadmap
+    assert "configs/models/selected/ml100k/ml100k_cb_svdpp_g6_validation_selected.yaml" in roadmap
     assert "approved_for_clean_outer_benchmark_contract" in roadmap
-    assert "docs/evidence/reproduction/2026-05-03_cb_svdpp_g6_outer_benchmark_contract.md" in roadmap
+    assert "docs/evidence/reproduction/current/2026-05-03_cb_svdpp_g6_outer_benchmark_contract.md" in roadmap
     assert "completed_g6_clean_outer_benchmark" in roadmap
-    assert "docs/evidence/reproduction/2026-05-03_cb_svdpp_g6_outer_benchmark_run.md" in roadmap
+    assert "docs/evidence/reproduction/current/2026-05-03_cb_svdpp_g6_outer_benchmark_run.md" in roadmap
     assert "test RMSE mean: `0.9595668222022953`" in roadmap
     assert "pass_for_hotpath_prioritization_not_remediation" in roadmap
-    assert "docs/evidence/reproduction/2026-05-03_cb_asvdpp_hotpath_decision_g7.md" in roadmap
+    assert "docs/evidence/reproduction/current/2026-05-03_cb_asvdpp_hotpath_decision_g7.md" in roadmap
     assert "main_training` share: about `92.44%`" in roadmap
     assert "approved_for_exact_remediation_contract" in roadmap
-    assert "docs/evidence/reproduction/2026-05-03_cb_asvdpp_hotpath_remediation_contract_g8.md" in roadmap
+    assert "docs/evidence/reproduction/current/2026-05-03_cb_asvdpp_hotpath_remediation_contract_g8.md" in roadmap
     assert "pass_for_clean_prechange_baseline" in roadmap
-    assert "docs/evidence/reproduction/2026-05-03_cb_asvdpp_hotpath_prechange_baseline_g9.md" in roadmap
+    assert "docs/evidence/reproduction/current/2026-05-03_cb_asvdpp_hotpath_prechange_baseline_g9.md" in roadmap
     assert "main_training_wall_clock_seconds`: `122.91284980002092`" in roadmap
     assert "pass_for_exact_workbuffer_remediation_context" in roadmap
-    assert "docs/evidence/reproduction/2026-05-03_cb_asvdpp_hotpath_postchange_benchmark_g10.md" in roadmap
+    assert "docs/evidence/reproduction/current/2026-05-03_cb_asvdpp_hotpath_postchange_benchmark_g10.md" in roadmap
     assert "observed main-training wall-clock change: `-7.403998780257792%`" in roadmap
 
     g1_evidence = G1_RUNTIME_PROFILE_EVIDENCE.read_text(encoding="utf-8")
@@ -342,7 +364,7 @@ def test_master_plan_tracks_claim_unlock_scalability_backlog() -> None:
     assert "non-null `test_rmse` count across candidate metrics: `0`" in g6_evidence
     assert "rank032_uc100_ic100_a0000_lr0100_reg0020_e002" in g6_evidence
     assert "validation RMSE mean: `0.9566122815305916`" in g6_evidence
-    assert "configs/models/tuned/ml100k_cb_svdpp_g6_validation_selected.yaml" in g6_evidence
+    assert "configs/models/selected/ml100k/ml100k_cb_svdpp_g6_validation_selected.yaml" in g6_evidence
     assert "no final `ml100k cb_svdpp` quality claim" in g6_evidence
     assert "no test-set result or test-set comparison" in g6_evidence
 

@@ -1,11 +1,11 @@
-import json
+﻿import json
 from pathlib import Path
 
 import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
-TUNING_CONFIG = "configs/experiments/tuning/ml1m_cb_asvdpp_stage0.yaml"
+TUNING_CONFIG = "configs/experiments/tuning/active/ml1m_cb_asvdpp_stage0.yaml"
 EVIDENCE_NOTE = "docs/evidence/models/cb_asvdpp/2026-04-21_ml1m_cb_asvdpp_inner_tuning_stage0.md"
 BENCHMARK_DIR = "artifacts/benchmarks/2026-04-21T204336Z_ml1m_inner_tuning_cb_asvdpp_stage0_local_i5_2500k_24gb"
 

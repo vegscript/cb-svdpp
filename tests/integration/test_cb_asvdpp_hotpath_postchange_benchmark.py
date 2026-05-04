@@ -1,4 +1,4 @@
-from pathlib import Path
+﻿from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 EVIDENCE_PATH = (
@@ -6,6 +6,7 @@ EVIDENCE_PATH = (
     / "docs"
     / "evidence"
     / "reproduction"
+    / "current"
     / "2026-05-03_cb_asvdpp_hotpath_postchange_benchmark_g10.md"
 )
 ROADMAP_PATH = REPO_ROOT / "docs" / "roadmaps" / "2026-05-02_claim_unlock_and_scalability_plan.md"
@@ -38,11 +39,11 @@ def test_cb_asvdpp_postchange_benchmark_is_clean_exact_and_claim_limited() -> No
     assert "Pytest after this evidence note and guardrail test: `141 passed`" in evidence
 
     assert "pass_for_exact_workbuffer_remediation_context" in roadmap
-    assert "docs/evidence/reproduction/2026-05-03_cb_asvdpp_hotpath_postchange_benchmark_g10.md" in roadmap
+    assert "docs/evidence/reproduction/current/2026-05-03_cb_asvdpp_hotpath_postchange_benchmark_g10.md" in roadmap
     assert "observed main-training wall-clock change: `-7.403998780257792%`" in roadmap
     assert "`96%`" in roadmap
 
     assert "clean post-change work-buffer benchmark" in matrix
     assert "G10 `cb_asvdpp` post-change benchmark unlocks only a narrow speed claim" in matrix
 
-    assert "CB-ASVD++ hotpath post-change benchmark evidence" in readme
+    assert "docs/evidence/current_evidence_index.md" in readme

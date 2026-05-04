@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 from pathlib import Path
 from typing import Any
@@ -11,6 +11,7 @@ CONFIG_PATH = (
     / "configs"
     / "experiments"
     / "tuning"
+    / "active"
     / "ml20m_cb_svdpp_g11_lower_memory_validation_grid.yaml"
 )
 EVIDENCE_PATH = (
@@ -18,6 +19,7 @@ EVIDENCE_PATH = (
     / "docs"
     / "evidence"
     / "reproduction"
+    / "current"
     / "2026-05-03_ml20m_cb_svdpp_g11_lower_memory_validation_contract.md"
 )
 ROADMAP_PATH = REPO_ROOT / "docs" / "roadmaps" / "2026-05-02_claim_unlock_and_scalability_plan.md"
@@ -114,10 +116,13 @@ def test_ml20m_g11_lower_memory_contract_is_validation_only_and_resource_gated()
     assert "no scalability claim from this contract" in evidence
 
     assert "status: `contract_ready_g11_ml20m_lower_memory_validation_reassessment`" in roadmap
-    assert "docs/evidence/reproduction/2026-05-03_ml20m_cb_svdpp_g11_lower_memory_validation_contract.md" in roadmap
+    assert (
+        "docs/evidence/reproduction/current/2026-05-03_ml20m_cb_svdpp_g11_lower_memory_validation_contract.md"
+        in roadmap
+    )
     assert "`96%`" in roadmap
 
     assert "G11 lower-memory validation contract and operative `tune-inner` resource-gate" in matrix
     assert "no final `ml20m cb_svdpp` benchmark claim" in matrix
 
-    assert "ML20M CB-SVD++ G11 lower-memory validation contract evidence" in readme
+    assert "docs/evidence/current_evidence_index.md" in readme

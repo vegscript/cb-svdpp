@@ -1,14 +1,14 @@
-from pathlib import Path
+﻿from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
 ML1M_EXPLORATORY_READOUTS = {
     "biased_mf": {
-        "config": "configs/models/tuned/ml1m_biased_mf_stage0_transfer.yaml",
+        "config": "configs/models/selected/ml1m/ml1m_biased_mf_stage0_transfer.yaml",
         "evidence": ("docs/evidence/models/biased_mf/2026-04-16_ml1m_biased_mf_stage0_transfer_clean_seed_sweep.md"),
     },
     "cb_svdpp": {
-        "config": "configs/models/tuned/ml1m_cb_svdpp_stage0_transfer.yaml",
+        "config": "configs/models/selected/ml1m/ml1m_cb_svdpp_stage0_transfer.yaml",
         "evidence": ("docs/evidence/models/cb_svdpp/2026-04-16_ml1m_cb_svdpp_stage0_transfer_clean_seed_readout.md"),
     },
 }

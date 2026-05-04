@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 from pathlib import Path
 from typing import Any
@@ -6,14 +6,38 @@ from typing import Any
 from recsys_lab.config.loader import load_yaml_file
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-CONFIG_PATH = REPO_ROOT / "configs" / "experiments" / "tuning" / "ml100k_cb_svdpp_g6_validation_grid.yaml"
+CONFIG_PATH = (
+    REPO_ROOT
+    / "configs"
+    / "experiments"
+    / "tuning"
+    / "active"
+    / "ml100k_cb_svdpp_g6_validation_grid.yaml"
+)
 EVIDENCE_PATH = (
-    REPO_ROOT / "docs" / "evidence" / "reproduction" / "2026-05-03_cb_svdpp_g6_validation_grid_contract.md"
+    REPO_ROOT
+    / "docs"
+    / "evidence"
+    / "reproduction"
+    / "current"
+    / "2026-05-03_cb_svdpp_g6_validation_grid_contract.md"
 )
 RUN_EVIDENCE_PATH = (
-    REPO_ROOT / "docs" / "evidence" / "reproduction" / "2026-05-03_cb_svdpp_g6_validation_grid_run.md"
+    REPO_ROOT
+    / "docs"
+    / "evidence"
+    / "reproduction"
+    / "current"
+    / "2026-05-03_cb_svdpp_g6_validation_grid_run.md"
 )
-SELECTED_CONFIG_PATH = REPO_ROOT / "configs" / "models" / "tuned" / "ml100k_cb_svdpp_g6_validation_selected.yaml"
+SELECTED_CONFIG_PATH = (
+    REPO_ROOT
+    / "configs"
+    / "models"
+    / "selected"
+    / "ml100k"
+    / "ml100k_cb_svdpp_g6_validation_selected.yaml"
+)
 ROADMAP_PATH = REPO_ROOT / "docs" / "roadmaps" / "2026-05-02_claim_unlock_and_scalability_plan.md"
 
 
@@ -113,8 +137,8 @@ def test_g6_validation_grid_contract_is_validation_only_and_method_bounded() -> 
     assert "non-null `test_rmse` count across candidate metrics: `0`" in run_evidence
     assert "rank032_uc100_ic100_a0000_lr0100_reg0020_e002" in run_evidence
     assert "validation RMSE mean: `0.9566122815305916`" in run_evidence
-    assert "configs/models/tuned/ml100k_cb_svdpp_g6_validation_selected.yaml" in run_evidence
+    assert "configs/models/selected/ml100k/ml100k_cb_svdpp_g6_validation_selected.yaml" in run_evidence
     assert "no final `ml100k cb_svdpp` quality claim" in run_evidence
 
     assert "status: `completed_g6_validation_only_selection`" in roadmap
-    assert "docs/evidence/reproduction/2026-05-03_cb_svdpp_g6_validation_grid_run.md" in roadmap
+    assert "docs/evidence/reproduction/current/2026-05-03_cb_svdpp_g6_validation_grid_run.md" in roadmap

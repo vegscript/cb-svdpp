@@ -1,10 +1,10 @@
-from pathlib import Path
+﻿from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
 ML100K_CLEAN_ANCHORS = {
     "biased_mf": {
-        "config": "configs/models/tuned/ml100k_biased_mf_stage1.yaml",
+        "config": "configs/models/selected/ml100k/ml100k_biased_mf_stage1.yaml",
         "evidence": [
             "docs/evidence/models/biased_mf/2026-04-13_ml100k_biased_mf_inner_tuning_stage1.md",
             "docs/evidence/models/biased_mf/2026-04-13_ml100k_biased_mf_stage1_tuned_benchmark.md",
@@ -12,7 +12,7 @@ ML100K_CLEAN_ANCHORS = {
         ],
     },
     "svdpp": {
-        "config": "configs/models/tuned/ml100k_svdpp_stage1.yaml",
+        "config": "configs/models/selected/ml100k/ml100k_svdpp_stage1.yaml",
         "evidence": [
             "docs/evidence/models/svdpp/2026-04-13_ml100k_svdpp_inner_tuning_stage1.md",
             "docs/evidence/models/svdpp/2026-04-13_ml100k_svdpp_stage1_tuned_benchmark.md",
@@ -20,7 +20,7 @@ ML100K_CLEAN_ANCHORS = {
         ],
     },
     "cb_svdpp": {
-        "config": "configs/models/tuned/ml100k_cb_svdpp_stage1.yaml",
+        "config": "configs/models/selected/ml100k/ml100k_cb_svdpp_stage1.yaml",
         "evidence": [
             "docs/evidence/models/cb_svdpp/2026-04-15_ml100k_cb_svdpp_inner_tuning_stage1.md",
             "docs/evidence/models/cb_svdpp/2026-04-15_ml100k_cb_svdpp_stage1_tuned_benchmark.md",
@@ -28,7 +28,7 @@ ML100K_CLEAN_ANCHORS = {
         ],
     },
     "cb_asvdpp": {
-        "config": "configs/models/tuned/ml100k_cb_asvdpp_stage1.yaml",
+        "config": "configs/models/selected/ml100k/ml100k_cb_asvdpp_stage1.yaml",
         "evidence": [
             "docs/evidence/models/cb_asvdpp/2026-04-15_ml100k_cb_asvdpp_inner_tuning_stage1.md",
             "docs/evidence/models/cb_asvdpp/2026-04-15_ml100k_cb_asvdpp_stage1_tuned_benchmark.md",

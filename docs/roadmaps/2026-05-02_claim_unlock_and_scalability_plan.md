@@ -1,4 +1,4 @@
-# Claim Unlock And Scalability Plan
+﻿# Claim Unlock And Scalability Plan
 
 - date: `2026-05-02`
 - governed_by: `docs/project_master_plan.md`
@@ -69,7 +69,7 @@ campaign:
 Acceptance gate:
 
 - status: `implemented_g1_preflight`
-- evidence: `docs/evidence/reproduction/2026-05-02_runtime_profile_contract_g1.md`
+- evidence: `docs/evidence/reproduction/current/2026-05-02_runtime_profile_contract_g1.md`
 - a focused test fails if a claim-eligible HPC profile still contains null
   thread or RAM fields
 - `validate-runtime-profile --claim-eligible` rejects the draft `hpc_cpu`
@@ -95,8 +95,8 @@ least:
 Acceptance gate:
 
 - status: `implemented_g2_instrumentation_ml100k_and_ml10m_profile`
-- evidence: `docs/evidence/reproduction/2026-05-02_cb_stage_profile_g2.md`
-- large-dataset evidence: `docs/evidence/reproduction/2026-05-02_ml10m_cb_svdpp_large_stage_profile_g2.md`
+- evidence: `docs/evidence/reproduction/current/2026-05-02_cb_stage_profile_g2.md`
+- large-dataset evidence: `docs/evidence/reproduction/current/2026-05-02_ml10m_cb_svdpp_large_stage_profile_g2.md`
 - one synthetic integration test verifies that stage timings are written
 - one `ml100k` evidence note records the profiler output
 - one bounded `ml10m` evidence note records the large-dataset profiler output
@@ -128,7 +128,7 @@ Status:
 
 - status: `implemented_g3_cb_svdpp_workbuffer_ml100k`
 - evidence:
-  `docs/evidence/reproduction/2026-05-02_cb_svdpp_hotpath_g3.md`
+  `docs/evidence/reproduction/current/2026-05-02_cb_svdpp_hotpath_g3.md`
 - accepted change: reuse fixed-size `cb_svdpp` Numba work buffers while
   preserving old-value vector semantics
 - rejected change: scalar re-read candidate, because the clean `ml100k` Stage1
@@ -183,7 +183,7 @@ Status:
 
 - status: `implemented_g4_cluster_artifact_cache`
 - evidence:
-  `docs/evidence/reproduction/2026-05-02_cluster_artifact_cache_g4.md`
+  `docs/evidence/reproduction/current/2026-05-02_cluster_artifact_cache_g4.md`
 - `cb_svdpp` and `cb_asvdpp` run manifests expose top-level `caches`
 - `--cluster-artifact-cache/--disable-cluster-artifact-cache` is available for
   both CB experiment CLIs
@@ -224,7 +224,7 @@ Status:
 
 - status: `implemented_g5_bounded_validation_only_selection_probe`
 - evidence:
-  `docs/evidence/reproduction/2026-05-02_tune_inner_cache_controls_g5.md`
+  `docs/evidence/reproduction/current/2026-05-02_tune_inner_cache_controls_g5.md`
 - `tune-inner` and `tune-ml100k-inner` expose explicit cache controls for
   split cache, supported training-index cache, and supported CB
   cluster-artifact cache
@@ -241,11 +241,11 @@ Promotion contract:
 
 - status: `completed_g6_validation_only_selection`
 - evidence:
-  `docs/evidence/reproduction/2026-05-03_cb_svdpp_g6_validation_grid_contract.md`
+  `docs/evidence/reproduction/current/2026-05-03_cb_svdpp_g6_validation_grid_contract.md`
 - run evidence:
-  `docs/evidence/reproduction/2026-05-03_cb_svdpp_g6_validation_grid_run.md`
+  `docs/evidence/reproduction/current/2026-05-03_cb_svdpp_g6_validation_grid_run.md`
 - config:
-  `configs/experiments/tuning/ml100k_cb_svdpp_g6_validation_grid.yaml`
+  `configs/experiments/tuning/active/ml100k_cb_svdpp_g6_validation_grid.yaml`
 - decision: promote the bounded G5 winner into a larger validation-only
   `ml100k cb_svdpp` grid before any outer test rerun
 - planned scope: `12` candidates times `3` split seeds, all selected by
@@ -253,7 +253,7 @@ Promotion contract:
 - selected candidate:
   `rank032_uc100_ic100_a0000_lr0100_reg0020_e002`
 - frozen selected config:
-  `configs/models/tuned/ml100k_cb_svdpp_g6_validation_selected.yaml`
+  `configs/models/selected/ml100k/ml100k_cb_svdpp_g6_validation_selected.yaml`
 - no final quality claim, test-set claim, large-dataset claim, speed claim,
   scalability claim, SOTA claim, production-readiness claim, or
   paper-faithfulness claim is unlocked by this selection evidence
@@ -262,11 +262,11 @@ Outer benchmark contract:
 
 - status: `approved_for_clean_outer_benchmark_contract`
 - evidence:
-  `docs/evidence/reproduction/2026-05-03_cb_svdpp_g6_outer_benchmark_contract.md`
+  `docs/evidence/reproduction/current/2026-05-03_cb_svdpp_g6_outer_benchmark_contract.md`
 - decision: run one clean outer `ml100k cb_svdpp` benchmark for the frozen
   G6-selected config
 - selected config:
-  `configs/models/tuned/ml100k_cb_svdpp_g6_validation_selected.yaml`
+  `configs/models/selected/ml100k/ml100k_cb_svdpp_g6_validation_selected.yaml`
 - planned scope: split seeds `1,2,3`, model seed `1`, split family
   `benchmark_random_v1`
 - required order: commit this contract first, then run the three outer runs
@@ -279,7 +279,7 @@ Outer benchmark run:
 
 - status: `completed_g6_clean_outer_benchmark`
 - evidence:
-  `docs/evidence/reproduction/2026-05-03_cb_svdpp_g6_outer_benchmark_run.md`
+  `docs/evidence/reproduction/current/2026-05-03_cb_svdpp_g6_outer_benchmark_run.md`
 - benchmark artifact:
   `artifacts/benchmarks/2026-05-03T120906Z_ml100k_benchmark_random_v1_cb_svdpp_multiseed_s001_s002_s003_modelseed_s001_local_i5_2500k_24gb/benchmark_manifest.json`
 - git commit: `67570ed8fde4c158848ab80494524ab203b40df5`
@@ -302,7 +302,7 @@ Status:
 
 - status: `pass_for_hotpath_prioritization_not_remediation`
 - evidence:
-  `docs/evidence/reproduction/2026-05-03_cb_asvdpp_hotpath_decision_g7.md`
+  `docs/evidence/reproduction/current/2026-05-03_cb_asvdpp_hotpath_decision_g7.md`
 - run artifact:
   `artifacts/runs/2026-05-03T121942Z_ml100k_cb_asvdpp_local_i5_2500k_24gb_benchmark_random_v1_tr080_va010_s001_s001/run_manifest.json`
 - git commit: `2edc8a3be8f64c657df9519befc371d9e7accfd3`
@@ -322,7 +322,7 @@ Remediation contract:
 
 - status: `approved_for_exact_remediation_contract`
 - evidence:
-  `docs/evidence/reproduction/2026-05-03_cb_asvdpp_hotpath_remediation_contract_g8.md`
+  `docs/evidence/reproduction/current/2026-05-03_cb_asvdpp_hotpath_remediation_contract_g8.md`
 - target:
   `src/recsys_lab/models/kernels.py::train_cb_asvdpp_epoch_numba`
 - approved first target: fixed-size work-buffer reuse inside the exact Numba
@@ -342,7 +342,7 @@ Pre-change baseline:
 
 - status: `pass_for_clean_prechange_baseline`
 - evidence:
-  `docs/evidence/reproduction/2026-05-03_cb_asvdpp_hotpath_prechange_baseline_g9.md`
+  `docs/evidence/reproduction/current/2026-05-03_cb_asvdpp_hotpath_prechange_baseline_g9.md`
 - run artifact:
   `artifacts/runs/2026-05-03T123549Z_ml100k_cb_asvdpp_local_i5_2500k_24gb_benchmark_random_v1_tr080_va010_s001_s001/run_manifest.json`
 - git commit: `bc966e42f4fc2cf3d09c7f7194e17a81c93617cc`
@@ -360,7 +360,7 @@ Post-change benchmark:
 
 - status: `pass_for_exact_workbuffer_remediation_context`
 - evidence:
-  `docs/evidence/reproduction/2026-05-03_cb_asvdpp_hotpath_postchange_benchmark_g10.md`
+  `docs/evidence/reproduction/current/2026-05-03_cb_asvdpp_hotpath_postchange_benchmark_g10.md`
 - run artifact:
   `artifacts/runs/2026-05-03T124801Z_ml100k_cb_asvdpp_local_i5_2500k_24gb_benchmark_random_v1_tr080_va010_s001_s001/run_manifest.json`
 - git commit: `e6b77c7f9bc5a87259a5e18e618dc18941a3a9e3`
@@ -383,9 +383,9 @@ Status:
 
 - status: `contract_ready_g11_ml20m_lower_memory_validation_reassessment`
 - evidence:
-  `docs/evidence/reproduction/2026-05-03_ml20m_cb_svdpp_g11_lower_memory_validation_contract.md`
+  `docs/evidence/reproduction/current/2026-05-03_ml20m_cb_svdpp_g11_lower_memory_validation_contract.md`
 - config:
-  `configs/experiments/tuning/ml20m_cb_svdpp_g11_lower_memory_validation_grid.yaml`
+  `configs/experiments/tuning/active/ml20m_cb_svdpp_g11_lower_memory_validation_grid.yaml`
 - purpose: define the next allowed local `ml20m cb_svdpp` reassessment after
   the previous full `stage0_transfer` campaign breached the local RAM guardrail
 - planned scope: `8` lower-memory candidates times split seeds `1,2`, all

@@ -5,6 +5,18 @@ import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
+MOVED_MODEL_CONFIG_REFS = {
+    "configs/models/tuned/ml1m_biased_mf_stage0_transfer.yaml": (
+        "configs/models/selected/ml1m/ml1m_biased_mf_stage0_transfer.yaml"
+    ),
+    "configs/models/tuned/ml1m_cb_svdpp_stage0_transfer.yaml": (
+        "configs/models/selected/ml1m/ml1m_cb_svdpp_stage0_transfer.yaml"
+    ),
+    "configs/models/tuned/ml1m_cb_asvdpp_stage0_transfer.yaml": (
+        "configs/models/selected/ml1m/ml1m_cb_asvdpp_stage0_transfer.yaml"
+    ),
+}
+
 
 def test_completed_clean_ml1m_runs_reference_existing_model_configs() -> None:
     run_manifest_paths = sorted((REPO_ROOT / "artifacts" / "runs").glob("*ml1m*/run_manifest.json"))
@@ -21,6 +33,8 @@ def test_completed_clean_ml1m_runs_reference_existing_model_configs() -> None:
 
         model_config_ref = str(manifest["model"]["config_ref"])
         model_config_path = REPO_ROOT / model_config_ref
+        if not model_config_path.exists() and model_config_ref in MOVED_MODEL_CONFIG_REFS:
+            model_config_path = REPO_ROOT / MOVED_MODEL_CONFIG_REFS[model_config_ref]
         assert model_config_path.exists(), (
             f"missing config_ref target for clean ml1m run: {run_manifest_path} -> {model_config_ref}"
         )

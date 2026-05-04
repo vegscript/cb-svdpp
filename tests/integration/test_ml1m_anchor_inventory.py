@@ -1,4 +1,4 @@
-import json
+﻿import json
 from pathlib import Path
 
 import pytest
@@ -7,7 +7,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 
 ML1M_CLEAN_ANCHORS = {
     "biased_mf": {
-        "config": "configs/models/tuned/ml1m_biased_mf_stage0_transfer.yaml",
+        "config": "configs/models/selected/ml1m/ml1m_biased_mf_stage0_transfer.yaml",
         "evidence": (
             "docs/evidence/models/biased_mf/2026-04-21_ml1m_biased_mf_stage0_transfer_clean_multiseed_benchmark.md"
         ),
@@ -18,7 +18,7 @@ ML1M_CLEAN_ANCHORS = {
         ),
     },
     "cb_svdpp": {
-        "config": "configs/models/tuned/ml1m_cb_svdpp_stage0_transfer.yaml",
+        "config": "configs/models/selected/ml1m/ml1m_cb_svdpp_stage0_transfer.yaml",
         "evidence": (
             "docs/evidence/models/cb_svdpp/2026-04-21_ml1m_cb_svdpp_stage0_transfer_clean_multiseed_benchmark.md"
         ),

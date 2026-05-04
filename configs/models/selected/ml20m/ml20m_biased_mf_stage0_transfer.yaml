@@ -1,0 +1,29 @@
+﻿metadata:
+  status: stage0_transfer
+  owner: repo
+  purpose: model_profile
+  provenance:
+    transferred_from: configs/models/selected/ml10m/ml10m_biased_mf_stage0_transfer.yaml
+    transfer_stage: ml20m_stage0
+
+model:
+  name: biased_mf
+  family: matrix_factorization
+  scope: paper_inspired
+
+training:
+  latent_dim: 64
+  epochs: 25
+  learning_rate: 0.0075
+  lambda_b: 0.03
+  lambda_p: 0.03
+  lambda_q: 0.03
+  init_std: 0.1
+  dtype: float32
+  training_backend: auto
+
+notes:
+  - transferred from the clean ml10m stage0 transfer profile
+  - not tuned on ml20m
+  - first ml20m feasibility readout only
+  - not benchmark-final

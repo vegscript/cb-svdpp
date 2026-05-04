@@ -6,6 +6,7 @@ CONTRACT_PATH = (
     / "docs"
     / "evidence"
     / "reproduction"
+    / "current"
     / "2026-05-03_cb_asvdpp_hotpath_remediation_contract_g8.md"
 )
 ROADMAP_PATH = REPO_ROOT / "docs" / "roadmaps" / "2026-05-02_claim_unlock_and_scalability_plan.md"
@@ -55,4 +56,4 @@ def test_cb_asvdpp_hotpath_remediation_contract_has_exact_gates() -> None:
     assert "clean post-change work-buffer benchmark" in matrix
     assert "unlocks no speed claim" in matrix
 
-    assert "CB-ASVD++ hotpath remediation contract evidence" in readme
+    assert "docs/evidence/current_evidence_index.md" in readme

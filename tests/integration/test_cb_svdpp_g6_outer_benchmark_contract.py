@@ -1,4 +1,4 @@
-from pathlib import Path
+﻿from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 CONTRACT_PATH = (
@@ -6,6 +6,7 @@ CONTRACT_PATH = (
     / "docs"
     / "evidence"
     / "reproduction"
+    / "current"
     / "2026-05-03_cb_svdpp_g6_outer_benchmark_contract.md"
 )
 RUN_EVIDENCE_PATH = (
@@ -13,13 +14,14 @@ RUN_EVIDENCE_PATH = (
     / "docs"
     / "evidence"
     / "reproduction"
+    / "current"
     / "2026-05-03_cb_svdpp_g6_outer_benchmark_run.md"
 )
 ROADMAP_PATH = REPO_ROOT / "docs" / "roadmaps" / "2026-05-02_claim_unlock_and_scalability_plan.md"
 READINESS_MATRIX_PATH = REPO_ROOT / "docs" / "publish_readiness_matrix.md"
 README_PATH = REPO_ROOT / "README.md"
-SELECTED_CONFIG = "configs/models/tuned/ml100k_cb_svdpp_g6_validation_selected.yaml"
-SELECTION_EVIDENCE = "docs/evidence/reproduction/2026-05-03_cb_svdpp_g6_validation_grid_run.md"
+SELECTED_CONFIG = "configs/models/selected/ml100k/ml100k_cb_svdpp_g6_validation_selected.yaml"
+SELECTION_EVIDENCE = "docs/evidence/reproduction/current/2026-05-03_cb_svdpp_g6_validation_grid_run.md"
 PROCESSED_MANIFEST = (
     "data/processed/ml100k/ml100k_benchmark_random_v1_explicit_v1_float32_manifest.json"
 )
@@ -79,8 +81,7 @@ def test_g6_outer_benchmark_contract_freezes_inputs_and_claim_boundary() -> None
     assert "benchmark_evidence_ready_g6_outer_anchor_documented" in matrix
     assert "the G6 `cb_svdpp` outer benchmark may be used only as its own" in matrix
 
-    assert "G6 outer benchmark contract evidence" in readme
-    assert "2026-05-03_cb_svdpp_g6_outer_benchmark_contract.md" in readme
+    assert "docs/evidence/current_evidence_index.md" in readme
 
 
 def test_g6_outer_benchmark_run_records_clean_aggregate_without_broad_claims() -> None:
@@ -107,4 +108,4 @@ def test_g6_outer_benchmark_run_records_clean_aggregate_without_broad_claims() -
     assert "pass_for_current_anchor_set_plus_g6_outer_benchmark" in matrix
     assert "test RMSE mean `0.9595668222022953`" in matrix
     assert "paper_faithful_ml100k_v1` anchor rows" in matrix
-    assert "G6 outer benchmark run evidence" in readme
+    assert "docs/evidence/current_evidence_index.md" in readme

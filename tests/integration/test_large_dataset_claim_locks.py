@@ -13,8 +13,12 @@ CAMPAIGN_CONTRACT = (
     / "benchmarking"
     / "2026-04-30_large_cb_svdpp_matched_campaign_contract.md"
 )
-ML10M_CB_SVDPP_MATCHED_PROFILE = REPO_ROOT / "configs" / "models" / "tuned" / "ml10m_cb_svdpp_stage0_transfer.yaml"
-ML20M_CB_SVDPP_MATCHED_PROFILE = REPO_ROOT / "configs" / "models" / "tuned" / "ml20m_cb_svdpp_stage0_transfer.yaml"
+ML10M_CB_SVDPP_MATCHED_PROFILE = (
+    REPO_ROOT / "configs" / "models" / "selected" / "ml10m" / "ml10m_cb_svdpp_stage0_transfer.yaml"
+)
+ML20M_CB_SVDPP_MATCHED_PROFILE = (
+    REPO_ROOT / "configs" / "models" / "archive" / "tuned" / "ml20m_cb_svdpp_stage0_transfer.yaml"
+)
 ML20M_CB_SVDPP_BUDGET_GATE = (
     REPO_ROOT
     / "docs"
@@ -245,7 +249,7 @@ def test_release_marker_is_consistent_across_release_facing_documents() -> None:
         READINESS_MATRIX,
         PROJECT_REPORT,
         REPO_ROOT / "docs" / "evidence" / "release" / "2026-05-02_release_hygiene.md",
-        REPO_ROOT / "docs" / "evidence" / "reproduction" / "2026-05-02_public_clean_import.md",
+        REPO_ROOT / "docs" / "evidence" / "reproduction" / "current" / "2026-05-02_public_clean_import.md",
     )
 
     for path in release_files:

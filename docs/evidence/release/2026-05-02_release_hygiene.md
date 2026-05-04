@@ -9,9 +9,9 @@
 - README states the claim-limited release status and links the canonical claim
   matrix.
 - README links the current public-clean reproduction evidence note:
-  `docs/evidence/reproduction/2026-05-02_public_clean_import.md`.
+  `docs/evidence/reproduction/current/2026-05-02_public_clean_import.md`.
 - README links the post-publication path-hygiene evidence note:
-  `docs/evidence/reproduction/2026-05-03_public_path_hygiene.md`.
+  `docs/evidence/reproduction/current/2026-05-03_public_path_hygiene.md`.
 - The project report states the current release marker.
 - `docs/publish_readiness_matrix.md` keeps the final claim matrix, feasibility
   evidence, and explicit non-claims as the source of truth.

@@ -1,0 +1,29 @@
+metadata:
+  status: template
+  owner: repo
+  purpose: cb_asvdpp_tuning_grid_template
+
+tuning:
+  name: cb_asvdpp_grid_template
+  dataset_short_name: ml100k
+  split_family: benchmark_random_v1
+  selection_stage: template
+  objective: validation_rmse_mean
+  train_ratio: 0.8
+  split_seeds:
+    - 1
+  validation_ratio: 0.1
+  model_seed: 1
+
+base_model_config: configs/models/cb_asvdpp.yaml
+
+candidates:
+  - candidate_id: template_rank032_uc032_ic032_a0050_e001
+    overrides:
+      training:
+        latent_dim: 32
+        epochs: 1
+      clustering:
+        n_user_clusters: 32
+        n_item_clusters: 32
+        alpha: 0.05

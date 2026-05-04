@@ -9,8 +9,8 @@ RELEASE_FACING_DOCS = (
     REPO_ROOT / "docs" / "publish_readiness_matrix.md",
     REPO_ROOT / "docs" / "report" / "project_report.md",
     REPO_ROOT / "docs" / "evidence" / "release" / "2026-05-02_release_hygiene.md",
-    REPO_ROOT / "docs" / "evidence" / "reproduction" / "2026-05-02_public_clean_import.md",
-    REPO_ROOT / "docs" / "evidence" / "reproduction" / "2026-05-03_public_path_hygiene.md",
+    REPO_ROOT / "docs" / "evidence" / "reproduction" / "current" / "2026-05-02_public_clean_import.md",
+    REPO_ROOT / "docs" / "evidence" / "reproduction" / "current" / "2026-05-03_public_path_hygiene.md",
 )
 PUBLIC_MARKDOWN_LINK_DOCS = (
     *RELEASE_FACING_DOCS,
@@ -24,20 +24,61 @@ PUBLIC_MARKDOWN_LINK_DOCS = (
     REPO_ROOT / "docs" / "research_integrity.md",
 )
 REPRODUCTION_EVIDENCE_FILES = (
-    REPO_ROOT / "docs" / "evidence" / "reproduction" / "2026-05-02_public_clean_import.md",
-    REPO_ROOT / "docs" / "evidence" / "reproduction" / "2026-05-03_public_path_hygiene.md",
-    REPO_ROOT / "docs" / "evidence" / "reproduction" / "2026-05-03_cb_svdpp_g6_validation_grid_contract.md",
-    REPO_ROOT / "docs" / "evidence" / "reproduction" / "2026-05-03_cb_svdpp_g6_validation_grid_run.md",
-    REPO_ROOT / "docs" / "evidence" / "reproduction" / "2026-05-03_cb_svdpp_g6_outer_benchmark_contract.md",
-    REPO_ROOT / "docs" / "evidence" / "reproduction" / "2026-05-03_cb_svdpp_g6_outer_benchmark_run.md",
-    REPO_ROOT / "docs" / "evidence" / "reproduction" / "2026-05-03_cb_asvdpp_hotpath_decision_g7.md",
-    REPO_ROOT / "docs" / "evidence" / "reproduction" / "2026-05-03_cb_asvdpp_hotpath_remediation_contract_g8.md",
-    REPO_ROOT / "docs" / "evidence" / "reproduction" / "2026-05-03_cb_asvdpp_hotpath_prechange_baseline_g9.md",
-    REPO_ROOT / "docs" / "evidence" / "reproduction" / "2026-05-03_cb_asvdpp_hotpath_postchange_benchmark_g10.md",
+    REPO_ROOT / "docs" / "evidence" / "reproduction" / "current" / "2026-05-02_public_clean_import.md",
+    REPO_ROOT / "docs" / "evidence" / "reproduction" / "current" / "2026-05-03_public_path_hygiene.md",
     REPO_ROOT
     / "docs"
     / "evidence"
     / "reproduction"
+    / "current"
+    / "2026-05-03_cb_svdpp_g6_validation_grid_contract.md",
+    REPO_ROOT
+    / "docs"
+    / "evidence"
+    / "reproduction"
+    / "current"
+    / "2026-05-03_cb_svdpp_g6_validation_grid_run.md",
+    REPO_ROOT
+    / "docs"
+    / "evidence"
+    / "reproduction"
+    / "current"
+    / "2026-05-03_cb_svdpp_g6_outer_benchmark_contract.md",
+    REPO_ROOT
+    / "docs"
+    / "evidence"
+    / "reproduction"
+    / "current"
+    / "2026-05-03_cb_svdpp_g6_outer_benchmark_run.md",
+    REPO_ROOT
+    / "docs"
+    / "evidence"
+    / "reproduction"
+    / "current"
+    / "2026-05-03_cb_asvdpp_hotpath_decision_g7.md",
+    REPO_ROOT
+    / "docs"
+    / "evidence"
+    / "reproduction"
+    / "current"
+    / "2026-05-03_cb_asvdpp_hotpath_remediation_contract_g8.md",
+    REPO_ROOT
+    / "docs"
+    / "evidence"
+    / "reproduction"
+    / "current"
+    / "2026-05-03_cb_asvdpp_hotpath_prechange_baseline_g9.md",
+    REPO_ROOT
+    / "docs"
+    / "evidence"
+    / "reproduction"
+    / "current"
+    / "2026-05-03_cb_asvdpp_hotpath_postchange_benchmark_g10.md",
+    REPO_ROOT
+    / "docs"
+    / "evidence"
+    / "reproduction"
+    / "current"
     / "2026-05-03_ml20m_cb_svdpp_g11_lower_memory_validation_contract.md",
 )
 EVIDENCE_PATH_RE = re.compile(r"docs/evidence/[A-Za-z0-9_./-]+\.md")
@@ -124,6 +165,8 @@ def test_public_tree_does_not_contain_local_absolute_paths() -> None:
     offenders: list[str] = []
     for relative_path in result.stdout.splitlines():
         path = REPO_ROOT / relative_path
+        if not path.exists():
+            continue
         try:
             content = path.read_text(encoding="utf-8")
         except UnicodeDecodeError:
@@ -136,16 +179,8 @@ def test_public_tree_does_not_contain_local_absolute_paths() -> None:
     assert not sorted(offenders)
 
 
-def test_readme_full_suite_readout_matches_reproduction_evidence() -> None:
+def test_readme_points_to_current_evidence_index_and_scoped_mypy_gate() -> None:
     readme = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
 
-    readme_match = re.search(r"full test suite from the `uv` environment: `(\d+) passed`", readme)
-    assert readme_match is not None
-
-    reproduction_counts = [
-        int(count)
-        for path in REPRODUCTION_EVIDENCE_FILES
-        for count in PASSED_COUNT_RE.findall(path.read_text(encoding="utf-8"))
-    ]
-    assert reproduction_counts
-    assert int(readme_match.group(1)) == max(reproduction_counts)
+    assert "docs/evidence/current_evidence_index.md" in readme
+    assert "The Mypy command is a scoped smoke gate only" in readme
