@@ -34,3 +34,15 @@ def test_evidence_reproduction_structure_is_frozen() -> None:
     assert top_level_dirs == {"current", "archive"}
     assert any((reproduction_dir / "current").glob("*.md"))
     assert any((reproduction_dir / "archive").glob("*.md"))
+
+
+def test_active_configs_do_not_load_archived_profiles() -> None:
+    active_config_dirs = (
+        REPO_ROOT / "configs" / "models" / "selected",
+        REPO_ROOT / "configs" / "experiments" / "tuning" / "active",
+    )
+
+    for config_dir in active_config_dirs:
+        for config_path in config_dir.rglob("*.yaml"):
+            config_text = config_path.read_text(encoding="utf-8")
+            assert "archive/" not in config_text

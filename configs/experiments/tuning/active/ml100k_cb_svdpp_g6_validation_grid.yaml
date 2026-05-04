@@ -10,7 +10,6 @@ tuning:
   selection_stage: g6_validation_grid
   objective: validation_rmse_mean
   promoted_from:
-    config: configs/experiments/tuning/archive/ml100k_cb_svdpp_g5_bounded_alpha_cluster.yaml
     evidence: docs/evidence/reproduction/current/2026-05-02_tune_inner_cache_controls_g5.md
     candidate_id: rank032_uc064_ic064_a000_lr0100_reg0020_e002
   train_ratio: 0.8
