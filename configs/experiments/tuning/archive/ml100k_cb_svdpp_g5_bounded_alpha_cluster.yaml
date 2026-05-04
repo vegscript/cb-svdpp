@@ -15,7 +15,7 @@ tuning:
   validation_ratio: 0.1
   model_seed: 1
 
-base_model_config: configs/models/development/ml100k_cb_svdpp_stage_profile_smoke.yaml
+base_model_config: configs/models/archive/development/ml100k_cb_svdpp_stage_profile_smoke.yaml
 
 candidates:
   - candidate_id: rank032_uc064_ic064_a000_lr0100_reg0020_e002

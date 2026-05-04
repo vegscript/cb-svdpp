@@ -67,6 +67,8 @@ execution provenance; external references should use the paths listed here.
   `configs/models/selected/`
 - Archived tuned, probe, blocked, and negative-resource profiles:
   `configs/models/archive/tuned/`
+- Archived development-only smoke profiles:
+  `configs/models/archive/development/`
 - Active tuning configs:
   `configs/experiments/tuning/active/`
 - Tuning templates:
@@ -79,6 +81,10 @@ execution provenance; external references should use the paths listed here.
 - `configs/models/tuned/ml20m_cb_svdpp_stage0_transfer.yaml` moved to
   `configs/models/archive/tuned/ml20m_cb_svdpp_stage0_transfer.yaml` as
   blocked negative-resource evidence, not as an active selected profile.
+- `configs/models/development/ml100k_cb_svdpp_stage_profile_smoke.yaml` moved
+  to `configs/models/archive/development/ml100k_cb_svdpp_stage_profile_smoke.yaml`
+  as development-only stage-profiling evidence, not as an active selected
+  profile.
 - Current references to moved selected profiles should use
   `configs/models/selected/<dataset>/`.
 - Historical evidence notes may still contain original command strings with

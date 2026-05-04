@@ -25,6 +25,10 @@ Implemented:
 - development-only `ml100k` smoke profile:
   `configs/models/development/ml100k_cb_svdpp_stage_profile_smoke.yaml`
 
+Migration note: this development-only profile is now archived at
+`configs/models/archive/development/ml100k_cb_svdpp_stage_profile_smoke.yaml`.
+The command below is unchanged historical execution provenance.
+
 ## ML100K Smoke Run
 
 Run:
