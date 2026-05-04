@@ -61,15 +61,180 @@ Die Zahl der Seeds muss immer im Readout genannt werden.
 
 ## Tuning Protocol
 
-- Hyperparameter-Tuning auf `ml100k` erfolgt nicht auf `paper_faithful_ml100k_v1`
-  direkt, sondern nur auf `paper_faithful_ml100k_inner_v1`.
-- Die offiziellen aeusseren Test-Folds `u1.test` bis `u5.test` bleiben fuer die
-  finale Bewertung reserviert.
-- Tuning-Runs duerfen keine Test-RMSE aus den aeusseren offiziellen Folds
-  berichten oder fuer Kandidatenwahl verwenden.
-- Wenn aus Laufzeitgruenden nur eine Teilmenge der aeusseren Folds fuer Tuning
-  genutzt wird, muss dies explizit als `stage` oder `development` gekennzeichnet
-  werden.
+Tuning ist eine innere Validierungsprozedur. Es erzeugt keine
+Modellvergleichs-Claims und keine Paper-Reproduktionsclaims. Ein Kandidat darf
+erst dann als benchmark-relevant behandelt werden, wenn nach der Auswahl ein
+separater sauberer Outer-Benchmark mit reserviertem Test-Split dokumentiert
+wurde.
+
+### Scope
+
+Aktiv getuned werden nur die CB-Modelle, bei denen die Cluster- und
+Alpha-Parameter den Ressourcenbedarf und die Rating-Metriken wesentlich
+beeinflussen:
+
+- `cb_svdpp`
+- `cb_asvdpp`
+
+Die Nicht-CB-Modelle `biased_mf`, `svdpp`, `asymmetric_svd` und `asvdpp`
+werden in diesem begrenzten Protokoll nicht neu getuned. Ihre sichtbaren
+Profile bleiben Benchmark- oder Transfer-Profile, bis ein separates
+Tuning-Protokoll fuer diese Modellfamilien beschlossen wird.
+
+### Tuned And Fixed Parameters
+
+Getuned werden in den aktiven Grids nur:
+
+- `training.latent_dim`, wenn das aktive Grid diesen Wert explizit variiert
+- `training.epochs`, als bewusstes Budgetlimit pro Kandidat
+- `clustering.n_user_clusters`
+- `clustering.n_item_clusters`
+- `clustering.alpha`
+- `clustering.algorithm` und `clustering.kmeans_n_init` nur dort, wo sie in
+  der aktiven Config explizit festgeschrieben sind
+
+Fix bleiben, sofern die jeweilige aktive Config sie nicht ueberschreibt:
+
+- Modellfamilie und Basisprofil
+- Split-Familie
+- `model_seed`
+- Learning Rate
+- Regularisierungsterme
+- Dtype
+- Device-Profil
+- Cluster-Induction-Datenbasis
+- Metrikdefinition
+- Manifest- und Cache-Semantik
+
+`R_star` bleibt diagnostisch. Es ist kein Tuning-Ziel, kein Koeffizient und
+keine Auswahlmetrik.
+
+### Active Candidate Grids
+
+Die aktiven Tuning-Konfigurationen liegen ausschliesslich unter
+`configs/experiments/tuning/active/`.
+
+`ml100k_cb_svdpp_g6_validation_grid.yaml`:
+
+- Modell: `cb_svdpp`
+- Dataset: `ml100k`
+- Split-Familie: `benchmark_random_v1`
+- Split Seeds: `1, 2, 3`
+- Validation Ratio: `0.1`
+- Model Seed: `1`
+- Kandidaten: `latent_dim=32`, `epochs=2`, `learning_rate=0.01`,
+  Regularisierungsterme `0.02`
+- Grid: `n_user_clusters`/`n_item_clusters` in `{32, 64, 80, 100}` und
+  `alpha` in `{0.0, 0.025, 0.05}`
+- Status: validation-only selection evidence, nicht Benchmark-Anker
+
+`ml1m_cb_svdpp_stage0.yaml`:
+
+- Modell: `cb_svdpp`
+- Dataset: `ml1m`
+- Split-Familie: `benchmark_random_v1`
+- Split Seeds: `1, 2`
+- Validation Ratio: `0.1`
+- Model Seed: `1`
+- Basisprofil: `configs/models/selected/ml1m/ml1m_cb_svdpp_stage0_transfer.yaml`
+- Kandidaten: `epochs=2`; Cluster/Alpha-Kandidaten genau wie in der aktiven
+  YAML definiert
+- Status: Stage0-Selection, nicht finaler Benchmark-Anker
+
+`ml1m_cb_asvdpp_stage0.yaml`:
+
+- Modell: `cb_asvdpp`
+- Dataset: `ml1m`
+- Split-Familie: `benchmark_random_v1`
+- Split Seeds: `1, 2`
+- Validation Ratio: `0.1`
+- Model Seed: `1`
+- Basisprofil:
+  `configs/models/selected/ml1m/ml1m_cb_asvdpp_stage0_transfer.yaml`
+- Kandidaten: `epochs=2`; Cluster/Alpha-Kandidaten genau wie in der aktiven
+  YAML definiert
+- Status: Stage0-Selection, nicht finaler Benchmark-Anker
+
+`ml20m_cb_svdpp_g11_lower_memory_validation_grid.yaml`:
+
+- Modell: `cb_svdpp`
+- Dataset: `ml20m`
+- Split-Familie: `benchmark_random_v1`
+- Split Seeds: `1, 2`
+- Validation Ratio: `0.1`
+- Model Seed: `1`
+- Kandidaten: `latent_dim` in `{16, 32}`, `epochs=1`,
+  `n_user_clusters`/`n_item_clusters` in `{32, 64}`, `alpha` in `{0.0, 0.025}`,
+  `algorithm=kmeans`, `kmeans_n_init=10`
+- Resource Gate: lokales `local_i5_2500k_24gb` Profil, maximal `80%` RAM
+- Status: blocked/negative-resource reassessment, nicht aktives selected
+  profile und kein Modellvergleichs-Claim
+
+### Validation Split
+
+Alle aktiven Tuning-Grids verwenden:
+
+- `split_family: benchmark_random_v1`
+- `train_ratio: 0.8`
+- `validation_ratio: 0.1`
+- die in der jeweiligen aktiven Config definierten `split_seeds`
+- `model_seed: 1`
+
+Der Test-Split darf waehrend der Kandidatenwahl nicht ausgewertet werden. Falls
+ein Tuning-Lauf technisch trotzdem ein Test-Feld erzeugen koennte, darf dieses
+Feld nicht in die Auswahlregel einfliessen und nicht als Ergebnisclaim
+berichtet werden.
+
+### Selection Rule
+
+Die Kandidatenwahl erfolgt in dieser Reihenfolge:
+
+1. niedrigste mittlere `validation_rmse`
+2. niedrigere `validation_rmse`-Streuung, wenn die Mittelwerte praktisch gleich
+   sind
+3. niedrigere Trainingszeit, wenn Validierungsqualitaet und Stabilitaet keine
+   klare Entscheidung liefern
+4. besserer Memory-/Resource-Status, insbesondere keine Guardrail-Verletzung
+
+Resource Gates sind harte Vorbedingungen, wenn eine aktive Config sie definiert.
+Ein Kandidat, der die dort definierte RAM-Guardrail verletzt, darf nicht durch
+eine bessere Validation-RMSE ausgewaehlt werden.
+
+### Alpha-0 Semantics
+
+`alpha=0` ist ein expliziter Ablationskandidat. Er bedeutet:
+
+- Cluster-Artefakte koennen weiterhin erzeugt und validiert werden
+- der Cluster-Kanal traegt keinen gewichteten Beitrag zur Praediktorformel bei
+- `alpha=0` ist kein Fehlerfall
+- `alpha>0` aktiviert nur den Cluster-Kanal
+- weder `alpha=0` noch `alpha>0` machen einen Run automatisch
+  `cb_claim_eligible`
+
+Ein CB-Claim braucht weiterhin die im Manifest und in den Evidence-Dateien
+geforderten semantischen Nachweise.
+
+### Claim Boundary
+
+Claim-relevant sind nur:
+
+- nachgelagerte Outer-Benchmarks mit reserviertem Test-Split
+- sauber dokumentierte Multi-Seed-Readouts
+- Runs mit Manifest, Config Snapshot, Metrics und cleanem Claim-Kontext
+
+Nicht claim-relevant sind:
+
+- einzelne Tuning-Kandidaten
+- validation-only Selection Runs
+- `alpha=0` Ablationen
+- Resource-Gate-Fehlschlaege
+- blocked/negative-resource Evidence
+- Entwicklungs- oder Stage0-Runs ohne separaten Outer-Benchmark
+
+Negative oder blockierte Runs muessen dokumentiert werden, wenn sie eine
+Richtung disqualifizieren oder den lokalen Ressourcenrahmen begrenzen. Sie
+duerfen aber nicht als schlechtere Modellqualitaet interpretiert werden, wenn
+der Run primaer durch Ressourcenstatus begrenzt war.
 
 ## Reporting Rules
 
