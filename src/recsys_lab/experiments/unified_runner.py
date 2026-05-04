@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 import traceback
-from dataclasses import asdict
+from dataclasses import asdict, dataclass
 from pathlib import Path
 from time import perf_counter
-from typing import Any, cast
+from typing import Any, Callable, cast
 
 import numpy as np
 
@@ -57,6 +57,33 @@ from recsys_lab.utils.manifests import validate_manifest_file
 from recsys_lab.utils.paths import discover_repo_root, repo_path_string
 
 
+@dataclass(frozen=True, slots=True)
+class ExperimentServices:
+    git_snapshot_fn: Callable[[Path], dict[str, Any]]
+    paper_faithful_split_fn: Callable[..., RatingsSplit]
+    inner_validation_split_fn: Callable[..., RatingsSplit]
+
+
+DEFAULT_EXPERIMENT_SERVICES = ExperimentServices(
+    git_snapshot_fn=git_snapshot,
+    paper_faithful_split_fn=official_ml100k_paper_faithful_split,
+    inner_validation_split_fn=official_ml100k_inner_validation_split,
+)
+
+
+def build_experiment_services(
+    *,
+    git_snapshot_fn: Callable[[Path], dict[str, Any]] | None = None,
+    paper_faithful_split_fn: Callable[..., RatingsSplit] | None = None,
+    inner_validation_split_fn: Callable[..., RatingsSplit] | None = None,
+) -> ExperimentServices:
+    return ExperimentServices(
+        git_snapshot_fn=git_snapshot_fn or DEFAULT_EXPERIMENT_SERVICES.git_snapshot_fn,
+        paper_faithful_split_fn=paper_faithful_split_fn or DEFAULT_EXPERIMENT_SERVICES.paper_faithful_split_fn,
+        inner_validation_split_fn=inner_validation_split_fn or DEFAULT_EXPERIMENT_SERVICES.inner_validation_split_fn,
+    )
+
+
 def run_unified_experiment(
     *,
     processed_manifest_path: Path,
@@ -75,8 +102,10 @@ def run_unified_experiment(
     reuse_precomputed_indices: bool = True,
     use_training_index_cache: bool = False,
     use_cluster_artifact_cache: bool = False,
+    services: ExperimentServices | None = None,
 ) -> dict[str, Any]:
     root = (repo_root or discover_repo_root()).resolve()
+    experiment_services = services or DEFAULT_EXPERIMENT_SERVICES
 
     processed_manifest_path = processed_manifest_path.resolve()
     model_config_path = model_config_path.resolve()
@@ -128,7 +157,7 @@ def run_unified_experiment(
     metrics_path = run_dir / "metrics.json"
     stdout_log_path = run_dir / "stdout.log"
     run_manifest_path = run_dir / "run_manifest.json"
-    git = git_snapshot(root)
+    git = experiment_services.git_snapshot_fn(root)
     command_string = command or _default_command_string(
         adapter=adapter,
         processed_manifest_path=processed_manifest_path,
@@ -247,6 +276,7 @@ def run_unified_experiment(
                         requested_split_family=requested_split_family,
                         split_config=split_config,
                         inner_validation_seed=inner_validation_seed,
+                        services=experiment_services,
                     ),
                     use_cache=split_cache_policy.effective_use_cache,
                 )
@@ -540,6 +570,7 @@ def _build_split(
     requested_split_family: str,
     split_config: SplitConfig,
     inner_validation_seed: int | None,
+    services: ExperimentServices,
 ) -> RatingsSplit:
     if requested_split_family == "benchmark_random_v1":
         return random_split_with_train_coverage(
@@ -549,7 +580,7 @@ def _build_split(
             seed=split_config.seed,
         )
     if requested_split_family == "paper_faithful_ml100k_v1":
-        return official_ml100k_paper_faithful_split(
+        return services.paper_faithful_split_fn(
             ratings_data,
             processed_manifest_path=processed_manifest_path,
             fold_index=split_config.seed,
@@ -557,7 +588,7 @@ def _build_split(
     if requested_split_family == "paper_faithful_ml100k_inner_v1":
         if inner_validation_seed is None:
             raise ValueError("inner_validation_seed is required for paper_faithful_ml100k_inner_v1")
-        return official_ml100k_inner_validation_split(
+        return services.inner_validation_split_fn(
             ratings_data,
             processed_manifest_path=processed_manifest_path,
             fold_index=split_config.seed,

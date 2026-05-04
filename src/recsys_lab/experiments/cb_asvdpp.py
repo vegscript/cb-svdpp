@@ -3,16 +3,21 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-import recsys_lab.experiments.unified_runner as unified_runner_module
 from recsys_lab.data.splitters import (
     official_ml100k_inner_validation_split,
     official_ml100k_paper_faithful_split,
 )
 from recsys_lab.experiments.common import SplitConfig, git_snapshot
+from recsys_lab.experiments.unified_runner import build_experiment_services, run_unified_experiment
 from recsys_lab.models.biased_mf import BiasedMFConfig
 from recsys_lab.models.cb_asvdpp import CBASVDppConfig
 from recsys_lab.models.registry import CBASVDppAdapter, validate_model_config_payload
 from recsys_lab.utils.paths import discover_repo_root
+
+
+# Legacy compatibility wrapper only.
+# Do not add experiment lifecycle logic here.
+# All execution must delegate to run_unified_experiment.
 
 
 def _build_cb_asvdpp_config(
@@ -55,32 +60,26 @@ def run_cb_asvdpp_experiment(
     use_training_index_cache: bool = False,
     use_cluster_artifact_cache: bool = False,
 ) -> dict[str, Any]:
-    previous_git_snapshot = unified_runner_module.git_snapshot
-    previous_official_split = unified_runner_module.official_ml100k_paper_faithful_split
-    previous_inner_split = unified_runner_module.official_ml100k_inner_validation_split
-    unified_runner_module.git_snapshot = git_snapshot
-    unified_runner_module.official_ml100k_paper_faithful_split = official_ml100k_paper_faithful_split
-    unified_runner_module.official_ml100k_inner_validation_split = official_ml100k_inner_validation_split
-    try:
-        return unified_runner_module.run_unified_experiment(
-            processed_manifest_path=processed_manifest_path,
-            model_config_path=model_config_path,
-            runtime_config_path=runtime_config_path,
-            device_config_path=device_config_path,
-            split_config=split_config,
-            model_seed=model_seed,
-            repo_root=(repo_root or discover_repo_root()).resolve(),
-            command=command,
-            model_name="cb_asvdpp",
-            split_family=split_family,
-            inner_validation_seed=inner_validation_seed,
-            evaluate_test=evaluate_test,
-            use_split_cache=use_split_cache,
-            reuse_precomputed_indices=reuse_precomputed_indices,
-            use_training_index_cache=use_training_index_cache,
-            use_cluster_artifact_cache=use_cluster_artifact_cache,
-        )
-    finally:
-        unified_runner_module.git_snapshot = previous_git_snapshot
-        unified_runner_module.official_ml100k_paper_faithful_split = previous_official_split
-        unified_runner_module.official_ml100k_inner_validation_split = previous_inner_split
+    return run_unified_experiment(
+        processed_manifest_path=processed_manifest_path,
+        model_config_path=model_config_path,
+        runtime_config_path=runtime_config_path,
+        device_config_path=device_config_path,
+        split_config=split_config,
+        model_seed=model_seed,
+        repo_root=(repo_root or discover_repo_root()).resolve(),
+        command=command,
+        model_name="cb_asvdpp",
+        split_family=split_family,
+        inner_validation_seed=inner_validation_seed,
+        evaluate_test=evaluate_test,
+        use_split_cache=use_split_cache,
+        reuse_precomputed_indices=reuse_precomputed_indices,
+        use_training_index_cache=use_training_index_cache,
+        use_cluster_artifact_cache=use_cluster_artifact_cache,
+        services=build_experiment_services(
+            git_snapshot_fn=git_snapshot,
+            paper_faithful_split_fn=official_ml100k_paper_faithful_split,
+            inner_validation_split_fn=official_ml100k_inner_validation_split,
+        ),
+    )

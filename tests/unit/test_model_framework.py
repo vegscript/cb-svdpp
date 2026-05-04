@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import ast
 import json
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 import pyarrow as pa
@@ -9,6 +11,8 @@ import pyarrow.parquet as pq
 import pytest
 import yaml
 
+import recsys_lab.experiments.cb_asvdpp as cb_asvdpp_experiment
+import recsys_lab.experiments.cb_svdpp as cb_svdpp_experiment
 import recsys_lab.experiments.unified_runner as unified_runner_module
 import recsys_lab.models.cb_asvdpp as cb_asvdpp_module
 from recsys_lab.data.histories import (
@@ -18,9 +22,37 @@ from recsys_lab.data.histories import (
 )
 from recsys_lab.data.processed import RatingsData
 from recsys_lab.experiments.common import SplitConfig
-from recsys_lab.experiments.unified_runner import run_unified_experiment
+from recsys_lab.experiments.unified_runner import build_experiment_services, run_unified_experiment
 from recsys_lab.models.cb_asvdpp import CBASVDppConfig, CBASVDppRecommender
 from recsys_lab.models.registry import MODEL_REGISTRY, build_cb_semantics, validate_model_config_payload
+
+
+LEGACY_EXPERIMENT_WRAPPERS = {
+    "biased_mf.py": "run_biased_mf_experiment",
+    "svdpp.py": "run_svdpp_experiment",
+    "asymmetric_svd.py": "run_asymmetric_svd_experiment",
+    "asvdpp.py": "run_asvdpp_experiment",
+    "cb_svdpp.py": "run_cb_svdpp_experiment",
+    "cb_asvdpp.py": "run_cb_asvdpp_experiment",
+}
+LEGACY_WRAPPER_COMMENT_LINES = [
+    "# Legacy compatibility wrapper only.",
+    "# Do not add experiment lifecycle logic here.",
+    "# All execution must delegate to run_unified_experiment.",
+]
+FORBIDDEN_LEGACY_LIFECYCLE_IMPORT_NAMES = {
+    "PeakMemoryMonitor",
+    "load_or_build_split_cache",
+    "load_ratings_data_from_manifest",
+    "rmse",
+    "write_json",
+}
+FORBIDDEN_LEGACY_LIFECYCLE_IMPORT_MODULES = {
+    "recsys_lab.data.processed",
+    "recsys_lab.experiments.performance",
+    "recsys_lab.experiments.split_cache",
+    "recsys_lab.metrics",
+}
 
 
 def test_model_registry_declares_expected_artifact_requirements() -> None:
@@ -53,6 +85,29 @@ def test_unknown_model_config_key_fails_validation() -> None:
         validate_model_config_payload(payload)
 
 
+def test_legacy_experiment_wrappers_are_static_delegates() -> None:
+    experiments_dir = Path("src/recsys_lab/experiments")
+    for file_name, function_name in LEGACY_EXPERIMENT_WRAPPERS.items():
+        wrapper_path = experiments_dir / file_name
+        source = wrapper_path.read_text(encoding="utf-8")
+        tree = ast.parse(source, filename=str(wrapper_path))
+
+        for comment_line in LEGACY_WRAPPER_COMMENT_LINES:
+            assert comment_line in source, f"{wrapper_path} is missing legacy wrapper guard comment"
+
+        forbidden_imports = _forbidden_legacy_lifecycle_imports(tree)
+        assert forbidden_imports == [], f"{wrapper_path} imports lifecycle-only dependencies: {forbidden_imports}"
+
+        get_fallback_lines = _attribute_call_lines(tree, attr_name="get")
+        assert get_fallback_lines == [], f"{wrapper_path} uses .get(...) fallback calls on lines {get_fallback_lines}"
+
+        _assert_run_function_delegates_to_unified_runner(
+            tree,
+            wrapper_path=wrapper_path,
+            function_name=function_name,
+        )
+
+
 def test_alpha_zero_semantics_disables_cb_claim_eligibility() -> None:
     semantics = build_cb_semantics(0.0)
 
@@ -62,6 +117,50 @@ def test_alpha_zero_semantics_disables_cb_claim_eligibility() -> None:
         "cb_claim_eligible": False,
         "reason": "alpha=0 disables cluster factor contribution",
     }
+
+
+def test_cb_svdpp_wrapper_delegates_with_explicit_services(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    calls: list[dict[str, Any]] = []
+    sentinel = {"delegated": "cb_svdpp"}
+
+    def fake_run_unified_experiment(**kwargs: Any) -> dict[str, Any]:
+        calls.append(kwargs)
+        return sentinel
+
+    monkeypatch.setattr(cb_svdpp_experiment, "run_unified_experiment", fake_run_unified_experiment)
+
+    payload = cb_svdpp_experiment.run_cb_svdpp_experiment(**_legacy_cb_wrapper_kwargs(tmp_path))
+
+    assert payload is sentinel
+    assert len(calls) == 1
+    _assert_common_cb_wrapper_delegation(
+        calls[0],
+        wrapper_module=cb_svdpp_experiment,
+        expected_model_name="cb_svdpp",
+        repo_root=tmp_path.resolve(),
+    )
+
+
+def test_cb_asvdpp_wrapper_delegates_with_explicit_services(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    calls: list[dict[str, Any]] = []
+    sentinel = {"delegated": "cb_asvdpp"}
+
+    def fake_run_unified_experiment(**kwargs: Any) -> dict[str, Any]:
+        calls.append(kwargs)
+        return sentinel
+
+    monkeypatch.setattr(cb_asvdpp_experiment, "run_unified_experiment", fake_run_unified_experiment)
+
+    payload = cb_asvdpp_experiment.run_cb_asvdpp_experiment(**_legacy_cb_wrapper_kwargs(tmp_path))
+
+    assert payload is sentinel
+    assert len(calls) == 1
+    _assert_common_cb_wrapper_delegation(
+        calls[0],
+        wrapper_module=cb_asvdpp_experiment,
+        expected_model_name="cb_asvdpp",
+        repo_root=tmp_path.resolve(),
+    )
 
 
 def test_cb_asvdpp_reuses_supplied_indices(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -191,11 +290,6 @@ def test_unified_runner_writes_alpha_zero_cb_semantics(monkeypatch: pytest.Monke
             "precision": {"default_dtype": "float64", "reference_dtype": "float64"},
         },
     )
-    monkeypatch.setattr(
-        unified_runner_module,
-        "git_snapshot",
-        lambda root: {"commit": "abcdef0", "branch": "test", "dirty": False},
-    )
     monkeypatch.setattr(unified_runner_module, "validate_manifest_file", lambda *args, **kwargs: None)
 
     payload = run_unified_experiment(
@@ -212,6 +306,9 @@ def test_unified_runner_writes_alpha_zero_cb_semantics(monkeypatch: pytest.Monke
         use_split_cache=False,
         use_training_index_cache=False,
         use_cluster_artifact_cache=False,
+        services=build_experiment_services(
+            git_snapshot_fn=lambda _root: {"commit": "abcdef0", "branch": "test", "dirty": False},
+        ),
     )
 
     run_manifest = json.loads(Path(payload["run_manifest"]).read_text(encoding="utf-8"))
@@ -221,6 +318,105 @@ def test_unified_runner_writes_alpha_zero_cb_semantics(monkeypatch: pytest.Monke
     assert run_manifest["cb_semantics"]["cb_claim_eligible"] is False
     assert metrics["cb_semantics"]["cluster_contribution_enabled"] is False
     assert metrics["model"]["cb_semantics"]["reason"] == "alpha=0 disables cluster factor contribution"
+
+
+def _forbidden_legacy_lifecycle_imports(tree: ast.AST) -> list[str]:
+    forbidden: set[str] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ImportFrom):
+            module_name = node.module or ""
+            if module_name in FORBIDDEN_LEGACY_LIFECYCLE_IMPORT_MODULES:
+                forbidden.add(module_name)
+            for alias in node.names:
+                imported_name = alias.name
+                bound_name = alias.asname or imported_name
+                if imported_name in FORBIDDEN_LEGACY_LIFECYCLE_IMPORT_NAMES:
+                    forbidden.add(imported_name)
+                if bound_name in FORBIDDEN_LEGACY_LIFECYCLE_IMPORT_NAMES:
+                    forbidden.add(bound_name)
+        elif isinstance(node, ast.Import):
+            for alias in node.names:
+                imported_module = alias.name
+                if imported_module in FORBIDDEN_LEGACY_LIFECYCLE_IMPORT_MODULES:
+                    forbidden.add(imported_module)
+    return sorted(forbidden)
+
+
+def _attribute_call_lines(tree: ast.AST, *, attr_name: str) -> list[int]:
+    return sorted(
+        {
+            node.lineno
+            for node in ast.walk(tree)
+            if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) and node.func.attr == attr_name
+        }
+    )
+
+
+def _assert_run_function_delegates_to_unified_runner(
+    tree: ast.Module,
+    *,
+    wrapper_path: Path,
+    function_name: str,
+) -> None:
+    functions = [
+        node
+        for node in tree.body
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name == function_name
+    ]
+    assert len(functions) == 1, f"{wrapper_path} must define exactly one {function_name}"
+
+    function = functions[0]
+    assert len(function.body) == 1, f"{wrapper_path}:{function_name} must only return unified runner delegation"
+    statement = function.body[0]
+    assert isinstance(statement, ast.Return), f"{wrapper_path}:{function_name} must return unified runner payload"
+    assert isinstance(statement.value, ast.Call), f"{wrapper_path}:{function_name} must call run_unified_experiment"
+    assert isinstance(statement.value.func, ast.Name), f"{wrapper_path}:{function_name} must call a direct function"
+    assert statement.value.func.id == "run_unified_experiment", (
+        f"{wrapper_path}:{function_name} must delegate to run_unified_experiment"
+    )
+
+
+def _legacy_cb_wrapper_kwargs(tmp_path: Path) -> dict[str, Any]:
+    return {
+        "processed_manifest_path": tmp_path / "processed_manifest.json",
+        "model_config_path": tmp_path / "model.yaml",
+        "runtime_config_path": tmp_path / "runtime.yaml",
+        "device_config_path": tmp_path / "device.yaml",
+        "split_config": SplitConfig(train_ratio=0.7, validation_ratio=0.1, seed=13),
+        "model_seed": 17,
+        "repo_root": tmp_path,
+        "command": "legacy-wrapper-test",
+        "split_family": "paper_faithful_ml100k_v1",
+        "inner_validation_seed": 19,
+        "evaluate_test": False,
+        "use_split_cache": False,
+        "reuse_precomputed_indices": False,
+        "use_training_index_cache": True,
+        "use_cluster_artifact_cache": True,
+    }
+
+
+def _assert_common_cb_wrapper_delegation(
+    call: dict[str, Any],
+    *,
+    wrapper_module: Any,
+    expected_model_name: str,
+    repo_root: Path,
+) -> None:
+    services = call["services"]
+    assert isinstance(services, unified_runner_module.ExperimentServices)
+    assert services.git_snapshot_fn is wrapper_module.git_snapshot
+    assert services.paper_faithful_split_fn is wrapper_module.official_ml100k_paper_faithful_split
+    assert services.inner_validation_split_fn is wrapper_module.official_ml100k_inner_validation_split
+    assert call["model_name"] == expected_model_name
+    assert call["repo_root"] == repo_root
+    assert call["split_family"] == "paper_faithful_ml100k_v1"
+    assert call["inner_validation_seed"] == 19
+    assert call["evaluate_test"] is False
+    assert call["use_split_cache"] is False
+    assert call["reuse_precomputed_indices"] is False
+    assert call["use_training_index_cache"] is True
+    assert call["use_cluster_artifact_cache"] is True
 
 
 def _write_toy_processed_dataset(tmp_path: Path) -> Path:
