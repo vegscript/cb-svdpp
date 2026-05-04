@@ -41,7 +41,7 @@ from recsys_lab.experiments.common import (
 from recsys_lab.experiments.performance import PeakMemoryMonitor, StageProfiler, build_system_metrics
 from recsys_lab.experiments.runtime import resolve_runtime_threading_config, runtime_execution_context
 from recsys_lab.experiments.split_cache import SplitCacheResult, load_or_build_split_cache, resolve_split_cache_policy
-from recsys_lab.metrics import rmse
+from recsys_lab.metrics import rating_error_metrics
 from recsys_lab.models.cb_asvdpp import CBASVDppRecommender
 from recsys_lab.models.cb_svdpp import CBSVDppRecommender
 from recsys_lab.models.config_schemas import ClusteringSchema, ModelProfileSchema
@@ -419,19 +419,16 @@ def run_unified_experiment(
                     ),
                 },
                 "system_metrics": system_metrics,
-                "metrics": {
-                    "train_rmse": rmse(split.train.ratings, train_predictions),
-                    "validation_rmse": (
-                        None
-                        if split.validation is None or validation_predictions is None
-                        else rmse(split.validation.ratings, validation_predictions)
-                    ),
-                    "test_rmse": (
-                        None
-                        if not evaluate_test or test_predictions is None
-                        else rmse(split.test.ratings, test_predictions)
-                    ),
-                },
+                "metrics": _build_rating_metrics_payload(
+                    train_ratings=split.train.ratings,
+                    train_predictions=train_predictions,
+                    validation_ratings=None if split.validation is None else split.validation.ratings,
+                    validation_predictions=validation_predictions,
+                    test_ratings=split.test.ratings if evaluate_test else None,
+                    test_predictions=test_predictions,
+                    rating_min=ratings_data.rating_min,
+                    rating_max=ratings_data.rating_max,
+                ),
             }
             if cb_semantics is not None:
                 metrics_payload["cb_semantics"] = cb_semantics
@@ -596,6 +593,97 @@ def _build_split(
             inner_seed=inner_validation_seed,
         )
     raise ValueError(f"unsupported split family: {requested_split_family}")
+
+
+def _prefixed_rating_metrics(
+    prefix: str,
+    ratings: np.ndarray,
+    predictions: np.ndarray,
+    *,
+    rating_min: float,
+    rating_max: float,
+) -> dict[str, float]:
+    return {
+        f"{prefix}_{metric_name}": metric_value
+        for metric_name, metric_value in rating_error_metrics(
+            ratings,
+            predictions,
+            rating_min=rating_min,
+            rating_max=rating_max,
+        ).items()
+    }
+
+
+def _build_rating_metrics_payload(
+    *,
+    train_ratings: np.ndarray,
+    train_predictions: np.ndarray,
+    validation_ratings: np.ndarray | None,
+    validation_predictions: np.ndarray | None,
+    test_ratings: np.ndarray | None,
+    test_predictions: np.ndarray | None,
+    rating_min: float,
+    rating_max: float,
+) -> dict[str, Any]:
+    train_metrics = rating_error_metrics(
+        train_ratings,
+        train_predictions,
+        rating_min=rating_min,
+        rating_max=rating_max,
+    )
+    payload: dict[str, Any] = {
+        "train": train_metrics,
+        **_prefixed_rating_metrics(
+            "train",
+            train_ratings,
+            train_predictions,
+            rating_min=rating_min,
+            rating_max=rating_max,
+        ),
+    }
+
+    if validation_ratings is None or validation_predictions is None:
+        payload["validation"] = None
+        payload["validation_rmse"] = None
+    else:
+        validation_metrics = rating_error_metrics(
+            validation_ratings,
+            validation_predictions,
+            rating_min=rating_min,
+            rating_max=rating_max,
+        )
+        payload["validation"] = validation_metrics
+        payload.update(
+            _prefixed_rating_metrics(
+                "validation",
+                validation_ratings,
+                validation_predictions,
+                rating_min=rating_min,
+                rating_max=rating_max,
+            )
+        )
+
+    if test_ratings is None or test_predictions is None:
+        payload["test"] = None
+        payload["test_rmse"] = None
+    else:
+        test_metrics = rating_error_metrics(
+            test_ratings,
+            test_predictions,
+            rating_min=rating_min,
+            rating_max=rating_max,
+        )
+        payload["test"] = test_metrics
+        payload.update(
+            _prefixed_rating_metrics(
+                "test",
+                test_ratings,
+                test_predictions,
+                rating_min=rating_min,
+                rating_max=rating_max,
+            )
+        )
+    return payload
 
 
 def _default_command_string(

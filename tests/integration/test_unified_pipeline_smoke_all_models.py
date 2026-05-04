@@ -53,6 +53,24 @@ EXPECTED_AVAILABLE_ARTIFACTS = {
     ],
 }
 
+EXPECTED_RATING_METRIC_SUFFIXES = (
+    "rmse",
+    "mae",
+    "residual_mean",
+    "residual_std",
+    "abs_error_p50",
+    "abs_error_p90",
+    "abs_error_p95",
+    "abs_error_max",
+    "prediction_mean",
+    "prediction_std",
+    "prediction_min",
+    "prediction_max",
+    "prediction_below_rating_min_rate",
+    "prediction_above_rating_max_rate",
+    "prediction_out_of_range_rate",
+)
+
 
 def _write_text(path: Path, text: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -256,6 +274,19 @@ def test_unified_pipeline_smoke_trains_all_models_without_model_mocks(tmp_path: 
         assert metrics["metrics"]["train_rmse"] is not None
         assert metrics["metrics"]["validation_rmse"] is not None
         assert metrics["metrics"]["test_rmse"] is not None
+        for split_name in ("train", "validation", "test"):
+            split_metrics = metrics["metrics"][split_name]
+            assert isinstance(split_metrics, dict)
+            assert split_metrics["rmse"] == metrics["metrics"][f"{split_name}_rmse"]
+            assert split_metrics["mae"] == metrics["metrics"][f"{split_name}_mae"]
+            assert split_metrics["abs_error_p90"] == metrics["metrics"][f"{split_name}_abs_error_p90"]
+            assert (
+                split_metrics["prediction_out_of_range_rate"]
+                == metrics["metrics"][f"{split_name}_prediction_out_of_range_rate"]
+            )
+            for metric_suffix in EXPECTED_RATING_METRIC_SUFFIXES:
+                assert metrics["metrics"][f"{split_name}_{metric_suffix}"] is not None
+                assert split_metrics[metric_suffix] is not None
         assert metrics["profiling"]["stage_count"] > 0
         assert "split" in metrics["caches"]
         assert metrics["model"]["requirements"]["required_artifacts"] == EXPECTED_REQUIRED_ARTIFACTS[model_name]
