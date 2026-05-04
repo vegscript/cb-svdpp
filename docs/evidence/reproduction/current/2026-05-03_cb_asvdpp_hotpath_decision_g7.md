@@ -1,4 +1,4 @@
-﻿# CB-ASVD++ Hotpath Decision G7
+# CB-ASVD++ Hotpath Decision G7
 
 - date: `2026-05-03`
 - status: `pass_for_hotpath_prioritization_not_remediation`

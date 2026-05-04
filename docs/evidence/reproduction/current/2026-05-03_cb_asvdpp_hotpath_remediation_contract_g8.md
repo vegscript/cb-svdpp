@@ -1,4 +1,4 @@
-﻿# CB-ASVD++ Hotpath Remediation Contract G8
+# CB-ASVD++ Hotpath Remediation Contract G8
 
 - date: `2026-05-03`
 - status: `approved_for_exact_remediation_contract`

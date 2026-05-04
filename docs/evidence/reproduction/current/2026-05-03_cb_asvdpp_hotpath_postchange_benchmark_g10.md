@@ -1,4 +1,4 @@
-﻿# CB-ASVD++ Hotpath Post-Change Benchmark G10
+# CB-ASVD++ Hotpath Post-Change Benchmark G10
 
 - date: `2026-05-03`
 - status: `pass_for_exact_workbuffer_remediation_context`

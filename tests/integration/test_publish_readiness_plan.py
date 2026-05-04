@@ -1,4 +1,4 @@
-﻿from pathlib import Path
+from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 READINESS_MATRIX = REPO_ROOT / "docs" / "publish_readiness_matrix.md"

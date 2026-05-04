@@ -1,4 +1,4 @@
-﻿# CB-ASVD++ Hotpath Pre-Change Baseline G9
+# CB-ASVD++ Hotpath Pre-Change Baseline G9
 
 - date: `2026-05-03`
 - status: `pass_for_clean_prechange_baseline`

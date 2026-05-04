@@ -1,4 +1,4 @@
-﻿# CB-SVD++ Hot-Path Remediation G3
+# CB-SVD++ Hot-Path Remediation G3
 
 - date: `2026-05-02`
 - status: `pass_for_cb_svdpp_workbuffer_candidate`

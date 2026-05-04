@@ -1,4 +1,4 @@
-﻿# Tune-Inner Cache Controls And Bounded CB-SVD++ Selection G5
+# Tune-Inner Cache Controls And Bounded CB-SVD++ Selection G5
 
 - date: `2026-05-02`
 - status: `pass_for_bounded_validation_only_selection_probe`

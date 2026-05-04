@@ -1,4 +1,4 @@
-﻿# Publish Readiness Matrix
+# Publish Readiness Matrix
 
 - last_assessed: `2026-05-03`
 - canonical_plan: `docs/project_master_plan.md`

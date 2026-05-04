@@ -1,4 +1,4 @@
-﻿# Claim Unlock And Scalability Plan
+# Claim Unlock And Scalability Plan
 
 - date: `2026-05-02`
 - governed_by: `docs/project_master_plan.md`
