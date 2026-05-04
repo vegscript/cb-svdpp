@@ -112,6 +112,28 @@
         }
       }
     },
+    "cb_semantics": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["alpha", "cluster_contribution_enabled", "cb_claim_eligible", "reason"],
+      "properties": {
+        "alpha": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "cluster_contribution_enabled": {
+          "type": "boolean"
+        },
+        "cb_claim_eligible": {
+          "type": "boolean"
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
     "runtime": {
       "type": "object",
       "additionalProperties": false,

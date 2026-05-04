@@ -7,6 +7,7 @@ import pyarrow.parquet as pq
 from recsys_lab.data.splitters import RatingsSplit
 from recsys_lab.experiments.cb_svdpp import run_cb_svdpp_experiment
 from recsys_lab.experiments.common import SplitConfig
+from tests.support.model_configs import model_config_yaml
 
 
 def _write_text(path: Path, text: str) -> None:
@@ -30,14 +31,31 @@ def _prepare_synthetic_repo(tmp_path: Path, actual_repo_root: Path) -> tuple[Pat
 
     _write_text(
         repo_root / "configs" / "models" / "cb_svdpp.yaml",
-        "model:\n  name: cb_svdpp\n  scope: paper_inspired\ntraining:\n"
-        "  latent_dim: 8\n  epochs: 8\n  learning_rate: 0.02\n"
-        "  lambda_b: 0.01\n  lambda_p: 0.01\n  lambda_q: 0.01\n"
-        "  lambda_y: 0.01\n  lambda_pC: 0.01\n  lambda_qC: 0.01\n"
-        "  lambda_yC: 0.01\n  init_std: 0.05\n  dtype: float32\n"
-        "  implicit_policy: ratings_as_implicit\nclustering:\n"
-        "  n_user_clusters: 2\n  n_item_clusters: 2\n  alpha: 0.2\n"
-        "  algorithm: kmeans\n  kmeans_n_init: 5\n",
+        model_config_yaml(
+            "cb_svdpp",
+            training={
+                "latent_dim": 8,
+                "epochs": 8,
+                "learning_rate": 0.02,
+                "lambda_b": 0.01,
+                "lambda_p": 0.01,
+                "lambda_q": 0.01,
+                "lambda_y": 0.01,
+                "lambda_pC": 0.01,
+                "lambda_qC": 0.01,
+                "lambda_yC": 0.01,
+                "init_std": 0.05,
+                "dtype": "float32",
+                "implicit_policy": "ratings_as_implicit",
+            },
+            clustering={
+                "n_user_clusters": 2,
+                "n_item_clusters": 2,
+                "alpha": 0.2,
+                "algorithm": "kmeans",
+                "kmeans_n_init": 5,
+            },
+        ),
     )
     _write_text(
         repo_root / "configs" / "runtime" / "base.yaml",
@@ -133,13 +151,13 @@ def test_run_cb_svdpp_experiment_writes_valid_run_artifacts(tmp_path: Path, monk
     assert metrics["profiling"]["stage_count"] == len(stage_names)
     assert metrics["profiling"]["total_profiled_wall_clock_seconds"] > 0.0
     assert {
-        "data_load",
-        "split_resolution",
-        "config_build",
-        "cluster_induction",
-        "training_index_resolution",
-        "user_cluster_history_build",
-        "model_initialization",
+            "data_load",
+            "split_resolution",
+            "config_build",
+            "cluster_induction",
+            "user_history_index_resolution",
+            "user_cluster_history_build",
+            "model_initialization",
         "main_training",
         "inference_train",
         "inference_validation",
@@ -194,8 +212,8 @@ def test_run_cb_svdpp_cluster_artifact_cache_hits_on_second_run(tmp_path: Path, 
     first_metrics = json.loads((Path(first_payload["run_dir"]) / "metrics.json").read_text(encoding="utf-8"))
     second_metrics = json.loads((Path(second_payload["run_dir"]) / "metrics.json").read_text(encoding="utf-8"))
 
-    assert "--processed-manifest" not in first_manifest["command"]
-    assert "data/processed/ml_latest_small/toy_manifest.json" in first_manifest["command"]
+    assert "recsys-lab train --model cb_svdpp" in first_manifest["command"]
+    assert "--processed-manifest data/processed/ml_latest_small/toy_manifest.json" in first_manifest["command"]
     assert "--train-ratio 0.5" in first_manifest["command"]
     assert "--validation-ratio 0.25" in first_manifest["command"]
     assert "--training-index-cache" in first_manifest["command"]

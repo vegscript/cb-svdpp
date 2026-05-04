@@ -153,23 +153,27 @@ def resolve_runtime_dtype(
     device_config_payload: dict[str, Any],
     model_config_payload: dict[str, Any],
 ) -> str:
-    training = model_config_payload.get("training", {})
+    training = model_config_payload["training"]
+    if not isinstance(training, dict):
+        raise TypeError("model config field 'training' must be a mapping")
     if "dtype" in training:
         return str(training["dtype"])
 
-    device_precision = device_config_payload.get("precision", {})
+    device_precision = device_config_payload["precision"]
+    if not isinstance(device_precision, dict):
+        raise TypeError("device config field 'precision' must be a mapping")
     if "default_dtype" in device_precision:
         return str(device_precision["default_dtype"])
 
-    runtime = runtime_config_payload.get("runtime", {})
-    precision_profiles = runtime_config_payload.get("precision_profiles", {})
-    default_profile = str(runtime.get("default_precision_profile", "performance_float32"))
-    if default_profile in precision_profiles:
-        payload = precision_profiles[default_profile]
-        if "dtype" in payload:
-            return str(payload["dtype"])
-
-    raise ValueError("unable to resolve runtime dtype from runtime/device/model configs")
+    runtime = runtime_config_payload["runtime"]
+    precision_profiles = runtime_config_payload["precision_profiles"]
+    if not isinstance(runtime, dict) or not isinstance(precision_profiles, dict):
+        raise TypeError("runtime config fields 'runtime' and 'precision_profiles' must be mappings")
+    default_profile = str(runtime["default_precision_profile"])
+    payload = precision_profiles[default_profile]
+    if not isinstance(payload, dict):
+        raise TypeError("runtime precision profile must be a mapping")
+    return str(payload["dtype"])
 
 
 def write_json(path: Path, payload: dict[str, Any]) -> None:

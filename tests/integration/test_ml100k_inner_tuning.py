@@ -8,6 +8,7 @@ from recsys_lab.experiments.ml100k_inner_tuning import (
     run_inner_tuning,
     run_ml100k_inner_tuning,
 )
+from tests.support.model_configs import model_config_yaml
 
 
 def _write_text(path: Path, text: str, *, encoding: str = "utf-8") -> None:
@@ -46,9 +47,20 @@ def _prepare_synthetic_tuning_repo(
 
     _write_text(
         model_config_path,
-        "metadata:\n  status: draft\nmodel:\n  name: biased_mf\n  scope: paper_inspired\ntraining:\n"
-        "  latent_dim: 50\n  epochs: 20\n  learning_rate: 0.01\n  lambda_b: 0.02\n"
-        "  lambda_p: 0.02\n  lambda_q: 0.02\n  dtype: float32\n",
+        model_config_yaml(
+            "biased_mf",
+            training={
+                "latent_dim": 50,
+                "epochs": 20,
+                "learning_rate": 0.01,
+                "lambda_b": 0.02,
+                "lambda_p": 0.02,
+                "lambda_q": 0.02,
+                "init_std": 0.05,
+                "dtype": "float32",
+                "training_backend": "auto",
+            },
+        ),
     )
     _write_text(
         runtime_config_path,
@@ -394,9 +406,22 @@ def test_run_ml100k_inner_tuning_passes_split_cache_override_to_supported_models
     model_config_path = repo_root / "configs" / "models" / "svdpp.yaml"
     _write_text(
         model_config_path,
-        "metadata:\n  status: draft\nmodel:\n  name: svdpp\n  scope: paper_inspired\ntraining:\n"
-        "  latent_dim: 50\n  epochs: 20\n  learning_rate: 0.01\n  lambda_b: 0.02\n"
-        "  lambda_p: 0.02\n  lambda_q: 0.02\n  lambda_y: 0.02\n  dtype: float32\n",
+        model_config_yaml(
+            "svdpp",
+            training={
+                "latent_dim": 50,
+                "epochs": 20,
+                "learning_rate": 0.01,
+                "lambda_b": 0.02,
+                "lambda_p": 0.02,
+                "lambda_q": 0.02,
+                "lambda_y": 0.02,
+                "init_std": 0.05,
+                "dtype": "float32",
+                "training_backend": "auto",
+                "implicit_policy": "ratings_as_implicit",
+            },
+        ),
     )
     _write_text(
         tuning_config_path,
@@ -511,8 +536,9 @@ def test_run_ml100k_inner_tuning_passes_split_cache_override_to_supported_models
     assert observed_training_index_cache == [True, True]
 
 
-def test_run_ml100k_inner_tuning_rejects_explicit_split_cache_override_for_unsupported_models(
+def test_run_ml100k_inner_tuning_passes_split_cache_override_to_biased_mf(
     tmp_path: Path,
+    monkeypatch,
 ) -> None:
     actual_repo_root = Path(__file__).resolve().parents[2]
     (
@@ -523,15 +549,93 @@ def test_run_ml100k_inner_tuning_rejects_explicit_split_cache_override_for_unsup
         device_config_path,
     ) = _prepare_synthetic_tuning_repo(tmp_path, actual_repo_root)
 
-    with pytest.raises(ValueError, match="explicit split-cache override"):
-        run_ml100k_inner_tuning(
-            tuning_config_path=tuning_config_path,
-            processed_manifest_path=processed_manifest_path,
-            runtime_config_path=runtime_config_path,
-            device_config_path=device_config_path,
-            use_split_cache=True,
-            repo_root=repo_root,
+    monkeypatch.setattr(
+        "recsys_lab.experiments.ml100k_inner_tuning.git_snapshot",
+        lambda _repo_root: {"commit": "abcdef1234567", "branch": "main", "dirty": False},
+    )
+    observed_split_cache: list[bool | None] = []
+
+    def _fake_runner(**kwargs):
+        observed_split_cache.append(kwargs.get("use_split_cache"))
+        fold_index = int(kwargs["split_config"].seed)
+        run_id = f"2026-04-13T50000{len(observed_split_cache)}Z_ml100k_biased_mf_local_test_s001"
+        run_dir = repo_root / "artifacts" / "runs" / run_id
+        run_dir.mkdir(parents=True, exist_ok=True)
+        metrics_path = run_dir / "metrics.json"
+        config_snapshot_path = run_dir / "config_snapshot.yaml"
+        stdout_log_path = run_dir / "stdout.log"
+        run_manifest_path = run_dir / "run_manifest.json"
+        _write_text(config_snapshot_path, "candidate: test\n")
+        _write_text(stdout_log_path, f"run_id={run_id}\n")
+        _write_text(
+            metrics_path,
+            json.dumps(
+                {
+                    "run_id": run_id,
+                    "metrics": {
+                        "train_rmse": 0.80,
+                        "validation_rmse": 0.90 + fold_index * 0.001,
+                        "test_rmse": None,
+                    },
+                    "timing": {"training_wall_clock_seconds": 10.0 + fold_index},
+                },
+                indent=2,
+            ),
         )
+        _write_text(
+            run_manifest_path,
+            json.dumps(
+                {
+                    "manifest_version": "v1",
+                    "kind": "run_manifest",
+                    "generated_at_utc": "2026-04-13T500000Z",
+                    "run_id": run_id,
+                    "status": "completed",
+                    "command": "recsys-lab tune-inner --synthetic-split-cache",
+                    "cwd": ".",
+                    "git": {"commit": "abcdef1234567", "branch": "main", "dirty": False},
+                    "dataset": {
+                        "short_name": "ml100k",
+                        "split_family": "paper_faithful_ml100k_inner_v1",
+                    },
+                    "model": {
+                        "name": "biased_mf",
+                        "scope": "paper_inspired",
+                        "config_ref": str(Path(kwargs["model_config_path"]).relative_to(repo_root)).replace("\\", "/"),
+                    },
+                    "runtime": {
+                        "device_profile": "local_test",
+                        "python_version": "3.11.9",
+                        "dtype": "float32",
+                        "threading": {"omp_num_threads": 1, "blas_threads": 1},
+                    },
+                    "seeds": [1],
+                    "artifacts": {
+                        "config_snapshot": str(config_snapshot_path.relative_to(repo_root)).replace("\\", "/"),
+                        "metrics": str(metrics_path.relative_to(repo_root)).replace("\\", "/"),
+                        "stdout_log": str(stdout_log_path.relative_to(repo_root)).replace("\\", "/"),
+                    },
+                },
+                indent=2,
+            ),
+        )
+        return {"run_manifest": str(run_manifest_path)}
+
+    monkeypatch.setattr(
+        "recsys_lab.experiments.ml100k_inner_tuning._runner_for_model",
+        lambda _model_name: _fake_runner,
+    )
+
+    run_ml100k_inner_tuning(
+        tuning_config_path=tuning_config_path,
+        processed_manifest_path=processed_manifest_path,
+        runtime_config_path=runtime_config_path,
+        device_config_path=device_config_path,
+        use_split_cache=True,
+        repo_root=repo_root,
+    )
+
+    assert observed_split_cache == [True, True, True, True]
 
 
 def test_run_ml100k_inner_tuning_rejects_unsupported_cache_controls(
@@ -583,27 +687,31 @@ def test_run_ml100k_inner_tuning_supports_cb_svdpp_and_counts_cluster_time(
     model_config_path = repo_root / "configs" / "models" / "cb_svdpp.yaml"
     _write_text(
         model_config_path,
-        "metadata:\n"
-        "  status: draft\n"
-        "model:\n"
-        "  name: cb_svdpp\n"
-        "  scope: paper_inspired\n"
-        "training:\n"
-        "  latent_dim: 64\n"
-        "  epochs: 2\n"
-        "  learning_rate: 0.0075\n"
-        "  lambda_b: 0.025\n"
-        "  lambda_p: 0.025\n"
-        "  lambda_q: 0.025\n"
-        "  lambda_y: 0.025\n"
-        "  lambda_pC: 0.025\n"
-        "  lambda_qC: 0.025\n"
-        "  lambda_yC: 0.025\n"
-        "  dtype: float32\n"
-        "clustering:\n"
-        "  n_user_clusters: 80\n"
-        "  n_item_clusters: 80\n"
-        "  alpha: 0.10\n",
+        model_config_yaml(
+            "cb_svdpp",
+            training={
+                "latent_dim": 64,
+                "epochs": 2,
+                "learning_rate": 0.0075,
+                "lambda_b": 0.025,
+                "lambda_p": 0.025,
+                "lambda_q": 0.025,
+                "lambda_y": 0.025,
+                "lambda_pC": 0.025,
+                "lambda_qC": 0.025,
+                "lambda_yC": 0.025,
+                "init_std": 0.05,
+                "dtype": "float32",
+                "implicit_policy": "ratings_as_implicit",
+            },
+            clustering={
+                "n_user_clusters": 80,
+                "n_item_clusters": 80,
+                "alpha": 0.10,
+                "algorithm": "kmeans",
+                "kmeans_n_init": 5,
+            },
+        ),
     )
     _write_text(
         tuning_config_path,
@@ -616,6 +724,7 @@ def test_run_ml100k_inner_tuning_supports_cb_svdpp_and_counts_cluster_time(
         "  split_seeds:\n"
         "    - 1\n"
         "    - 2\n"
+        "  train_ratio: 0.8\n"
         "  validation_ratio: 0.1\n"
         "  model_seed: 1\n"
         "base_model_config: configs/models/cb_svdpp.yaml\n"
@@ -794,30 +903,34 @@ def test_run_inner_tuning_supports_ml1m_cb_asvdpp_and_counts_cluster_time(
     model_config_path = repo_root / "configs" / "models" / "cb_asvdpp.yaml"
     _write_text(
         model_config_path,
-        "metadata:\n"
-        "  status: draft\n"
-        "model:\n"
-        "  name: cb_asvdpp\n"
-        "  scope: paper_inspired\n"
-        "training:\n"
-        "  latent_dim: 64\n"
-        "  epochs: 2\n"
-        "  learning_rate: 0.0075\n"
-        "  lambda_b: 0.025\n"
-        "  lambda_p: 0.025\n"
-        "  lambda_q: 0.025\n"
-        "  lambda_x: 0.025\n"
-        "  lambda_y: 0.025\n"
-        "  lambda_pC: 0.025\n"
-        "  lambda_qC: 0.025\n"
-        "  lambda_xC: 0.025\n"
-        "  lambda_yC: 0.025\n"
-        "  dtype: float32\n"
-        "  residual_weight_contract: detached\n"
-        "clustering:\n"
-        "  n_user_clusters: 80\n"
-        "  n_item_clusters: 80\n"
-        "  alpha: 0.10\n",
+        model_config_yaml(
+            "cb_asvdpp",
+            training={
+                "latent_dim": 64,
+                "epochs": 2,
+                "learning_rate": 0.0075,
+                "lambda_b": 0.025,
+                "lambda_p": 0.025,
+                "lambda_q": 0.025,
+                "lambda_x": 0.025,
+                "lambda_y": 0.025,
+                "lambda_pC": 0.025,
+                "lambda_qC": 0.025,
+                "lambda_xC": 0.025,
+                "lambda_yC": 0.025,
+                "init_std": 0.05,
+                "dtype": "float32",
+                "implicit_policy": "ratings_as_implicit",
+                "residual_weight_contract": "detached",
+            },
+            clustering={
+                "n_user_clusters": 80,
+                "n_item_clusters": 80,
+                "alpha": 0.10,
+                "algorithm": "kmeans",
+                "kmeans_n_init": 5,
+            },
+        ),
     )
     _write_text(
         tuning_config_path,
@@ -830,6 +943,7 @@ def test_run_inner_tuning_supports_ml1m_cb_asvdpp_and_counts_cluster_time(
         "  split_seeds:\n"
         "    - 1\n"
         "    - 2\n"
+        "  train_ratio: 0.8\n"
         "  validation_ratio: 0.1\n"
         "  model_seed: 1\n"
         "base_model_config: configs/models/cb_asvdpp.yaml\n"

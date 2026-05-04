@@ -22,6 +22,7 @@ training:
   init_std: 0.1
   dtype: float32
   implicit_policy: ratings_as_implicit
+  training_backend: auto
 
 notes:
   - selected on paper_faithful_ml100k_inner_v1

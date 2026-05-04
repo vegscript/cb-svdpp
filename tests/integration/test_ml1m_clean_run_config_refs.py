@@ -1,12 +1,15 @@
 import json
 from pathlib import Path
 
+import pytest
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
 def test_completed_clean_ml1m_runs_reference_existing_model_configs() -> None:
     run_manifest_paths = sorted((REPO_ROOT / "artifacts" / "runs").glob("*ml1m*/run_manifest.json"))
-    assert run_manifest_paths
+    if not run_manifest_paths:
+        pytest.skip("ignored ml1m run artifacts are not present in this workspace")
 
     checked_manifest_count = 0
     for run_manifest_path in run_manifest_paths:

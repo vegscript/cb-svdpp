@@ -6,6 +6,7 @@ import pyarrow.parquet as pq
 
 from recsys_lab.experiments.biased_mf import run_biased_mf_experiment
 from recsys_lab.experiments.common import SplitConfig
+from tests.support.model_configs import model_config_yaml
 
 
 def _write_text(path: Path, text: str) -> None:
@@ -29,9 +30,20 @@ def _prepare_synthetic_repo(tmp_path: Path, actual_repo_root: Path) -> tuple[Pat
 
     _write_text(
         repo_root / "configs" / "models" / "biased_mf.yaml",
-        "model:\n  name: biased_mf\n  scope: paper_inspired\ntraining:\n"
-        "  latent_dim: 8\n  epochs: 10\n  learning_rate: 0.02\n"
-        "  lambda_b: 0.01\n  lambda_p: 0.01\n  lambda_q: 0.01\n  dtype: float32\n",
+        model_config_yaml(
+            "biased_mf",
+            training={
+                "latent_dim": 8,
+                "epochs": 10,
+                "learning_rate": 0.02,
+                "lambda_b": 0.01,
+                "lambda_p": 0.01,
+                "lambda_q": 0.01,
+                "init_std": 0.05,
+                "dtype": "float32",
+                "training_backend": "auto",
+            },
+        ),
     )
     _write_text(
         repo_root / "configs" / "runtime" / "base.yaml",

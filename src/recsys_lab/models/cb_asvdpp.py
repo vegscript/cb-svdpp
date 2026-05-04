@@ -12,8 +12,12 @@ from recsys_lab.data.histories import (
     build_user_cluster_count_index,
     build_user_explicit_feedback_index,
     build_user_history_index,
+    validate_user_cluster_count_index,
+    validate_user_explicit_feedback_index,
+    validate_user_history_index,
 )
 from recsys_lab.data.processed import RatingsData
+from recsys_lab.models.inference import build_user_context_cache
 from recsys_lab.models.kernels import train_cb_asvdpp_epoch_numba
 
 
@@ -72,6 +76,8 @@ class CBASVDppRecommender:
         self.rating_min = 0.0
         self.rating_max = 0.0
         self.epoch_durations_seconds: list[float] = []
+        self._user_context_cache: np.ndarray | None = None
+        self._mixed_item_factors_cache: np.ndarray | None = None
 
     def _parameter_dtype(self) -> np.dtype:
         if self.config.dtype not in {"float32", "float64"}:
@@ -264,7 +270,14 @@ class CBASVDppRecommender:
                     cluster_old + cluster_update - (self.config.learning_rate * self.config.lambda_yC * cluster_old)
                 )
 
-    def fit(self, data: RatingsData) -> "CBASVDppRecommender":
+    def fit(
+        self,
+        data: RatingsData,
+        *,
+        explicit_feedback: UserExplicitFeedbackIndex | None = None,
+        implicit_history: UserHistoryIndex | None = None,
+        implicit_cluster_history: UserClusterCountIndex | None = None,
+    ) -> "CBASVDppRecommender":
         self._validate_contracts(data)
         rng = np.random.default_rng(self.config.seed)
         parameter_dtype = self._parameter_dtype()
@@ -298,19 +311,33 @@ class CBASVDppRecommender:
         self.implicit_cluster_factors = rng.normal(
             0.0, self.config.init_std, size=(self.n_item_clusters, self.config.latent_dim)
         ).astype(parameter_dtype, copy=False)
-        self.explicit_feedback = build_user_explicit_feedback_index(data, dtype=self.config.dtype)
-        self.implicit_history = build_user_history_index(data, dtype=self.config.dtype)
-        self.implicit_cluster_history = build_user_cluster_count_index(
-            self.implicit_history,
-            self.item_clusters,
-            n_clusters=self.n_item_clusters,
-        )
+        if explicit_feedback is None:
+            self.explicit_feedback = build_user_explicit_feedback_index(data, dtype=self.config.dtype)
+        else:
+            validate_user_explicit_feedback_index(explicit_feedback, n_users=data.n_users)
+            self.explicit_feedback = explicit_feedback
+        if implicit_history is None:
+            self.implicit_history = build_user_history_index(data, dtype=self.config.dtype)
+        else:
+            validate_user_history_index(implicit_history, n_users=data.n_users)
+            self.implicit_history = implicit_history
+        if implicit_cluster_history is None:
+            self.implicit_cluster_history = build_user_cluster_count_index(
+                self.implicit_history,
+                self.item_clusters,
+                n_clusters=self.n_item_clusters,
+            )
+        else:
+            validate_user_cluster_count_index(implicit_cluster_history, n_users=data.n_users)
+            self.implicit_cluster_history = implicit_cluster_history
 
         order = data.training_row_indices()
         user_ids = data.base_user_ids
         item_ids = data.base_item_ids
         ratings = data.base_ratings.astype(parameter_dtype, copy=False)
         self.epoch_durations_seconds = []
+        self._user_context_cache = None
+        self._mixed_item_factors_cache = None
 
         for _ in range(self.config.epochs):
             epoch_started = perf_counter()
@@ -368,6 +395,28 @@ class CBASVDppRecommender:
 
         self.is_fitted = True
         return self
+
+    def _ensure_user_context_cache(self) -> np.ndarray:
+        if self.user_factors is None:
+            raise RuntimeError("model parameters are not initialized")
+        if self._user_context_cache is None:
+            self._user_context_cache = build_user_context_cache(
+                n_users=self.user_factors.shape[0],
+                context_dim=self.user_factors.shape[1],
+                build_user_context=self._user_context,
+            )
+        return self._user_context_cache
+
+    def _ensure_mixed_item_factors_cache(self) -> np.ndarray:
+        if self.item_factors is None or self.item_cluster_factors is None:
+            raise RuntimeError("model parameters are not initialized")
+        if self._mixed_item_factors_cache is None:
+            alpha = float(self.config.alpha)
+            one_minus_alpha = 1.0 - alpha
+            self._mixed_item_factors_cache = one_minus_alpha * self.item_factors.astype(
+                np.float64, copy=False
+            ) + alpha * self.item_cluster_factors[self.item_clusters].astype(np.float64, copy=False)
+        return self._mixed_item_factors_cache
 
     def _user_context(self, user_id: int) -> np.ndarray:
         if (
@@ -459,13 +508,8 @@ class CBASVDppRecommender:
         ):
             raise RuntimeError("model parameters are not initialized")
 
-        alpha = float(self.config.alpha)
-        one_minus_alpha = 1.0 - alpha
-        item_cluster_id = int(self.item_clusters[item_id])
-        item_vector = one_minus_alpha * self.item_factors[item_id].astype(
-            np.float64, copy=False
-        ) + alpha * self.item_cluster_factors[item_cluster_id].astype(np.float64, copy=False)
-        context = self._user_context(user_id)
+        item_vector = self._ensure_mixed_item_factors_cache()[item_id]
+        context = self._ensure_user_context_cache()[user_id]
         prediction = float(
             self.global_mean + self.user_bias[user_id] + self.item_bias[item_id] + np.dot(context, item_vector)
         )
@@ -493,21 +537,14 @@ class CBASVDppRecommender:
 
         users = np.asarray(user_ids, dtype=np.int64)
         items = np.asarray(item_ids, dtype=np.int64)
-        contexts = np.zeros((self.user_factors.shape[0], self.user_factors.shape[1]), dtype=np.float64)
-        for user_id in np.unique(users):
-            contexts[int(user_id)] = self._user_context(int(user_id))
-
-        alpha = float(self.config.alpha)
-        one_minus_alpha = 1.0 - alpha
-        mixed_item_factors = one_minus_alpha * self.item_factors.astype(
-            np.float64, copy=False
-        ) + alpha * self.item_cluster_factors[self.item_clusters].astype(np.float64, copy=False)
+        contexts = self._ensure_user_context_cache()[users]
+        mixed_item_factors = self._ensure_mixed_item_factors_cache()
 
         predictions = (
             self.global_mean
             + self.user_bias[users].astype(np.float64, copy=False)
             + self.item_bias[items].astype(np.float64, copy=False)
-            + np.sum(contexts[users] * mixed_item_factors[items], axis=1)
+            + np.sum(contexts * mixed_item_factors[items], axis=1)
         )
         if clip:
             predictions = np.clip(predictions, self.rating_min, self.rating_max)

@@ -42,7 +42,9 @@ from recsys_lab.experiments.runtime import (
     runtime_execution_context,
 )
 from recsys_lab.models.cb_svdpp import CBSVDppRecommender
+from recsys_lab.models.config_schemas import CBSVDppModelProfile
 from recsys_lab.models.inference import build_unique_user_context_batch
+from recsys_lab.models.registry import validate_model_config_payload
 from recsys_lab.utils.manifests import load_json_file, validate_manifest_file
 from recsys_lab.utils.paths import discover_repo_root, repo_path_string
 
@@ -282,14 +284,20 @@ def run_cb_svdpp_inference_cache_benchmark(
                 cb_config=cb_config,
                 model_seed=model_seed,
             )
-            clustering_config = benchmark_model_config.get("clustering", {})
+            _, validated_model_profile = validate_model_config_payload(
+                benchmark_model_config,
+                expected_model_name="cb_svdpp",
+            )
+            if not isinstance(validated_model_profile, CBSVDppModelProfile):
+                raise TypeError("cb_svdpp inference benchmark requires a cb_svdpp model profile")
+            clustering_config = validated_model_profile.clustering
             cluster_artifacts = induce_train_only_clusters(
                 split.train,
                 induction_config=induction_config,
-                n_user_clusters=int(clustering_config.get("n_user_clusters", 100)),
-                n_item_clusters=int(clustering_config.get("n_item_clusters", 100)),
-                algorithm=str(clustering_config.get("algorithm", "kmeans")),
-                kmeans_n_init=int(clustering_config.get("kmeans_n_init", 10)),
+                n_user_clusters=clustering_config.n_user_clusters,
+                n_item_clusters=clustering_config.n_item_clusters,
+                algorithm=clustering_config.algorithm,
+                kmeans_n_init=clustering_config.kmeans_n_init,
             )
             model = CBSVDppRecommender(
                 cb_config,

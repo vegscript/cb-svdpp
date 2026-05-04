@@ -89,6 +89,9 @@ Optional, aber dringend empfohlen:
 
 - `dataset.source`
 - `dataset.manifest_ref`
+- `cb_semantics.alpha`
+- `cb_semantics.cluster_contribution_enabled`
+- `cb_semantics.cb_claim_eligible`
 - `runtime.platform`
 - `runtime.hostname`
 - `runtime.device_profile_contract`

@@ -5,6 +5,7 @@ import pytest
 
 from recsys_lab.config.loader import dump_yaml_file, load_yaml_file
 from recsys_lab.experiments.random_multiseed_benchmark import run_random_multiseed_benchmark
+from tests.support.model_configs import model_config_yaml
 
 
 def _write_text(path: Path, text: str, *, encoding: str = "utf-8") -> None:
@@ -83,17 +84,49 @@ def _prepare_repo(
     if model_name == "cb_svdpp":
         _write_text(
             model_config_path,
-            "metadata:\n  status: draft\n"
-            "model:\n  name: cb_svdpp\n  scope: paper_inspired\n"
-            "training:\n  dtype: float32\n"
-            "clustering:\n  n_user_clusters: 80\n  n_item_clusters: 80\n  alpha: 0.10\n",
+            model_config_yaml(
+                "cb_svdpp",
+                training={
+                    "latent_dim": 64,
+                    "epochs": 2,
+                    "learning_rate": 0.0075,
+                    "lambda_b": 0.025,
+                    "lambda_p": 0.025,
+                    "lambda_q": 0.025,
+                    "lambda_y": 0.025,
+                    "lambda_pC": 0.025,
+                    "lambda_qC": 0.025,
+                    "lambda_yC": 0.025,
+                    "init_std": 0.05,
+                    "dtype": "float32",
+                    "implicit_policy": "ratings_as_implicit",
+                },
+                clustering={
+                    "n_user_clusters": 80,
+                    "n_item_clusters": 80,
+                    "alpha": 0.10,
+                    "algorithm": "kmeans",
+                    "kmeans_n_init": 5,
+                },
+            ),
         )
     else:
         _write_text(
             model_config_path,
-            "metadata:\n  status: draft\n"
-            f"model:\n  name: {model_name}\n  scope: paper_inspired\n"
-            "training:\n  dtype: float32\n",
+            model_config_yaml(
+                model_name,
+                training={
+                    "latent_dim": 50,
+                    "epochs": 20,
+                    "learning_rate": 0.01,
+                    "lambda_b": 0.02,
+                    "lambda_p": 0.02,
+                    "lambda_q": 0.02,
+                    "init_std": 0.05,
+                    "dtype": "float32",
+                    "training_backend": "auto",
+                },
+            ),
         )
     _write_text(
         runtime_config_path,

@@ -6,6 +6,7 @@ import pyarrow.parquet as pq
 
 from recsys_lab.experiments.asvdpp import run_asvdpp_experiment
 from recsys_lab.experiments.common import SplitConfig
+from tests.support.model_configs import model_config_yaml
 
 
 def _write_text(path: Path, text: str) -> None:
@@ -29,12 +30,23 @@ def _prepare_synthetic_repo(tmp_path: Path, actual_repo_root: Path) -> tuple[Pat
 
     _write_text(
         repo_root / "configs" / "models" / "asvdpp.yaml",
-        "model:\n  name: asvdpp\n  scope: paper_inspired\ntraining:\n"
-        "  latent_dim: 8\n  epochs: 8\n  learning_rate: 0.01\n"
-        "  lambda_b: 0.02\n  lambda_p: 0.02\n  lambda_q: 0.02\n"
-        "  lambda_x: 0.02\n  lambda_y: 0.02\n  init_std: 0.05\n"
-        "  dtype: float32\n  implicit_policy: ratings_as_implicit\n"
-        "  residual_weight_contract: detached\n",
+        model_config_yaml(
+            "asvdpp",
+            training={
+                "latent_dim": 8,
+                "epochs": 8,
+                "learning_rate": 0.01,
+                "lambda_b": 0.02,
+                "lambda_p": 0.02,
+                "lambda_q": 0.02,
+                "lambda_x": 0.02,
+                "lambda_y": 0.02,
+                "init_std": 0.05,
+                "dtype": "float32",
+                "implicit_policy": "ratings_as_implicit",
+                "residual_weight_contract": "detached",
+            },
+        ),
     )
     _write_text(
         repo_root / "configs" / "runtime" / "base.yaml",

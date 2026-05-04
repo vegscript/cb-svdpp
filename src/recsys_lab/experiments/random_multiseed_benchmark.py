@@ -14,7 +14,6 @@ from recsys_lab.experiments.common import (
     build_runtime_metadata,
     git_snapshot,
     reserve_timestamped_artifact_dir,
-    resolve_runtime_dtype,
     seed_slug,
     split_id,
     utc_timestamp,
@@ -25,6 +24,7 @@ from recsys_lab.experiments.runtime import (
     resolve_runtime_threading_config,
     runtime_execution_context,
 )
+from recsys_lab.models.registry import validate_model_config_payload
 from recsys_lab.utils.manifests import load_json_file, validate_manifest_file
 from recsys_lab.utils.paths import discover_repo_root, repo_path_string
 
@@ -412,12 +412,9 @@ def run_random_multiseed_benchmark(
     runtime_config_payload = load_yaml_file(runtime_config_path)
     device_config_payload = load_yaml_file(device_config_path)
 
-    model_name = str(model_config_payload["model"]["name"])
-    runtime_dtype = resolve_runtime_dtype(
-        runtime_config_payload=runtime_config_payload,
-        device_config_payload=device_config_payload,
-        model_config_payload=model_config_payload,
-    )
+    adapter, model_profile = validate_model_config_payload(model_config_payload)
+    model_name = adapter.name
+    runtime_dtype = adapter.runtime_dtype(model_profile)
     device_profile_name = str(device_config_payload["device_profile"]["name"])
     threading_config = resolve_runtime_threading_config(device_config_payload=device_config_payload)
 

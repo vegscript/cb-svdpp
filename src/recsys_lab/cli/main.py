@@ -22,6 +22,7 @@ from recsys_lab.experiments.random_multiseed_benchmark import run_random_multise
 from recsys_lab.experiments.runner import build_dry_run_plan
 from recsys_lab.experiments.runtime import assess_device_profile_contract, validate_claim_eligible_device_profile
 from recsys_lab.experiments.svdpp import run_svdpp_experiment
+from recsys_lab.experiments.unified_runner import run_unified_experiment
 from recsys_lab.utils.manifests import validate_manifest_file
 from recsys_lab.utils.paths import discover_repo_root, repo_health_snapshot
 
@@ -189,6 +190,68 @@ def prepare_dataset(
         dataset_config_path=dataset_config_path,
         dtype=dtype,
         overwrite=overwrite,
+    )
+    typer.echo(json.dumps(payload, indent=2, sort_keys=True))
+
+
+@app.command("train")
+def train_model(
+    model: str = typer.Option(..., "--model", help="Canonical model name from the unified model registry."),
+    processed_manifest: str = typer.Option(..., "--processed-manifest", help="Processed dataset manifest path."),
+    model_config: str = typer.Option(..., "--model-config", help="Strict model config YAML path."),
+    runtime_config: str = "configs/runtime/base.yaml",
+    device_config: str = "configs/runtime/devices/local_i5_2500k_24gb.yaml",
+    split_family: str = "benchmark_random_v1",
+    train_ratio: float = 0.8,
+    validation_ratio: float = 0.1,
+    split_seed: int = 1,
+    model_seed: int = 1,
+    split_cache: str = typer.Option("auto", help="Split-cache policy: auto, enable, or disable."),
+    training_index_cache: bool = typer.Option(
+        False,
+        "--training-index-cache/--disable-training-index-cache",
+        help="Persist and reuse training indices required by the selected model.",
+    ),
+    cluster_artifact_cache: bool = typer.Option(
+        False,
+        "--cluster-artifact-cache/--disable-cluster-artifact-cache",
+        help="Persist and reuse train-only CB cluster artifacts where required.",
+    ),
+    evaluate_test: bool = typer.Option(
+        True,
+        "--test-eval/--skip-test-eval",
+        help="Evaluate the test split after training.",
+    ),
+) -> None:
+    root = discover_repo_root()
+    processed_manifest_path = _resolve_path(processed_manifest, repo_root=root)
+    model_config_path = _resolve_path(model_config, repo_root=root)
+    runtime_config_path = _resolve_path(runtime_config, repo_root=root)
+    device_config_path = _resolve_path(device_config, repo_root=root)
+
+    if processed_manifest_path is None or model_config_path is None:
+        raise typer.BadParameter("processed_manifest and model_config are required")
+    if runtime_config_path is None or device_config_path is None:
+        raise typer.BadParameter("runtime_config and device_config are required")
+
+    payload = run_unified_experiment(
+        processed_manifest_path=processed_manifest_path,
+        model_config_path=model_config_path,
+        runtime_config_path=runtime_config_path,
+        device_config_path=device_config_path,
+        split_config=SplitConfig(
+            train_ratio=train_ratio,
+            validation_ratio=validation_ratio,
+            seed=split_seed,
+        ),
+        model_seed=model_seed,
+        repo_root=root,
+        model_name=model,
+        split_family=split_family,
+        evaluate_test=evaluate_test,
+        use_split_cache=_resolve_split_cache_override(split_cache),
+        use_training_index_cache=training_index_cache,
+        use_cluster_artifact_cache=cluster_artifact_cache,
     )
     typer.echo(json.dumps(payload, indent=2, sort_keys=True))
 
@@ -430,6 +493,12 @@ def train_cb_asvdpp(
     validation_ratio: float = 0.1,
     split_seed: int = 1,
     model_seed: int = 1,
+    split_cache: str = typer.Option("auto", help="Split-cache policy: auto, enable, or disable."),
+    training_index_cache: bool = typer.Option(
+        False,
+        "--training-index-cache/--disable-training-index-cache",
+        help="Persist and reuse training history and explicit-feedback indices.",
+    ),
     cluster_artifact_cache: bool = typer.Option(
         False,
         "--cluster-artifact-cache/--disable-cluster-artifact-cache",
@@ -446,6 +515,9 @@ def train_cb_asvdpp(
         raise typer.BadParameter("processed_manifest is required")
     if model_config_path is None or runtime_config_path is None or device_config_path is None:
         raise typer.BadParameter("model_config, runtime_config, and device_config are required")
+    split_cache_value = split_cache if isinstance(split_cache, str) else "auto"
+    training_index_cache_enabled = training_index_cache if isinstance(training_index_cache, bool) else False
+    cluster_artifact_cache_enabled = cluster_artifact_cache if isinstance(cluster_artifact_cache, bool) else False
 
     payload = run_cb_asvdpp_experiment(
         processed_manifest_path=processed_manifest_path,
@@ -460,7 +532,9 @@ def train_cb_asvdpp(
         model_seed=model_seed,
         repo_root=root,
         split_family=split_family,
-        use_cluster_artifact_cache=cluster_artifact_cache,
+        use_split_cache=_resolve_split_cache_override(split_cache_value),
+        use_training_index_cache=training_index_cache_enabled,
+        use_cluster_artifact_cache=cluster_artifact_cache_enabled,
     )
     typer.echo(json.dumps(payload, indent=2, sort_keys=True))
 

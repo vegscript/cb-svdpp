@@ -11,9 +11,6 @@ from recsys_lab.experiments.benchmarking import (
     build_benchmark_measurement,
     summarize_scalar_samples,
 )
-from recsys_lab.experiments.biased_mf import run_biased_mf_experiment
-from recsys_lab.experiments.cb_asvdpp import run_cb_asvdpp_experiment
-from recsys_lab.experiments.cb_svdpp import run_cb_svdpp_experiment
 from recsys_lab.experiments.common import (
     SplitConfig,
     build_runtime_metadata,
@@ -28,29 +25,28 @@ from recsys_lab.experiments.runtime import (
     resolve_runtime_threading_config,
     runtime_execution_context,
 )
-from recsys_lab.experiments.svdpp import run_svdpp_experiment
+from recsys_lab.experiments.unified_runner import run_unified_experiment
+from recsys_lab.models.registry import MODEL_REGISTRY, validate_model_config_payload
 from recsys_lab.utils.manifests import load_json_file, validate_manifest_file
 from recsys_lab.utils.paths import discover_repo_root, repo_path_string
 
-SUPPORTED_MODELS = {"biased_mf", "svdpp", "cb_svdpp", "cb_asvdpp"}
+SUPPORTED_MODELS = set(MODEL_REGISTRY)
 
 
 def _runner_for_model(model_name: str) -> Callable[..., dict[str, Any]]:
-    if model_name == "biased_mf":
-        return run_biased_mf_experiment
-    if model_name == "svdpp":
-        return run_svdpp_experiment
-    if model_name == "cb_svdpp":
-        return run_cb_svdpp_experiment
-    if model_name == "cb_asvdpp":
-        return run_cb_asvdpp_experiment
-    raise ValueError(f"unsupported tuning model: {model_name}")
+    if model_name not in MODEL_REGISTRY:
+        raise ValueError(f"unsupported tuning model: {model_name}")
+
+    def _run(**kwargs: Any) -> dict[str, Any]:
+        return run_unified_experiment(model_name=model_name, **kwargs)
+
+    return _run
 
 
 def _merge_dicts(base: dict[str, Any], overrides: dict[str, Any]) -> dict[str, Any]:
     merged = copy.deepcopy(base)
     for key, value in overrides.items():
-        if isinstance(value, dict) and isinstance(merged.get(key), dict):
+        if key in merged and isinstance(value, dict) and isinstance(merged[key], dict):
             merged[key] = _merge_dicts(merged[key], value)
         else:
             merged[key] = copy.deepcopy(value)
@@ -109,16 +105,21 @@ def _resolve_selection_units(
     if split_family == "paper_faithful_ml100k_inner_v1":
         if dataset_short_name != "ml100k":
             raise ValueError("paper_faithful_ml100k_inner_v1 requires dataset_short_name='ml100k'")
-        units = [int(fold) for fold in tuning.get("folds", [])]
+        if "folds" not in tuning:
+            raise ValueError("tuning.folds is required for paper_faithful_ml100k_inner_v1")
+        units = [int(fold) for fold in tuning["folds"]]
         if not units:
             raise ValueError("tuning.folds must contain at least one fold")
         inner_seed = int(tuning["inner_seed"])
         return units, [f"u{fold}" for fold in units], "official_fold", inner_seed
 
     if split_family == "benchmark_random_v1":
-        raw_values = tuning.get("split_seeds")
-        if raw_values is None:
-            raw_values = tuning.get("folds", [])
+        if "split_seeds" in tuning:
+            raw_values = tuning["split_seeds"]
+        elif "folds" in tuning:
+            raw_values = tuning["folds"]
+        else:
+            raise ValueError("tuning.split_seeds is required for benchmark_random_v1")
         units = [int(seed) for seed in raw_values]
         if not units:
             raise ValueError("tuning.split_seeds must contain at least one split seed")
@@ -146,14 +147,16 @@ def run_inner_tuning(
     device_config_path = device_config_path.resolve()
 
     tuning_payload = load_yaml_file(tuning_config_path)
-    tuning = tuning_payload.get("tuning", {})
+    tuning = tuning_payload["tuning"]
+    if not isinstance(tuning, dict):
+        raise TypeError("tuning config field 'tuning' must be a mapping")
     processed_manifest = load_json_file(processed_manifest_path)
     runtime_config_payload = load_yaml_file(runtime_config_path)
     device_config_payload = load_yaml_file(device_config_path)
     threading_config = resolve_runtime_threading_config(device_config_payload=device_config_payload)
 
     dataset_short_name = str(processed_manifest["dataset_short_name"])
-    if str(tuning.get("dataset_short_name")) != dataset_short_name:
+    if str(tuning["dataset_short_name"]) != dataset_short_name:
         raise ValueError("tuning.dataset_short_name must match processed manifest dataset_short_name")
     requested_split_family = str(tuning["split_family"])
     selection_units, selection_labels, selection_unit_kind, inner_seed = _resolve_selection_units(
@@ -165,24 +168,25 @@ def run_inner_tuning(
     base_model_config_ref = str(tuning_payload["base_model_config"])
     base_model_config_path = (root / base_model_config_ref).resolve()
     base_model_config_payload = load_yaml_file(base_model_config_path)
-    model_name = str(base_model_config_payload["model"]["name"])
+    adapter, _ = validate_model_config_payload(base_model_config_payload)
+    model_name = adapter.name
     if model_name not in SUPPORTED_MODELS:
         raise ValueError(f"unsupported tuning model: {model_name}")
-    if use_split_cache is not None and model_name not in {"svdpp", "cb_svdpp"}:
-        raise ValueError("explicit split-cache override is only supported for svdpp and cb_svdpp tuning runs")
-    if use_training_index_cache and model_name not in {"svdpp", "cb_svdpp"}:
-        raise ValueError("training-index cache is only supported for svdpp and cb_svdpp tuning runs")
-    if use_cluster_artifact_cache and model_name not in {"cb_svdpp", "cb_asvdpp"}:
-        raise ValueError("cluster-artifact cache is only supported for cb_svdpp and cb_asvdpp tuning runs")
+    if use_training_index_cache and not (
+        adapter.requirements.needs_implicit_history or adapter.requirements.needs_explicit_feedback
+    ):
+        raise ValueError(f"training-index cache is not applicable to model '{model_name}'")
+    if use_cluster_artifact_cache and not adapter.requirements.needs_cluster_artifacts:
+        raise ValueError(f"cluster-artifact cache is not applicable to model '{model_name}'")
 
-    candidate_payloads = list(tuning_payload.get("candidates", []))
+    candidate_payloads = list(tuning_payload["candidates"])
     if not candidate_payloads:
         raise ValueError("tuning config must contain at least one candidate")
     validation_ratio = float(tuning["validation_ratio"])
     if requested_split_family == "paper_faithful_ml100k_inner_v1":
         train_ratio = 1.0 - validation_ratio
     elif requested_split_family == "benchmark_random_v1":
-        train_ratio = float(tuning.get("train_ratio", SplitConfig().train_ratio))
+        train_ratio = float(tuning["train_ratio"])
     else:
         raise ValueError(f"unsupported tuning split_family: {requested_split_family}")
     model_seed = int(tuning["model_seed"])
@@ -190,18 +194,22 @@ def run_inner_tuning(
     benchmark_scope = "_".join(["tuning", dataset_short_name, requested_split_family, model_name, selection_stage])
 
     device_profile_name = str(device_config_payload["device_profile"]["name"])
-    raw_resource_gate = tuning_payload.get("resource_gate")
+    raw_resource_gate = tuning_payload["resource_gate"] if "resource_gate" in tuning_payload else None
     resource_gate_payload: dict[str, Any] | None = None
     max_peak_memory_mb: float | None = None
     reject_candidate_on_guardrail_breach = False
     if raw_resource_gate is not None:
         resource_gate_payload = dict(raw_resource_gate)
-        expected_device_profile = resource_gate_payload.get("device_profile")
+        expected_device_profile = (
+            resource_gate_payload["device_profile"] if "device_profile" in resource_gate_payload else None
+        )
         if expected_device_profile is not None and str(expected_device_profile) != device_profile_name:
             raise ValueError("resource_gate.device_profile must match the selected device config")
         max_peak_memory_mb = float(resource_gate_payload["max_peak_memory_mb"])
-        reject_candidate_on_guardrail_breach = bool(
-            resource_gate_payload.get("reject_candidate_on_any_guardrail_breach", False)
+        reject_candidate_on_guardrail_breach = (
+            bool(resource_gate_payload["reject_candidate_on_any_guardrail_breach"])
+            if "reject_candidate_on_any_guardrail_breach" in resource_gate_payload
+            else False
         )
     timestamp, benchmark_id, benchmark_dir = reserve_timestamped_artifact_dir(
         artifacts_root=root / "artifacts" / "benchmarks",
@@ -234,11 +242,12 @@ def run_inner_tuning(
         },
         "training_index_cache": {
             "enabled": use_training_index_cache,
-            "supported_for_model": model_name in {"svdpp", "cb_svdpp"},
+            "supported_for_model": adapter.requirements.needs_implicit_history
+            or adapter.requirements.needs_explicit_feedback,
         },
         "cluster_artifact_cache": {
             "enabled": use_cluster_artifact_cache,
-            "supported_for_model": model_name in {"cb_svdpp", "cb_asvdpp"},
+            "supported_for_model": adapter.requirements.needs_cluster_artifacts,
         },
     }
     if use_split_cache is None:
@@ -346,13 +355,15 @@ def run_inner_tuning(
 
             for candidate_index, candidate in enumerate(candidate_payloads, start=1):
                 candidate_id = str(candidate["candidate_id"])
-                candidate_overrides = dict(candidate.get("overrides", {}))
+                candidate_overrides = dict(candidate["overrides"]) if "overrides" in candidate else {}
                 effective_model_config = _merge_dicts(base_model_config_payload, candidate_overrides)
-                metadata = dict(effective_model_config.get("metadata", {}))
+                metadata = dict(effective_model_config["metadata"])
                 metadata["status"] = "stage1_tuning_candidate"
                 metadata["owner"] = "repo"
                 metadata["purpose"] = "tuning_candidate_profile"
-                metadata["candidate_id"] = candidate_id
+                provenance = dict(metadata.get("provenance") or {})
+                provenance["candidate_id"] = candidate_id
+                metadata["provenance"] = provenance
                 effective_model_config["metadata"] = metadata
 
                 candidate_config_path = candidate_dir / _candidate_config_filename(
@@ -379,16 +390,23 @@ def run_inner_tuning(
                         "split_family": requested_split_family,
                         "inner_validation_seed": inner_seed,
                         "evaluate_test": False,
+                        "use_split_cache": use_split_cache,
                         "command": (
                             "recsys-lab tune-inner "
                             f"--tuning-config {repo_path_string(tuning_config_path, repo_root=root)} "
                             f"--candidate-id {candidate_id} --selection-unit {selection_label}"
                         ),
                     }
-                    if model_name in {"svdpp", "cb_svdpp"}:
-                        runner_kwargs["use_split_cache"] = use_split_cache
+                    candidate_adapter, _ = validate_model_config_payload(
+                        effective_model_config,
+                        expected_model_name=model_name,
+                    )
+                    if (
+                        candidate_adapter.requirements.needs_implicit_history
+                        or candidate_adapter.requirements.needs_explicit_feedback
+                    ):
                         runner_kwargs["use_training_index_cache"] = use_training_index_cache
-                    if model_name in {"cb_svdpp", "cb_asvdpp"}:
+                    if candidate_adapter.requirements.needs_cluster_artifacts:
                         runner_kwargs["use_cluster_artifact_cache"] = use_cluster_artifact_cache
                     payload = runner(**runner_kwargs)
                     run_manifest_path = Path(str(payload["run_manifest"])).resolve()

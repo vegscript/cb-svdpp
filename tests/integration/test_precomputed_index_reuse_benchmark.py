@@ -8,6 +8,7 @@ from recsys_lab.experiments.common import SplitConfig
 from recsys_lab.experiments.precomputed_index_reuse_benchmark import (
     run_precomputed_index_reuse_benchmark,
 )
+from tests.support.model_configs import model_config_yaml
 
 
 def _write_text(path: Path, text: str) -> None:
@@ -34,11 +35,22 @@ def _prepare_synthetic_repo(tmp_path: Path, actual_repo_root: Path) -> tuple[Pat
 
     _write_text(
         repo_root / "configs" / "models" / "svdpp.yaml",
-        "model:\n  name: svdpp\n  scope: paper_inspired\ntraining:\n"
-        "  latent_dim: 8\n  epochs: 4\n  learning_rate: 0.02\n"
-        "  lambda_b: 0.01\n  lambda_p: 0.01\n  lambda_q: 0.01\n"
-        "  lambda_y: 0.01\n  init_std: 0.05\n  dtype: float32\n"
-        "  implicit_policy: ratings_as_implicit\n  training_backend: python\n",
+        model_config_yaml(
+            "svdpp",
+            training={
+                "latent_dim": 8,
+                "epochs": 4,
+                "learning_rate": 0.02,
+                "lambda_b": 0.01,
+                "lambda_p": 0.01,
+                "lambda_q": 0.01,
+                "lambda_y": 0.01,
+                "init_std": 0.05,
+                "dtype": "float32",
+                "implicit_policy": "ratings_as_implicit",
+                "training_backend": "python",
+            },
+        ),
     )
     _write_text(
         repo_root / "configs" / "runtime" / "base.yaml",

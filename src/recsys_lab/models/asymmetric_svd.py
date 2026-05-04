@@ -10,6 +10,8 @@ from recsys_lab.data.histories import (
     UserHistoryIndex,
     build_user_explicit_feedback_index,
     build_user_history_index,
+    validate_user_explicit_feedback_index,
+    validate_user_history_index,
 )
 from recsys_lab.data.processed import RatingsData
 from recsys_lab.models.kernels import train_asymmetric_svd_epoch_numba
@@ -140,7 +142,13 @@ class AsymmetricSVDRecommender:
                     implicit_old + implicit_update - (self.config.learning_rate * self.config.lambda_y * implicit_old)
                 )
 
-    def fit(self, data: RatingsData) -> "AsymmetricSVDRecommender":
+    def fit(
+        self,
+        data: RatingsData,
+        *,
+        explicit_feedback: UserExplicitFeedbackIndex | None = None,
+        implicit_history: UserHistoryIndex | None = None,
+    ) -> "AsymmetricSVDRecommender":
         self._validate_contracts()
         rng = np.random.default_rng(self.config.seed)
         parameter_dtype = self._parameter_dtype()
@@ -159,8 +167,16 @@ class AsymmetricSVDRecommender:
         self.implicit_factors = rng.normal(
             0.0, self.config.init_std, size=(data.n_items, self.config.latent_dim)
         ).astype(parameter_dtype, copy=False)
-        self.explicit_feedback = build_user_explicit_feedback_index(data, dtype=self.config.dtype)
-        self.implicit_history = build_user_history_index(data, dtype=self.config.dtype)
+        if explicit_feedback is None:
+            self.explicit_feedback = build_user_explicit_feedback_index(data, dtype=self.config.dtype)
+        else:
+            validate_user_explicit_feedback_index(explicit_feedback, n_users=data.n_users)
+            self.explicit_feedback = explicit_feedback
+        if implicit_history is None:
+            self.implicit_history = build_user_history_index(data, dtype=self.config.dtype)
+        else:
+            validate_user_history_index(implicit_history, n_users=data.n_users)
+            self.implicit_history = implicit_history
 
         order = data.training_row_indices()
         user_ids = data.base_user_ids

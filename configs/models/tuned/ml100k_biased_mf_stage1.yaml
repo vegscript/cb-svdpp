@@ -18,7 +18,9 @@ training:
   lambda_b: 0.03
   lambda_p: 0.03
   lambda_q: 0.03
+  init_std: 0.1
   dtype: float32
+  training_backend: auto
 
 notes:
   - selected on paper_faithful_ml100k_inner_v1

@@ -1,9 +1,9 @@
 import json
 from pathlib import Path
 
-import pytest
-
+from recsys_lab.config.loader import load_yaml_file
 from recsys_lab.experiments.ml100k_paper_benchmark import run_ml100k_paper_benchmark
+from tests.support.model_configs import model_config_yaml
 
 
 def _write_text(path: Path, text: str, *, encoding: str = "utf-8") -> None:
@@ -37,7 +37,20 @@ def _prepare_synthetic_benchmark_repo(tmp_path: Path, actual_repo_root: Path) ->
 
     _write_text(
         model_config_path,
-        "model:\n  name: biased_mf\n  scope: paper_inspired\ntraining:\n  dtype: float32\n",
+        model_config_yaml(
+            "biased_mf",
+            training={
+                "latent_dim": 50,
+                "epochs": 20,
+                "learning_rate": 0.01,
+                "lambda_b": 0.02,
+                "lambda_p": 0.02,
+                "lambda_q": 0.02,
+                "init_std": 0.05,
+                "dtype": "float32",
+                "training_backend": "auto",
+            },
+        ),
     )
     _write_text(
         runtime_config_path,
@@ -109,10 +122,7 @@ def _write_completed_run(
                 },
                 "loaded_configs": {
                     "processed_manifest": json.loads(processed_manifest_path.read_text(encoding="utf-8")),
-                    "model": {
-                        "model": {"name": model_name, "scope": "paper_inspired"},
-                        "training": {"dtype": "float32"},
-                    },
+                    "model": load_yaml_file(model_config_path),
                     "runtime": {
                         "runtime": {"default_precision_profile": "performance_float32"},
                         "precision_profiles": {"performance_float32": {"dtype": "float32"}},
@@ -387,7 +397,22 @@ def test_run_ml100k_paper_benchmark_passes_split_cache_override_to_supported_mod
     model_config_path = repo_root / "configs" / "models" / "svdpp.yaml"
     _write_text(
         model_config_path,
-        "model:\n  name: svdpp\n  scope: paper_inspired\ntraining:\n  dtype: float32\n",
+        model_config_yaml(
+            "svdpp",
+            training={
+                "latent_dim": 50,
+                "epochs": 20,
+                "learning_rate": 0.01,
+                "lambda_b": 0.02,
+                "lambda_p": 0.02,
+                "lambda_q": 0.02,
+                "lambda_y": 0.02,
+                "init_std": 0.05,
+                "dtype": "float32",
+                "training_backend": "auto",
+                "implicit_policy": "ratings_as_implicit",
+            },
+        ),
     )
 
     monkeypatch.setattr(
@@ -437,8 +462,9 @@ def test_run_ml100k_paper_benchmark_passes_split_cache_override_to_supported_mod
     assert observed_split_cache == [False, False, False, False, False]
 
 
-def test_run_ml100k_paper_benchmark_rejects_explicit_split_cache_override_for_unsupported_models(
+def test_run_ml100k_paper_benchmark_passes_split_cache_override_to_biased_mf(
     tmp_path: Path,
+    monkeypatch,
 ) -> None:
     actual_repo_root = Path(__file__).resolve().parents[2]
     (
@@ -449,17 +475,46 @@ def test_run_ml100k_paper_benchmark_rejects_explicit_split_cache_override_for_un
         device_config_path,
     ) = _prepare_synthetic_benchmark_repo(tmp_path, actual_repo_root)
 
-    with pytest.raises(ValueError, match="explicit split-cache override"):
-        run_ml100k_paper_benchmark(
-            model_name="biased_mf",
+    monkeypatch.setattr(
+        "recsys_lab.experiments.ml100k_paper_benchmark.git_snapshot",
+        lambda _repo_root: {"commit": "abcdef1234567", "branch": "main", "dirty": True},
+    )
+    observed_split_cache: list[bool | None] = []
+
+    def _fake_runner(**kwargs):
+        fold_index = int(kwargs["split_config"].seed)
+        observed_split_cache.append(kwargs.get("use_split_cache"))
+        run_manifest_path = _write_completed_run(
+            repo_root=repo_root,
             processed_manifest_path=processed_manifest_path,
             model_config_path=model_config_path,
             runtime_config_path=runtime_config_path,
             device_config_path=device_config_path,
-            model_seed=1,
-            use_split_cache=True,
-            repo_root=repo_root,
+            fold_index=fold_index,
+            model_seed=int(kwargs["model_seed"]),
+            train_rmse=0.80 + fold_index * 0.01,
+            test_rmse=0.90 + fold_index * 0.01,
+            training_seconds=10.0 * fold_index,
         )
+        return {"run_manifest": str(run_manifest_path)}
+
+    monkeypatch.setattr(
+        "recsys_lab.experiments.ml100k_paper_benchmark._runner_for_model",
+        lambda _model_name: _fake_runner,
+    )
+
+    run_ml100k_paper_benchmark(
+        model_name="biased_mf",
+        processed_manifest_path=processed_manifest_path,
+        model_config_path=model_config_path,
+        runtime_config_path=runtime_config_path,
+        device_config_path=device_config_path,
+        model_seed=1,
+        use_split_cache=True,
+        repo_root=repo_root,
+    )
+
+    assert observed_split_cache == [True, True, True, True, True]
 
 
 def test_run_ml100k_paper_benchmark_supports_cb_svdpp_and_counts_cluster_time(
@@ -477,7 +532,31 @@ def test_run_ml100k_paper_benchmark_supports_cb_svdpp_and_counts_cluster_time(
 
     _write_text(
         model_config_path,
-        "model:\n  name: cb_svdpp\n  scope: paper_inspired\ntraining:\n  dtype: float32\n",
+        model_config_yaml(
+            "cb_svdpp",
+            training={
+                "latent_dim": 64,
+                "epochs": 2,
+                "learning_rate": 0.0075,
+                "lambda_b": 0.025,
+                "lambda_p": 0.025,
+                "lambda_q": 0.025,
+                "lambda_y": 0.025,
+                "lambda_pC": 0.025,
+                "lambda_qC": 0.025,
+                "lambda_yC": 0.025,
+                "init_std": 0.05,
+                "dtype": "float32",
+                "implicit_policy": "ratings_as_implicit",
+            },
+            clustering={
+                "n_user_clusters": 80,
+                "n_item_clusters": 80,
+                "alpha": 0.10,
+                "algorithm": "kmeans",
+                "kmeans_n_init": 5,
+            },
+        ),
     )
 
     monkeypatch.setattr(
@@ -550,7 +629,34 @@ def test_run_ml100k_paper_benchmark_supports_cb_asvdpp_and_counts_cluster_time(
 
     _write_text(
         model_config_path,
-        "model:\n  name: cb_asvdpp\n  scope: paper_inspired\ntraining:\n  dtype: float32\n",
+        model_config_yaml(
+            "cb_asvdpp",
+            training={
+                "latent_dim": 64,
+                "epochs": 2,
+                "learning_rate": 0.0075,
+                "lambda_b": 0.025,
+                "lambda_p": 0.025,
+                "lambda_q": 0.025,
+                "lambda_x": 0.025,
+                "lambda_y": 0.025,
+                "lambda_pC": 0.025,
+                "lambda_qC": 0.025,
+                "lambda_xC": 0.025,
+                "lambda_yC": 0.025,
+                "init_std": 0.05,
+                "dtype": "float32",
+                "implicit_policy": "ratings_as_implicit",
+                "residual_weight_contract": "detached",
+            },
+            clustering={
+                "n_user_clusters": 80,
+                "n_item_clusters": 80,
+                "alpha": 0.10,
+                "algorithm": "kmeans",
+                "kmeans_n_init": 5,
+            },
+        ),
     )
 
     monkeypatch.setattr(

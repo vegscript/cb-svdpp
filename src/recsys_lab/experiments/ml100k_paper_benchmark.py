@@ -9,15 +9,11 @@ from recsys_lab.experiments.benchmarking import (
     build_benchmark_measurement,
     summarize_scalar_samples,
 )
-from recsys_lab.experiments.biased_mf import run_biased_mf_experiment
-from recsys_lab.experiments.cb_asvdpp import run_cb_asvdpp_experiment
-from recsys_lab.experiments.cb_svdpp import run_cb_svdpp_experiment
 from recsys_lab.experiments.common import (
     SplitConfig,
     build_runtime_metadata,
     git_snapshot,
     reserve_timestamped_artifact_dir,
-    resolve_runtime_dtype,
     utc_timestamp,
     write_json,
     write_log,
@@ -26,11 +22,12 @@ from recsys_lab.experiments.runtime import (
     resolve_runtime_threading_config,
     runtime_execution_context,
 )
-from recsys_lab.experiments.svdpp import run_svdpp_experiment
+from recsys_lab.experiments.unified_runner import run_unified_experiment
+from recsys_lab.models.registry import MODEL_REGISTRY, validate_model_config_payload
 from recsys_lab.utils.manifests import load_json_file, validate_manifest_file
 from recsys_lab.utils.paths import discover_repo_root, repo_path_string
 
-SUPPORTED_MODELS = {"biased_mf", "svdpp", "cb_svdpp", "cb_asvdpp"}
+SUPPORTED_MODELS = set(MODEL_REGISTRY)
 
 
 def _read_run_manifest(run_manifest_path: Path) -> dict[str, Any]:
@@ -127,15 +124,13 @@ def _existing_matching_run(
 
 
 def _runner_for_model(model_name: str) -> Callable[..., dict[str, Any]]:
-    if model_name == "biased_mf":
-        return run_biased_mf_experiment
-    if model_name == "svdpp":
-        return run_svdpp_experiment
-    if model_name == "cb_svdpp":
-        return run_cb_svdpp_experiment
-    if model_name == "cb_asvdpp":
-        return run_cb_asvdpp_experiment
-    raise ValueError(f"unsupported benchmark model: {model_name}")
+    if model_name not in MODEL_REGISTRY:
+        raise ValueError(f"unsupported benchmark model: {model_name}")
+
+    def _run(**kwargs: Any) -> dict[str, Any]:
+        return run_unified_experiment(model_name=model_name, **kwargs)
+
+    return _run
 
 
 def _benchmark_fit_seconds(metrics: dict[str, Any]) -> float:
@@ -161,8 +156,6 @@ def run_ml100k_paper_benchmark(
 ) -> dict[str, Any]:
     if model_name not in SUPPORTED_MODELS:
         raise ValueError(f"unsupported benchmark model: {model_name}")
-    if use_split_cache is not None and model_name not in {"svdpp", "cb_svdpp"}:
-        raise ValueError("explicit split-cache override is only supported for svdpp and cb_svdpp benchmarks")
 
     root = (repo_root or discover_repo_root()).resolve()
     processed_manifest_path = processed_manifest_path.resolve()
@@ -183,12 +176,9 @@ def run_ml100k_paper_benchmark(
     runtime_config_payload = load_yaml_file(runtime_config_path)
     device_config_payload = load_yaml_file(device_config_path)
     model_config_payload = load_yaml_file(model_config_path)
+    adapter, model_profile = validate_model_config_payload(model_config_payload, expected_model_name=model_name)
 
-    runtime_dtype = resolve_runtime_dtype(
-        runtime_config_payload=runtime_config_payload,
-        device_config_payload=device_config_payload,
-        model_config_payload=model_config_payload,
-    )
+    runtime_dtype = adapter.runtime_dtype(model_profile)
     threading_config = resolve_runtime_threading_config(device_config_payload=device_config_payload)
     device_profile_name = str(device_config_payload["device_profile"]["name"])
 
@@ -339,9 +329,8 @@ def run_ml100k_paper_benchmark(
                     "model_seed": model_seed,
                     "repo_root": root,
                     "split_family": "paper_faithful_ml100k_v1",
+                    "use_split_cache": use_split_cache,
                 }
-                if model_name in {"svdpp", "cb_svdpp"}:
-                    runner_kwargs["use_split_cache"] = use_split_cache
                 payload = runner(
                     **runner_kwargs,
                 )
