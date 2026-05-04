@@ -3,17 +3,12 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from recsys_lab.data.splitters import (
-    official_ml100k_inner_validation_split,
-    official_ml100k_paper_faithful_split,
-)
-from recsys_lab.experiments.common import SplitConfig, git_snapshot
-from recsys_lab.experiments.unified_runner import build_experiment_services, run_unified_experiment
+from recsys_lab.experiments.common import SplitConfig
+from recsys_lab.experiments.unified_runner import run_unified_experiment
 from recsys_lab.models.biased_mf import BiasedMFConfig
 from recsys_lab.models.cb_asvdpp import CBASVDppConfig
 from recsys_lab.models.registry import CBASVDppAdapter, validate_model_config_payload
 from recsys_lab.utils.paths import discover_repo_root
-
 
 # Legacy compatibility wrapper only.
 # Do not add experiment lifecycle logic here.
@@ -77,9 +72,4 @@ def run_cb_asvdpp_experiment(
         reuse_precomputed_indices=reuse_precomputed_indices,
         use_training_index_cache=use_training_index_cache,
         use_cluster_artifact_cache=use_cluster_artifact_cache,
-        services=build_experiment_services(
-            git_snapshot_fn=git_snapshot,
-            paper_faithful_split_fn=official_ml100k_paper_faithful_split,
-            inner_validation_split_fn=official_ml100k_inner_validation_split,
-        ),
     )

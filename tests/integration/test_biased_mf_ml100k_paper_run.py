@@ -4,6 +4,7 @@ from pathlib import Path
 import pyarrow as pa
 import pyarrow.parquet as pq
 
+from recsys_lab.experiments import unified_runner as unified_runner_module
 from recsys_lab.experiments.biased_mf import run_biased_mf_experiment
 from recsys_lab.experiments.common import SplitConfig
 from tests.support.model_configs import model_config_yaml
@@ -116,6 +117,16 @@ def _prepare_synthetic_ml100k_repo(tmp_path: Path, actual_repo_root: Path) -> tu
     )
 
 
+def _patch_unified_services(monkeypatch) -> None:
+    monkeypatch.setattr(
+        unified_runner_module,
+        "DEFAULT_EXPERIMENT_SERVICES",
+        unified_runner_module.build_experiment_services(
+            git_snapshot_fn=lambda _repo_root: {"commit": "abcdef1234567", "branch": "main", "dirty": False},
+        ),
+    )
+
+
 def test_run_biased_mf_experiment_supports_ml100k_paper_faithful_split(
     tmp_path: Path,
     monkeypatch,
@@ -127,10 +138,7 @@ def test_run_biased_mf_experiment_supports_ml100k_paper_faithful_split(
     )
     runtime_config_path = repo_root / "configs" / "runtime" / "base.yaml"
 
-    monkeypatch.setattr(
-        "recsys_lab.experiments.biased_mf.git_snapshot",
-        lambda _repo_root: {"commit": "abcdef1234567", "branch": "main", "dirty": False},
-    )
+    _patch_unified_services(monkeypatch)
 
     payload = run_biased_mf_experiment(
         processed_manifest_path=processed_manifest_path,

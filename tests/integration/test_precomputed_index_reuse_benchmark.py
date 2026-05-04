@@ -4,6 +4,7 @@ from pathlib import Path
 import pyarrow as pa
 import pyarrow.parquet as pq
 
+from recsys_lab.experiments import unified_runner as unified_runner_module
 from recsys_lab.experiments.common import SplitConfig
 from recsys_lab.experiments.precomputed_index_reuse_benchmark import (
     run_precomputed_index_reuse_benchmark,
@@ -123,8 +124,9 @@ def test_run_precomputed_index_reuse_benchmark_writes_valid_artifacts(
         lambda _repo_root: git_payload,
     )
     monkeypatch.setattr(
-        "recsys_lab.experiments.svdpp.git_snapshot",
-        lambda _repo_root: git_payload,
+        unified_runner_module,
+        "DEFAULT_EXPERIMENT_SERVICES",
+        unified_runner_module.build_experiment_services(git_snapshot_fn=lambda _repo_root: git_payload),
     )
 
     payload = run_precomputed_index_reuse_benchmark(

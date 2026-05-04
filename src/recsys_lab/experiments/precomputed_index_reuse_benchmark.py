@@ -27,6 +27,7 @@ from recsys_lab.experiments.runtime import (
     runtime_execution_context,
 )
 from recsys_lab.experiments.svdpp import run_svdpp_experiment
+from recsys_lab.models.registry import validated_model_config_payload_with_training_overrides
 from recsys_lab.utils.manifests import validate_manifest_file
 from recsys_lab.utils.paths import discover_repo_root, repo_path_string
 
@@ -52,8 +53,11 @@ def _prepare_model_config(
     override_epochs: int,
 ) -> dict[str, Any]:
     payload = load_yaml_file(source_path)
-    training = payload.setdefault("training", {})
-    training["epochs"] = int(override_epochs)
+    payload = validated_model_config_payload_with_training_overrides(
+        payload,
+        expected_model_name=source_path.stem,
+        training_overrides={"epochs": int(override_epochs)},
+    )
     dump_yaml_file(output_path, payload)
     return payload
 

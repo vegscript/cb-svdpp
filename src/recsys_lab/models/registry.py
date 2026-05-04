@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 from dataclasses import asdict, dataclass
 from typing import Any, ClassVar
 
@@ -382,6 +383,7 @@ class CBSVDppAdapter(ModelAdapter):
         artifacts: FitArtifacts,
         reuse_precomputed_indices: bool,
     ) -> CBSVDppRecommender:
+        # False intentionally leaves index construction to the model fallback path.
         return model.fit(
             train_data,
             user_histories=artifacts.user_history_index if reuse_precomputed_indices else None,
@@ -471,6 +473,7 @@ class CBASVDppAdapter(ModelAdapter):
         artifacts: FitArtifacts,
         reuse_precomputed_indices: bool,
     ) -> CBASVDppRecommender:
+        # False intentionally leaves index construction to the model fallback path.
         return model.fit(
             train_data,
             explicit_feedback=artifacts.explicit_feedback_index if reuse_precomputed_indices else None,
@@ -518,17 +521,36 @@ def validate_model_config_payload(
     return adapter, profile
 
 
+def validated_model_config_payload_with_training_overrides(
+    model_config_payload: dict[str, Any],
+    *,
+    training_overrides: dict[str, Any],
+    expected_model_name: str | None = None,
+) -> dict[str, Any]:
+    validate_model_config_payload(model_config_payload, expected_model_name=expected_model_name)
+    payload = copy.deepcopy(model_config_payload)
+    training_payload = payload["training"]
+    if not isinstance(training_payload, dict):
+        raise TypeError("model config field 'training' must be a mapping")
+    for key, value in training_overrides.items():
+        training_payload[key] = copy.deepcopy(value)
+    validate_model_config_payload(payload, expected_model_name=expected_model_name)
+    return payload
+
+
 def build_cb_semantics(alpha: float) -> dict[str, Any]:
     alpha_value = float(alpha)
     cluster_enabled = alpha_value > 0.0
     return {
         "alpha": alpha_value,
-        "cluster_contribution_enabled": cluster_enabled,
-        "cb_claim_eligible": cluster_enabled,
-        "reason": (
-            "alpha>0 enables cluster factor contribution"
+        "cluster_contribution_config_enabled": cluster_enabled,
+        "cluster_contribution_measured": None if cluster_enabled else False,
+        "cb_claim_eligible": False,
+        "claim_gate_reason": (
+            "alpha>0 enables cluster channel, but claim eligibility requires diagnostics "
+            "and ablation evidence"
             if cluster_enabled
-            else "alpha=0 disables cluster factor contribution"
+            else "alpha=0 disables cluster factor contribution; run is a CB-disabled ablation"
         ),
     }
 

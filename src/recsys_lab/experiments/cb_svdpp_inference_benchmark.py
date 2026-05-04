@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import traceback
 from pathlib import Path
 from typing import Any
@@ -44,7 +43,10 @@ from recsys_lab.experiments.runtime import (
 from recsys_lab.models.cb_svdpp import CBSVDppRecommender
 from recsys_lab.models.config_schemas import CBSVDppModelProfile
 from recsys_lab.models.inference import build_unique_user_context_batch
-from recsys_lab.models.registry import validate_model_config_payload
+from recsys_lab.models.registry import (
+    validate_model_config_payload,
+    validated_model_config_payload_with_training_overrides,
+)
 from recsys_lab.utils.manifests import load_json_file, validate_manifest_file
 from recsys_lab.utils.paths import discover_repo_root, repo_path_string
 
@@ -210,8 +212,11 @@ def run_cb_svdpp_inference_cache_benchmark(
         },
     }
 
-    benchmark_model_config = json.loads(json.dumps(model_config_payload))
-    benchmark_model_config.setdefault("training", {})["epochs"] = reduced_epochs
+    benchmark_model_config = validated_model_config_payload_with_training_overrides(
+        model_config_payload,
+        expected_model_name="cb_svdpp",
+        training_overrides={"epochs": reduced_epochs},
+    )
     benchmark_model_config_path = config_dir / "cb_svdpp_inference_benchmark.yaml"
     dump_yaml_file(benchmark_model_config_path, benchmark_model_config)
 

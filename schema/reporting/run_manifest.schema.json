@@ -115,20 +115,29 @@
     "cb_semantics": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["alpha", "cluster_contribution_enabled", "cb_claim_eligible", "reason"],
+      "required": [
+        "alpha",
+        "cluster_contribution_config_enabled",
+        "cluster_contribution_measured",
+        "cb_claim_eligible",
+        "claim_gate_reason"
+      ],
       "properties": {
         "alpha": {
           "type": "number",
           "minimum": 0,
           "maximum": 1
         },
-        "cluster_contribution_enabled": {
+        "cluster_contribution_config_enabled": {
           "type": "boolean"
+        },
+        "cluster_contribution_measured": {
+          "type": ["boolean", "null"]
         },
         "cb_claim_eligible": {
           "type": "boolean"
         },
-        "reason": {
+        "claim_gate_reason": {
           "type": "string",
           "minLength": 1
         }

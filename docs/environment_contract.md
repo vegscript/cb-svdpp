@@ -46,6 +46,29 @@ Device-Profile sind die kanonische Stelle fuer:
 - Benchmark-Schalter
 - spaetere GPU-Schalter
 
+## Model Config Contract
+
+Produktive CLI-, Benchmark- und Tuning-Pfade duerfen Modellkonfigurationen nur
+ueber die Pydantic-`ModelProfile`-Schemas und den `ModelAdapter` bauen.
+
+Der zulaessige Produktionspfad ist:
+
+```text
+YAML payload -> validate_model_config_payload -> ModelAdapter.build_model_config
+```
+
+Interne Modell-Config-Dataclasses duerfen Defaults fuer fokussierte Tests und
+direkte Modell-Unit-Tests behalten. Diese Defaults sind keine produktive
+Config-Quelle. Produktive Pfade duerfen deshalb keine Modell-Dataclass direkt
+aus YAML-Dicts konstruieren und keine `.get(..., default)`- oder
+`.setdefault(...)`-Fallbacks fuer Modellparameter verwenden.
+
+Abgeleitete Benchmark- oder Tuning-Kandidaten muessen nach jeder
+programmatischen Override-Erzeugung erneut mit `validate_model_config_payload`
+validiert werden. Felder wie `init_std`, `training_backend`, `lambda_xC` und
+`lambda_yC` muessen explizit im Schema stehen und duerfen nicht still implizit
+ergaenzt werden.
+
 Lokale Referenzhardware:
 
 - CPU: `Intel Core i5-2500K`

@@ -5,6 +5,7 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 
 from recsys_lab.data.splitters import RatingsSplit
+from recsys_lab.experiments import unified_runner as unified_runner_module
 from recsys_lab.experiments.cb_svdpp import run_cb_svdpp_experiment
 from recsys_lab.experiments.common import SplitConfig
 from tests.support.model_configs import model_config_yaml
@@ -109,6 +110,17 @@ def _prepare_synthetic_repo(tmp_path: Path, actual_repo_root: Path) -> tuple[Pat
     )
 
 
+def _patch_unified_services(monkeypatch, *, paper_faithful_split_fn=None) -> None:
+    monkeypatch.setattr(
+        unified_runner_module,
+        "DEFAULT_EXPERIMENT_SERVICES",
+        unified_runner_module.build_experiment_services(
+            git_snapshot_fn=lambda _repo_root: {"commit": "abcdef1234567", "branch": "main", "dirty": False},
+            paper_faithful_split_fn=paper_faithful_split_fn,
+        ),
+    )
+
+
 def test_run_cb_svdpp_experiment_writes_valid_run_artifacts(tmp_path: Path, monkeypatch) -> None:
     actual_repo_root = Path(__file__).resolve().parents[2]
     repo_root, processed_manifest_path, model_config_path, device_config_path = _prepare_synthetic_repo(
@@ -117,10 +129,7 @@ def test_run_cb_svdpp_experiment_writes_valid_run_artifacts(tmp_path: Path, monk
     )
     runtime_config_path = repo_root / "configs" / "runtime" / "base.yaml"
 
-    monkeypatch.setattr(
-        "recsys_lab.experiments.cb_svdpp.git_snapshot",
-        lambda _repo_root: {"commit": "abcdef1234567", "branch": "main", "dirty": False},
-    )
+    _patch_unified_services(monkeypatch)
 
     payload = run_cb_svdpp_experiment(
         processed_manifest_path=processed_manifest_path,
@@ -166,6 +175,26 @@ def test_run_cb_svdpp_experiment_writes_valid_run_artifacts(tmp_path: Path, monk
     assert metrics["metrics"]["validation_rmse"] >= 0.0
     assert metrics["model"]["clustering"]["r_star_role"] == "diagnostic_only"
     assert metrics["model"]["clustering"]["train_only_assignments"] is True
+    cb_diagnostics = metrics["cb_diagnostics"]
+    assert cb_diagnostics["alpha"] == 0.2
+    assert cb_diagnostics["cluster_artifacts_present"] is True
+    assert cb_diagnostics["user_cluster_count"] == 2
+    assert cb_diagnostics["item_cluster_count"] == 2
+    assert cb_diagnostics["empty_user_clusters"] >= 0
+    assert cb_diagnostics["empty_item_clusters"] >= 0
+    assert cb_diagnostics["user_cluster_size_min"] >= 0
+    assert cb_diagnostics["item_cluster_size_min"] >= 0
+    assert cb_diagnostics["user_cluster_size_max"] >= cb_diagnostics["user_cluster_size_min"]
+    assert cb_diagnostics["item_cluster_size_max"] >= cb_diagnostics["item_cluster_size_min"]
+    assert cb_diagnostics["individual_factor_norm_mean"] is not None
+    assert cb_diagnostics["cluster_factor_norm_mean"] is not None
+    assert cb_diagnostics["implicit_factor_norm_mean"] is not None
+    assert cb_diagnostics["implicit_cluster_factor_norm_mean"] is not None
+    assert cb_diagnostics["missing_expected_artifacts"] == []
+    assert cb_diagnostics["missing_expected_model_fields"] == []
+    assert cb_diagnostics["cluster_contribution_config_enabled"] is True
+    assert cb_diagnostics["cb_claim_eligible"] is False
+    assert cb_diagnostics["diagnostic_claim_ready"] is False
     assert metrics["system_metrics"]["train_time_total"] >= metrics["timing"]["training_wall_clock_seconds"]
     assert metrics["system_metrics"]["train_time_per_epoch"] > 0.0
     assert metrics["system_metrics"]["ratings_per_second_train"] > 0.0
@@ -188,10 +217,7 @@ def test_run_cb_svdpp_cluster_artifact_cache_hits_on_second_run(tmp_path: Path, 
     )
     runtime_config_path = repo_root / "configs" / "runtime" / "base.yaml"
 
-    monkeypatch.setattr(
-        "recsys_lab.experiments.cb_svdpp.git_snapshot",
-        lambda _repo_root: {"commit": "abcdef1234567", "branch": "main", "dirty": False},
-    )
+    _patch_unified_services(monkeypatch)
     common_kwargs = {
         "processed_manifest_path": processed_manifest_path,
         "model_config_path": model_config_path,
@@ -240,11 +266,6 @@ def test_run_cb_svdpp_experiment_supports_official_split_family_without_test_eva
         actual_repo_root,
     )
     runtime_config_path = repo_root / "configs" / "runtime" / "base.yaml"
-    monkeypatch.setattr(
-        "recsys_lab.experiments.cb_svdpp.git_snapshot",
-        lambda _repo_root: {"commit": "abcdef1234567", "branch": "main", "dirty": False},
-    )
-
     def _fake_official_split(ratings_data, *, processed_manifest_path, fold_index):
         del processed_manifest_path, fold_index
         return RatingsSplit(
@@ -253,10 +274,7 @@ def test_run_cb_svdpp_experiment_supports_official_split_family_without_test_eva
             test=ratings_data.subset([2, 5, 8, 11], name="test"),
         )
 
-    monkeypatch.setattr(
-        "recsys_lab.experiments.cb_svdpp.official_ml100k_paper_faithful_split",
-        _fake_official_split,
-    )
+    _patch_unified_services(monkeypatch, paper_faithful_split_fn=_fake_official_split)
 
     payload = run_cb_svdpp_experiment(
         processed_manifest_path=processed_manifest_path,

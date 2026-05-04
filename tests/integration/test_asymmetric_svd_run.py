@@ -4,6 +4,7 @@ from pathlib import Path
 import pyarrow as pa
 import pyarrow.parquet as pq
 
+from recsys_lab.experiments import unified_runner as unified_runner_module
 from recsys_lab.experiments.asymmetric_svd import run_asymmetric_svd_experiment
 from recsys_lab.experiments.common import SplitConfig
 from tests.support.model_configs import model_config_yaml
@@ -99,6 +100,16 @@ def _prepare_synthetic_repo(tmp_path: Path, actual_repo_root: Path) -> tuple[Pat
     )
 
 
+def _patch_unified_services(monkeypatch) -> None:
+    monkeypatch.setattr(
+        unified_runner_module,
+        "DEFAULT_EXPERIMENT_SERVICES",
+        unified_runner_module.build_experiment_services(
+            git_snapshot_fn=lambda _repo_root: {"commit": "abcdef1234567", "branch": "main", "dirty": False},
+        ),
+    )
+
+
 def test_run_asymmetric_svd_experiment_writes_valid_run_artifacts(
     tmp_path: Path,
     monkeypatch,
@@ -110,10 +121,7 @@ def test_run_asymmetric_svd_experiment_writes_valid_run_artifacts(
     )
     runtime_config_path = repo_root / "configs" / "runtime" / "base.yaml"
 
-    monkeypatch.setattr(
-        "recsys_lab.experiments.asymmetric_svd.git_snapshot",
-        lambda _repo_root: {"commit": "abcdef1234567", "branch": "main", "dirty": False},
-    )
+    _patch_unified_services(monkeypatch)
 
     payload = run_asymmetric_svd_experiment(
         processed_manifest_path=processed_manifest_path,

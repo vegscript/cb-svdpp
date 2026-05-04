@@ -3,12 +3,11 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from recsys_lab.experiments.common import SplitConfig, git_snapshot
-from recsys_lab.experiments.unified_runner import build_experiment_services, run_unified_experiment
+from recsys_lab.experiments.common import SplitConfig
+from recsys_lab.experiments.unified_runner import run_unified_experiment
 from recsys_lab.models.biased_mf import BiasedMFConfig
 from recsys_lab.models.registry import BiasedMFAdapter, validate_model_config_payload
 from recsys_lab.utils.paths import discover_repo_root
-
 
 # Legacy compatibility wrapper only.
 # Do not add experiment lifecycle logic here.
@@ -56,5 +55,4 @@ def run_biased_mf_experiment(
         split_family=split_family,
         inner_validation_seed=inner_validation_seed,
         evaluate_test=evaluate_test,
-        services=build_experiment_services(git_snapshot_fn=git_snapshot),
     )

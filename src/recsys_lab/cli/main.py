@@ -257,6 +257,9 @@ def train_model(
 
 
 @app.command("train-biased-mf")
+# Legacy compatibility wrapper only.
+# Do not add experiment lifecycle logic here.
+# All execution must delegate to run_unified_experiment.
 def train_biased_mf(
     processed_manifest: str,
     model_config: str = "configs/models/biased_mf.yaml",
@@ -297,6 +300,9 @@ def train_biased_mf(
 
 
 @app.command("train-svdpp")
+# Legacy compatibility wrapper only.
+# Do not add experiment lifecycle logic here.
+# All execution must delegate to run_unified_experiment.
 def train_svdpp(
     processed_manifest: str,
     model_config: str = "configs/models/svdpp.yaml",
@@ -345,6 +351,9 @@ def train_svdpp(
 
 
 @app.command("train-asymmetric-svd")
+# Legacy compatibility wrapper only.
+# Do not add experiment lifecycle logic here.
+# All execution must delegate to run_unified_experiment.
 def train_asymmetric_svd(
     processed_manifest: str,
     model_config: str = "configs/models/asymmetric_svd.yaml",
@@ -383,6 +392,9 @@ def train_asymmetric_svd(
 
 
 @app.command("train-asvdpp")
+# Legacy compatibility wrapper only.
+# Do not add experiment lifecycle logic here.
+# All execution must delegate to run_unified_experiment.
 def train_asvdpp(
     processed_manifest: str,
     model_config: str = "configs/models/asvdpp.yaml",
@@ -429,6 +441,9 @@ def train_asvdpp(
 
 
 @app.command("train-cb-svdpp")
+# Legacy compatibility wrapper only.
+# Do not add experiment lifecycle logic here.
+# All execution must delegate to run_unified_experiment.
 def train_cb_svdpp(
     processed_manifest: str,
     model_config: str = "configs/models/cb_svdpp.yaml",
@@ -483,6 +498,9 @@ def train_cb_svdpp(
 
 
 @app.command("train-cb-asvdpp")
+# Legacy compatibility wrapper only.
+# Do not add experiment lifecycle logic here.
+# All execution must delegate to run_unified_experiment.
 def train_cb_asvdpp(
     processed_manifest: str,
     model_config: str = "configs/models/cb_asvdpp.yaml",
@@ -515,9 +533,6 @@ def train_cb_asvdpp(
         raise typer.BadParameter("processed_manifest is required")
     if model_config_path is None or runtime_config_path is None or device_config_path is None:
         raise typer.BadParameter("model_config, runtime_config, and device_config are required")
-    split_cache_value = split_cache if isinstance(split_cache, str) else "auto"
-    training_index_cache_enabled = training_index_cache if isinstance(training_index_cache, bool) else False
-    cluster_artifact_cache_enabled = cluster_artifact_cache if isinstance(cluster_artifact_cache, bool) else False
 
     payload = run_cb_asvdpp_experiment(
         processed_manifest_path=processed_manifest_path,
@@ -532,9 +547,9 @@ def train_cb_asvdpp(
         model_seed=model_seed,
         repo_root=root,
         split_family=split_family,
-        use_split_cache=_resolve_split_cache_override(split_cache_value),
-        use_training_index_cache=training_index_cache_enabled,
-        use_cluster_artifact_cache=cluster_artifact_cache_enabled,
+        use_split_cache=_resolve_split_cache_override(split_cache),
+        use_training_index_cache=training_index_cache,
+        use_cluster_artifact_cache=cluster_artifact_cache,
     )
     typer.echo(json.dumps(payload, indent=2, sort_keys=True))
 

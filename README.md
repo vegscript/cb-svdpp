@@ -78,6 +78,18 @@ Basic smoke checks:
 .venv\Scripts\python.exe -m pytest
 ```
 
+Local quality gates after the canonical `uv sync --extra dev` setup:
+
+```powershell
+.venv\Scripts\ruff.exe check .
+.venv\Scripts\python.exe -m mypy --ignore-missing-imports --follow-imports=skip --no-incremental src/recsys_lab/core/config.py src/recsys_lab/utils/paths.py
+.venv\Scripts\python.exe -m pytest
+```
+
+The Mypy gate is intentionally scoped. `mypy src` currently fails on existing
+type-contract and third-party stub debt in the Registry/Runner and data-loading
+surface, so CI keeps a narrow typed smoke gate until that debt is resolved.
+
 Manifest validation examples in the evidence notes require the corresponding
 local, ignored run or benchmark artifact to exist.
 
@@ -152,6 +164,7 @@ Core contracts:
 - `docs/data_and_split_contract.md`
 - `docs/evaluation_protocol.md`
 - `docs/manifest_contract.md`
+- `docs/unified_experiment_framework.md`
 - `docs/report/report_contract.md`
 - `docs/methodology/deviations_from_paper.md`
 

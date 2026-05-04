@@ -70,6 +70,8 @@ def test_train_cb_asvdpp_wires_cluster_artifact_cache(monkeypatch, tmp_path) -> 
         model_config="configs/models/cb_asvdpp.yaml",
         runtime_config="configs/runtime/base.yaml",
         device_config="configs/runtime/devices/local_i5_2500k_24gb.yaml",
+        split_cache="auto",
+        training_index_cache=False,
         cluster_artifact_cache=True,
     )
 

@@ -90,8 +90,10 @@ Optional, aber dringend empfohlen:
 - `dataset.source`
 - `dataset.manifest_ref`
 - `cb_semantics.alpha`
-- `cb_semantics.cluster_contribution_enabled`
+- `cb_semantics.cluster_contribution_config_enabled`
+- `cb_semantics.cluster_contribution_measured`
 - `cb_semantics.cb_claim_eligible`
+- `cb_semantics.claim_gate_reason`
 - `runtime.platform`
 - `runtime.hostname`
 - `runtime.device_profile_contract`
@@ -104,6 +106,11 @@ Optional, aber dringend empfohlen:
 - `dependencies.environment_hash`
 - `timing.started_at_utc`
 - `timing.finished_at_utc`
+
+CB-Semantik trennt Konfiguration, Diagnostik und Claim-Governance. `alpha > 0`
+aktiviert nur den Clusterkanal in der Modellkonfiguration. Ein CB-Qualitaetsclaim
+ist daraus nicht ableitbar; `cb_claim_eligible` bleibt ohne explizite
+Diagnostik- und Ablations-Evidenz `false`.
 
 If a run uses persisted local caches, `caches` must report whether each cache
 was `hit`, `miss`, or `disabled`. Cache manifests are lineage evidence only;

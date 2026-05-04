@@ -1045,6 +1045,15 @@ def _induction_payload_from_model_config(model_config: object) -> dict[str, Any]
 
 def _cluster_size_summary(sizes: np.ndarray) -> dict[str, Any]:
     size_values = np.asarray(sizes, dtype=np.int64)
+    if size_values.size == 0:
+        return {
+            "min_size": None,
+            "max_size": None,
+            "mean_size": None,
+            "empty_cluster_count": 0,
+            "near_empty_cluster_count_le1": 0,
+            "nonempty_cluster_count": 0,
+        }
     return {
         "min_size": int(size_values.min()),
         "max_size": int(size_values.max()),
@@ -1067,35 +1076,159 @@ def _build_cb_diagnostics(
     cb_semantics: dict[str, Any],
 ) -> dict[str, Any]:
     cluster_artifacts = fit_artifacts.cluster_artifacts
-    if cluster_artifacts is None:
-        raise ValueError("CB diagnostics require cluster artifacts")
-    sample_indices = _diagnostic_sample_indices(train_data, max_rows=10_000)
-    users = train_data.user_ids[sample_indices]
-    items = train_data.item_ids[sample_indices]
-    actual = model.predict_many(users, items, clip=False)
-    alpha_zero = _predict_alpha_zero(model=model, user_ids=users, item_ids=items)
-    contribution = np.asarray(actual - alpha_zero, dtype=np.float64)
+    missing_expected_artifacts = _missing_expected_cb_artifacts(fit_artifacts)
+    missing_expected_model_fields = _missing_expected_cb_model_fields(model)
+    diagnostic_warnings: list[str] = []
+
+    user_cluster_sizes = (
+        np.asarray(cluster_artifacts.user_cluster_sizes, dtype=np.int64)
+        if cluster_artifacts is not None
+        else np.asarray([], dtype=np.int64)
+    )
+    item_cluster_sizes = (
+        np.asarray(cluster_artifacts.item_cluster_sizes, dtype=np.int64)
+        if cluster_artifacts is not None
+        else np.asarray([], dtype=np.int64)
+    )
+
+    contribution: np.ndarray | None = None
+    try:
+        sample_indices = _diagnostic_sample_indices(train_data, max_rows=10_000)
+        users = train_data.user_ids[sample_indices]
+        items = train_data.item_ids[sample_indices]
+        actual = model.predict_many(users, items, clip=False)
+        alpha_zero = _predict_alpha_zero(model=model, user_ids=users, item_ids=items)
+        contribution = np.asarray(actual - alpha_zero, dtype=np.float64)
+        diagnostic_sample_rows = int(sample_indices.shape[0])
+    except Exception as exc:  # pragma: no cover - defensive diagnostic path
+        diagnostic_sample_rows = 0
+        diagnostic_warnings.append(f"cluster contribution diagnostic failed: {type(exc).__name__}: {exc}")
+
+    individual_factor_norm_mean = _factor_norm_mean(
+        model,
+        ("user_factors", "item_factors"),
+    )
+    cluster_factor_norm_mean = _factor_norm_mean(
+        model,
+        ("user_cluster_factors", "item_cluster_factors"),
+    )
+    cluster_to_individual_norm_ratio = _safe_ratio(
+        numerator=cluster_factor_norm_mean,
+        denominator=individual_factor_norm_mean,
+    )
+    cluster_contribution_measured = (
+        _cluster_contribution_measured(contribution) if contribution is not None else None
+    )
     return {
+        "alpha": float(cb_semantics["alpha"]),
         "effective_alpha": float(cb_semantics["alpha"]),
-        "cluster_contribution_enabled": bool(cb_semantics["cluster_contribution_enabled"]),
+        "cluster_artifacts_present": cluster_artifacts is not None,
+        "user_cluster_count": int(user_cluster_sizes.size) if cluster_artifacts is not None else None,
+        "item_cluster_count": int(item_cluster_sizes.size) if cluster_artifacts is not None else None,
+        "empty_user_clusters": _empty_cluster_count(user_cluster_sizes),
+        "empty_item_clusters": _empty_cluster_count(item_cluster_sizes),
+        "user_cluster_size_min": _cluster_size_min(user_cluster_sizes),
+        "user_cluster_size_max": _cluster_size_max(user_cluster_sizes),
+        "item_cluster_size_min": _cluster_size_min(item_cluster_sizes),
+        "item_cluster_size_max": _cluster_size_max(item_cluster_sizes),
+        "individual_factor_norm_mean": individual_factor_norm_mean,
+        "cluster_factor_norm_mean": cluster_factor_norm_mean,
+        "cluster_to_individual_norm_ratio": cluster_to_individual_norm_ratio,
+        "implicit_factor_norm_mean": _factor_norm_mean(model, ("implicit_factors",)),
+        "implicit_cluster_factor_norm_mean": _factor_norm_mean(model, ("implicit_cluster_factors",)),
+        "explicit_factor_norm_mean": _factor_norm_mean(model, ("explicit_factors",)),
+        "explicit_cluster_factor_norm_mean": _factor_norm_mean(model, ("explicit_cluster_factors",)),
+        "missing_expected_artifacts": missing_expected_artifacts,
+        "missing_expected_model_fields": missing_expected_model_fields,
+        "diagnostic_claim_ready": False,
+        "diagnostic_warnings": diagnostic_warnings,
+        "cluster_contribution_config_enabled": bool(cb_semantics["cluster_contribution_config_enabled"]),
+        "cluster_contribution_measured": cluster_contribution_measured,
         "cb_claim_eligible": bool(cb_semantics["cb_claim_eligible"]),
-        "cluster_factor_norm_ratio": _cluster_factor_norm_ratio(model),
-        "average_absolute_cluster_prediction_contribution": float(np.mean(np.abs(contribution))),
-        "diagnostic_sample_rows": int(sample_indices.shape[0]),
-        "r_star_density": _r_star_density(cluster_artifacts.r_star_counts),
+        "claim_gate_reason": str(cb_semantics["claim_gate_reason"]),
+        "cluster_factor_norm_ratio": cluster_to_individual_norm_ratio,
+        "average_absolute_cluster_prediction_contribution": (
+            float(np.mean(np.abs(contribution))) if contribution is not None else None
+        ),
+        "diagnostic_sample_rows": diagnostic_sample_rows,
+        "r_star_density": (
+            _r_star_density(cluster_artifacts.r_star_counts) if cluster_artifacts is not None else None
+        ),
         "cluster_size_distribution": {
-            "users": _cluster_size_summary(cluster_artifacts.user_cluster_sizes),
-            "items": _cluster_size_summary(cluster_artifacts.item_cluster_sizes),
+            "users": _cluster_size_summary(user_cluster_sizes),
+            "items": _cluster_size_summary(item_cluster_sizes),
         },
         "cluster_coverage": {
-            "user_cluster_coverage": _cluster_coverage(cluster_artifacts.user_cluster_sizes),
-            "item_cluster_coverage": _cluster_coverage(cluster_artifacts.item_cluster_sizes),
+            "user_cluster_coverage": _cluster_coverage(user_cluster_sizes),
+            "item_cluster_coverage": _cluster_coverage(item_cluster_sizes),
         },
         "alpha_zero_ablation_reference": {
             "available": False,
             "reason": "no same-split alpha=0 reference run was supplied to the unified runner",
         },
     }
+
+
+def _missing_expected_cb_artifacts(fit_artifacts: FitArtifacts) -> list[str]:
+    missing: list[str] = []
+    if fit_artifacts.cluster_artifacts is None:
+        missing.append("cluster_artifacts")
+    if fit_artifacts.user_cluster_history_index is None:
+        missing.append("user_cluster_history_index")
+    return missing
+
+
+def _missing_expected_cb_model_fields(model: object) -> list[str]:
+    if isinstance(model, CBSVDppRecommender):
+        expected = (
+            "user_factors",
+            "item_factors",
+            "implicit_factors",
+            "user_cluster_factors",
+            "item_cluster_factors",
+            "implicit_cluster_factors",
+            "user_histories",
+            "user_cluster_histories",
+        )
+    elif isinstance(model, CBASVDppRecommender):
+        expected = (
+            "user_factors",
+            "item_factors",
+            "explicit_factors",
+            "implicit_factors",
+            "user_cluster_factors",
+            "item_cluster_factors",
+            "explicit_cluster_factors",
+            "implicit_cluster_factors",
+            "explicit_feedback",
+            "implicit_history",
+            "implicit_cluster_history",
+        )
+    else:
+        return ["unsupported_cb_model_type"]
+    return [name for name in expected if getattr(model, name, None) is None]
+
+
+def _cluster_contribution_measured(contribution: np.ndarray | None) -> bool:
+    if contribution is None:
+        return False
+    values = np.asarray(contribution, dtype=np.float64)
+    return bool(values.size and np.max(np.abs(values)) > 1.0e-12)
+
+
+def _empty_cluster_count(sizes: np.ndarray) -> int | None:
+    values = np.asarray(sizes, dtype=np.int64)
+    return int((values == 0).sum()) if values.size else None
+
+
+def _cluster_size_min(sizes: np.ndarray) -> int | None:
+    values = np.asarray(sizes, dtype=np.int64)
+    return int(values.min()) if values.size else None
+
+
+def _cluster_size_max(sizes: np.ndarray) -> int | None:
+    values = np.asarray(sizes, dtype=np.int64)
+    return int(values.max()) if values.size else None
 
 
 def _diagnostic_sample_indices(data, *, max_rows: int) -> np.ndarray:
@@ -1115,24 +1248,29 @@ def _cluster_coverage(sizes: np.ndarray) -> float:
     return float((size_values > 0).sum() / size_values.size) if size_values.size else 0.0
 
 
-def _cluster_factor_norm_ratio(model: object) -> float | None:
-    individual_arrays = [
-        getattr(model, "user_factors", None),
-        getattr(model, "item_factors", None),
-        getattr(model, "explicit_factors", None),
-        getattr(model, "implicit_factors", None),
-    ]
-    cluster_arrays = [
-        getattr(model, "user_cluster_factors", None),
-        getattr(model, "item_cluster_factors", None),
-        getattr(model, "explicit_cluster_factors", None),
-        getattr(model, "implicit_cluster_factors", None),
-    ]
-    individual_norm = sum(float(np.linalg.norm(array)) for array in individual_arrays if array is not None)
-    cluster_norm = sum(float(np.linalg.norm(array)) for array in cluster_arrays if array is not None)
-    if individual_norm == 0.0:
+def _factor_norm_mean(model: object, factor_names: tuple[str, ...]) -> float | None:
+    row_norms: list[np.ndarray] = []
+    for factor_name in factor_names:
+        factor = getattr(model, factor_name, None)
+        if factor is None:
+            continue
+        values = np.asarray(factor, dtype=np.float64)
+        if values.size == 0:
+            continue
+        if values.ndim == 1:
+            row_norms.append(np.abs(values))
+        else:
+            rows = values.reshape(values.shape[0], -1)
+            row_norms.append(np.linalg.norm(rows, axis=1))
+    if not row_norms:
         return None
-    return float(cluster_norm / individual_norm)
+    return float(np.mean(np.concatenate(row_norms)))
+
+
+def _safe_ratio(*, numerator: float | None, denominator: float | None) -> float | None:
+    if numerator is None or denominator is None or denominator == 0.0:
+        return None
+    return float(numerator / denominator)
 
 
 def _predict_alpha_zero(*, model: object, user_ids: np.ndarray, item_ids: np.ndarray) -> np.ndarray:
