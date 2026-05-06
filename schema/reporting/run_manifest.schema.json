@@ -402,6 +402,9 @@
         "performance_profile": {
           "type": "string"
         },
+        "kernel_profile": {
+          "type": "string"
+        },
         "stdout_log": {
           "type": "string"
         },

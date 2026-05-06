@@ -38,6 +38,7 @@ from recsys_lab.experiments.common import (
     write_json,
     write_log,
 )
+from recsys_lab.experiments.kernel_profile import build_kernel_profile_payload
 from recsys_lab.experiments.performance import (
     PeakMemoryMonitor,
     StageProfiler,
@@ -181,6 +182,7 @@ def run_unified_experiment(
     config_snapshot_path = run_dir / "config_snapshot.yaml"
     metrics_path = run_dir / "metrics.json"
     performance_profile_path = run_dir / "performance_profile.json"
+    kernel_profile_path = run_dir / "kernel_profile.json"
     stdout_log_path = run_dir / "stdout.log"
     run_manifest_path = run_dir / "run_manifest.json"
     git = experiment_services.git_snapshot_fn(root)
@@ -232,6 +234,7 @@ def run_unified_experiment(
         if cb_semantics is not None:
             base_manifest["cb_semantics"] = cb_semantics
         base_manifest["artifacts"]["performance_profile"] = repo_path_string(performance_profile_path, repo_root=root)
+        base_manifest["artifacts"]["kernel_profile"] = repo_path_string(kernel_profile_path, repo_root=root)
 
         with stage_profiler.stage("resolve_model_requirements", metadata={"model_name": adapter.name}) as req_stage:
             model_requirements = model_requirements_payload(adapter)
@@ -409,6 +412,22 @@ def run_unified_experiment(
                         reuse_precomputed_indices=reuse_precomputed_indices,
                     )
                 training_seconds = perf_counter() - training_started
+                kernel_profile_payload = build_kernel_profile_payload(
+                    run_id=run_id,
+                    dataset=dataset_short_name,
+                    model=adapter.name,
+                    epochs=_model_epochs(model_config),
+                    latent_dim=_model_latent_dim(model_config),
+                    train_rows=len(train_data),
+                    train_user_ids=train_data.user_ids,
+                    epoch_durations_seconds=getattr(model, "epoch_durations_seconds", []),
+                    fit_artifacts=fit_artifacts,
+                )
+                with stage_profiler.stage(
+                    "write_kernel_profile",
+                    metadata={"path": repo_path_string(kernel_profile_path, repo_root=root)},
+                ):
+                    write_json(kernel_profile_path, kernel_profile_payload)
 
                 inference_started = perf_counter()
                 with stage_profiler.stage("predict_train", metadata=_ratings_stage_metadata(train_data)):
@@ -513,8 +532,13 @@ def run_unified_experiment(
                     performance_profile_payload=performance_profile_summary_payload,
                     performance_profile_path=performance_profile_path,
                 ),
+                "kernel_profile": _kernel_profile_summary(
+                    kernel_profile_payload=kernel_profile_payload,
+                    kernel_profile_path=kernel_profile_path,
+                ),
                 "artifacts": {
                     "performance_profile": repo_path_string(performance_profile_path, repo_root=root),
+                    "kernel_profile": repo_path_string(kernel_profile_path, repo_root=root),
                 },
                 "caches": caches_payload,
                 "dataset": ratings_summary(ratings_data),
@@ -753,6 +777,23 @@ def _performance_profile_summary(
         "stage_count": performance_profile_payload["stage_count"],
         "total_profiled_wall_clock_seconds": performance_profile_payload["total_profiled_wall_clock_seconds"],
         "top_hotspots": performance_profile_payload["hotspots"][:5],
+    }
+
+
+def _kernel_profile_summary(
+    *,
+    kernel_profile_payload: dict[str, Any],
+    kernel_profile_path: Path,
+) -> dict[str, Any]:
+    return {
+        "path": kernel_profile_path.name,
+        "profile_version": kernel_profile_payload["profile_version"],
+        "epoch_count": len(kernel_profile_payload["epoch_durations_seconds"]),
+        "train_rows": kernel_profile_payload["train_rows"],
+        "estimated_factor_touches": kernel_profile_payload["estimated_kernel_work"]["estimated_factor_touches"],
+        "fit_seconds_per_million_estimated_factor_touches": kernel_profile_payload["cost_ratios"][
+            "fit_seconds_per_million_estimated_factor_touches"
+        ],
     }
 
 
@@ -1478,6 +1519,10 @@ def _cluster_size_summary(sizes: np.ndarray) -> dict[str, Any]:
 
 def _model_epochs(model_config: object) -> int:
     return int(cast(Any, model_config).epochs)
+
+
+def _model_latent_dim(model_config: object) -> int:
+    return int(cast(Any, model_config).latent_dim)
 
 
 def _build_cb_diagnostics(
