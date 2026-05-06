@@ -1,14 +1,20 @@
 from __future__ import annotations
 
+import importlib
 from pathlib import Path
+from types import ModuleType
 from typing import Any
 
 
-def load_yaml_file(path: Path) -> dict[str, Any]:
+def _load_yaml_module() -> ModuleType:
     try:
-        import yaml
+        return importlib.import_module("yaml")
     except ImportError as exc:
         raise RuntimeError("PyYAML is required to load YAML configs. Run the canonical setup path first.") from exc
+
+
+def load_yaml_file(path: Path) -> dict[str, Any]:
+    yaml: Any = _load_yaml_module()
 
     with path.open("r", encoding="utf-8") as handle:
         data = yaml.safe_load(handle)
@@ -21,10 +27,7 @@ def load_yaml_file(path: Path) -> dict[str, Any]:
 
 
 def dump_yaml_file(path: Path, payload: dict[str, Any]) -> None:
-    try:
-        import yaml
-    except ImportError as exc:
-        raise RuntimeError("PyYAML is required to write YAML configs. Run the canonical setup path first.") from exc
+    yaml: Any = _load_yaml_module()
 
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", encoding="utf-8", newline="\n") as handle:

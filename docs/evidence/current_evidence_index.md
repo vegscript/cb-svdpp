@@ -1,12 +1,17 @@
 # Current Evidence Index
 
 This index is the current navigation point for evidence. The reproduction files
-were reorganized on 2026-05-04 into `current/` and `archive/` folders. Historical
+were reorganized on 2026-05-04 into `current/` and `archive/` directories. Historical
 commands and original path strings inside evidence notes remain historical
 execution provenance; external references should use the paths listed here.
 
 ## Current Reproduction Evidence
 
+- Controlled run indexes:
+  `docs/evidence/runs/ml100k_run_index.md`,
+  `docs/evidence/runs/ml1m_run_index.md`,
+  `docs/evidence/runs/ml10m_run_index.md`,
+  `docs/evidence/runs/ml20m_run_index.md`
 - Public clean import:
   `docs/evidence/reproduction/current/2026-05-02_public_clean_import.md`
 - Public path hygiene:
@@ -23,13 +28,13 @@ execution provenance; external references should use the paths listed here.
   `docs/evidence/reproduction/current/2026-05-02_cluster_artifact_cache_g4.md`
 - Inner tuning cache controls:
   `docs/evidence/reproduction/current/2026-05-02_tune_inner_cache_controls_g5.md`
-- CB-SVD++ G6 validation-grid contract:
+- Historical release evidence: CB-SVD++ G6 validation-grid contract:
   `docs/evidence/reproduction/current/2026-05-03_cb_svdpp_g6_validation_grid_contract.md`
-- CB-SVD++ G6 validation-grid run:
+- Historical release evidence: CB-SVD++ G6 validation-grid run:
   `docs/evidence/reproduction/current/2026-05-03_cb_svdpp_g6_validation_grid_run.md`
-- CB-SVD++ G6 outer benchmark contract:
+- Historical release evidence: CB-SVD++ G6 outer benchmark contract:
   `docs/evidence/reproduction/current/2026-05-03_cb_svdpp_g6_outer_benchmark_contract.md`
-- CB-SVD++ G6 outer benchmark run:
+- Historical release evidence: CB-SVD++ G6 outer benchmark run:
   `docs/evidence/reproduction/current/2026-05-03_cb_svdpp_g6_outer_benchmark_run.md`
 - CB-ASVD++ hotpath decision:
   `docs/evidence/reproduction/current/2026-05-03_cb_asvdpp_hotpath_decision_g7.md`
@@ -42,7 +47,7 @@ execution provenance; external references should use the paths listed here.
 
 ## Archived Or Negative Evidence
 
-- ML20M CB-SVD++ G11 lower-memory validation contract:
+- Archived/resource evidence: ML20M CB-SVD++ G11 lower-memory validation contract:
   `docs/evidence/reproduction/current/2026-05-03_ml20m_cb_svdpp_g11_lower_memory_validation_contract.md`
 
   This is archived/blocked negative resource evidence for `ml20m cb_svdpp`.
@@ -78,7 +83,7 @@ execution provenance; external references should use the paths listed here.
 
 ## Migration Notes
 
-- `configs/models/tuned/ml20m_cb_svdpp_stage0_transfer.yaml` moved to
+- Archived original path `configs/models/tuned/ml20m_cb_svdpp_stage0_transfer.yaml` moved to
   `configs/models/archive/tuned/ml20m_cb_svdpp_stage0_transfer.yaml` as
   blocked negative-resource evidence, not as an active selected profile.
 - `configs/models/development/ml100k_cb_svdpp_stage_profile_smoke.yaml` moved
@@ -90,4 +95,4 @@ execution provenance; external references should use the paths listed here.
 - Historical evidence notes may still contain original command strings with
   pre-migration paths. Those strings describe how the historical run was
   recorded and should not be rewritten as if the run happened under the new
-  folder structure.
+  directory structure.

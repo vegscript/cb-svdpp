@@ -3,9 +3,9 @@
 ## What This Repo Does
 
 This repository is a research and engineering platform for controlled
-experiments with factorized recommender models, including clustering-based
-extensions. The current implementation is claim-limited: reported results must
-match the publish-readiness matrix and dated evidence notes.
+rating-prediction experiments with factorized recommender models and
+clustering-based extensions. Productive results must be backed by run artifacts,
+manifests, dated evidence notes, and the publish-readiness matrix.
 
 Release marker: `submission-2026-05-02-r10`
 
@@ -20,6 +20,15 @@ The active model ladder contains exactly six registry-backed models:
 5. `cb_svdpp`
 6. `cb_asvdpp`
 
+## Rating-Only Scope
+
+The current evaluation scope is explicit rating prediction. RMSE remains the
+primary metric, with MAE, error-distribution metrics, prediction range metrics,
+runtime, memory, cache, profiling, and manifest fields as supporting evidence.
+
+The repo does not currently evaluate ranking metrics, genres, tags, content
+features, online serving, or production readiness.
+
 ## Unified Experiment Framework
 
 Productive model runs go through `run_unified_experiment` and the model
@@ -33,8 +42,8 @@ registry. The active framework surface is:
 - history, explicit-feedback, cluster-artifact, metrics, manifest, profiling,
   and cache builders
 
-Legacy CLI and experiment wrappers are retained only as delegation paths into
-the unified runner.
+Legacy CLI and experiment wrappers are retained only as tested delegation paths
+into the unified runner.
 
 ## Setup
 
@@ -64,16 +73,41 @@ Unified training entry point:
 .venv\Scripts\python.exe -m recsys_lab.cli.main train --model biased_mf --processed-manifest data/processed/ml100k/manifest.json --model-config configs/models/biased_mf.yaml --runtime-config configs/runtime/base.yaml --device-config configs/runtime/devices/local_i5_2500k_24gb.yaml
 ```
 
-Model-specific wrappers may exist for compatibility with previous command
-records, but new productive runs should prefer `train --model`.
+Current artifact-derived report table:
 
-## Current Claim Boundary
+```powershell
+.venv\Scripts\python.exe scripts\collect_results.py
+```
+
+## Current Evidence
+
+Use `docs/evidence/current_evidence_index.md` for current evidence navigation.
+The README intentionally does not list every evidence note.
+
+Current clean benchmark anchors:
+
+| Dataset | Claimable Scope |
+| --- | --- |
+| `ml100k` | Clean multi-seed anchors for `biased_mf`, `svdpp`, `cb_svdpp`, and `cb_asvdpp`. |
+| `ml1m` | Clean matched multi-seed comparison for `biased_mf` vs `cb_svdpp`. |
+| `ml10m` | Clean matched multi-seed comparison for documented transfer profiles. |
+| `ml20m` | Clean `biased_mf` baseline anchor plus archived/resource evidence for clustering-model attempts; no final model-comparison claim. |
+
+Current generated run indexes:
+
+- `docs/evidence/runs/ml100k_run_index.md`
+- `docs/evidence/runs/ml1m_run_index.md`
+- `docs/evidence/runs/ml10m_run_index.md`
+- `docs/evidence/runs/ml20m_run_index.md`
+
+## Claim Boundary
 
 The final claim boundary is controlled by:
 
 - `docs/publish_readiness_matrix.md`
 - `docs/evaluation_protocol.md`
 - `docs/evidence/current_evidence_index.md`
+- `docs/report/project_report.md`
 
 Non-claims remain explicit:
 
@@ -81,30 +115,7 @@ Non-claims remain explicit:
 - no exact optimizer-faithful CB training claim
 - no final `ml20m` model-comparison claim
 - no final `ml1m cb_asvdpp` benchmark-anchor claim
-- no unqualified `faster`, `scalable`, or production-readiness claim
-
-Current clean benchmark anchors:
-
-| Dataset | Claimable Scope |
-| --- | --- |
-| `ml100k` | Clean multi-seed anchors for `biased_mf`, `svdpp`, `cb_svdpp`, and `cb_asvdpp`; the G6-selected `cb_svdpp` profile is a separate `benchmark_random_v1` readout. |
-| `ml1m` | Clean matched multi-seed comparison for `biased_mf` vs `cb_svdpp`. |
-| `ml10m` | Clean matched multi-seed comparison for the documented transfer profiles. |
-| `ml20m` | Clean `biased_mf` baseline anchor plus `cb_svdpp` blocked negative resource evidence; no final model-comparison claim. |
-
-## Repository Structure
-
-- `src/recsys_lab/`: active implementation code
-- `tests/`: unit, integration, and documentation guardrails
-- `configs/models/`: base profiles, selected profiles, and archived tuned profiles
-- `configs/experiments/`: active, template, and archived experiment configs
-- `docs/`: governance, math specs, evidence, and report
-- `scripts/`: reproducible helper entry points
-- `schema/`: run and benchmark manifest schemas
-- `data/`: local data zones, ignored except placeholders
-- `artifacts/`: generated run and benchmark outputs, ignored except placeholders
-
-## Evidence Index
-
-Use `docs/evidence/current_evidence_index.md` for current evidence navigation.
-The README intentionally does not list every reproduction note.
+- no ranking-performance claim
+- no genre, tag, or content-feature usage claim
+- no production-readiness claim
+- no unqualified `better`, `faster`, or `scalable` claim
