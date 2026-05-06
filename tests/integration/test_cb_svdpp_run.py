@@ -160,17 +160,20 @@ def test_run_cb_svdpp_experiment_writes_valid_run_artifacts(tmp_path: Path, monk
     assert metrics["profiling"]["stage_count"] == len(stage_names)
     assert metrics["profiling"]["total_profiled_wall_clock_seconds"] > 0.0
     assert {
-            "data_load",
-            "split_resolution",
-            "config_build",
-            "cluster_induction",
-            "user_history_index_resolution",
-            "user_cluster_history_build",
-            "model_initialization",
-        "main_training",
-        "inference_train",
-        "inference_validation",
-        "inference_test",
+        "load_ratings_data",
+        "load_train_ratings",
+        "load_validation_ratings",
+        "load_test_ratings",
+        "resolve_split_cache",
+        "build_model_config",
+        "build_cluster_artifacts",
+        "build_user_history_index",
+        "build_user_cluster_history_index",
+        "initialize_model",
+        "fit_model",
+        "predict_train",
+        "predict_validation",
+        "predict_test",
     }.issubset(stage_names)
     assert metrics["metrics"]["validation_rmse"] >= 0.0
     assert metrics["model"]["clustering"]["r_star_role"] == "diagnostic_only"
@@ -300,6 +303,6 @@ def test_run_cb_svdpp_experiment_supports_official_split_family_without_test_eva
     assert metrics["caches"]["cluster_artifacts"]["status"] == "disabled"
     assert metrics["caches"]["user_cluster_history"]["status"] == "disabled"
     assert metrics["split"]["test_metrics_available"] is False
-    assert "inference_test" not in [stage["name"] for stage in metrics["profiling"]["stages"]]
+    assert "predict_test" not in [stage["name"] for stage in metrics["profiling"]["stages"]]
     assert metrics["metrics"]["validation_rmse"] is None
     assert metrics["metrics"]["test_rmse"] is None

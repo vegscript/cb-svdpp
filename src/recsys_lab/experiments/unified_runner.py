@@ -38,7 +38,12 @@ from recsys_lab.experiments.common import (
     write_json,
     write_log,
 )
-from recsys_lab.experiments.performance import PeakMemoryMonitor, StageProfiler, build_system_metrics
+from recsys_lab.experiments.performance import (
+    PeakMemoryMonitor,
+    StageProfiler,
+    build_performance_profile_payload,
+    build_system_metrics,
+)
 from recsys_lab.experiments.runtime import resolve_runtime_threading_config, runtime_execution_context
 from recsys_lab.experiments.split_cache import SplitCacheResult, load_or_build_split_cache, resolve_split_cache_policy
 from recsys_lab.metrics import rating_error_metrics
@@ -104,36 +109,56 @@ def run_unified_experiment(
     use_cluster_artifact_cache: bool = False,
     services: ExperimentServices | None = None,
 ) -> dict[str, Any]:
-    root = (repo_root or discover_repo_root()).resolve()
-    experiment_services = services or DEFAULT_EXPERIMENT_SERVICES
+    stage_profiler = StageProfiler()
+    with stage_profiler.stage("resolve_experiment_config"):
+        root = (repo_root or discover_repo_root()).resolve()
+        experiment_services = services or DEFAULT_EXPERIMENT_SERVICES
 
-    processed_manifest_path = processed_manifest_path.resolve()
-    model_config_path = model_config_path.resolve()
-    runtime_config_path = runtime_config_path.resolve()
-    device_config_path = device_config_path.resolve()
+        processed_manifest_path = processed_manifest_path.resolve()
+        model_config_path = model_config_path.resolve()
+        runtime_config_path = runtime_config_path.resolve()
+        device_config_path = device_config_path.resolve()
 
-    processed_manifest = load_processed_dataset_manifest(processed_manifest_path)
-    dataset_short_name = str(processed_manifest["dataset_short_name"])
-    requested_split_family = split_family or str(processed_manifest["split_family"])
+        runtime_config_payload = load_yaml_file(runtime_config_path)
+        device_config_payload = load_yaml_file(device_config_path)
+        threading_config = resolve_runtime_threading_config(device_config_payload=device_config_payload)
 
-    runtime_config_payload = load_yaml_file(runtime_config_path)
-    device_config_payload = load_yaml_file(device_config_path)
-    raw_model_config_payload = load_yaml_file(model_config_path)
-    adapter, model_profile = validate_model_config_payload(
-        raw_model_config_payload,
-        expected_model_name=model_name,
-    )
-    runtime_dtype = adapter.runtime_dtype(model_profile)
-    threading_config = resolve_runtime_threading_config(device_config_payload=device_config_payload)
-    split_cache_policy = resolve_split_cache_policy(
-        split_family=requested_split_family,
-        use_split_cache=use_split_cache,
-    )
-    _validate_cache_options(
-        adapter=adapter,
-        use_training_index_cache=use_training_index_cache,
-        use_cluster_artifact_cache=use_cluster_artifact_cache,
-    )
+    with stage_profiler.stage(
+        "resolve_dataset_manifest",
+        metadata={"processed_manifest": str(processed_manifest_path)},
+    ) as dataset_stage:
+        processed_manifest = load_processed_dataset_manifest(processed_manifest_path)
+        dataset_short_name = str(processed_manifest["dataset_short_name"])
+        requested_split_family = split_family or str(processed_manifest["split_family"])
+        dataset_stage["dataset"] = dataset_short_name
+        dataset_stage["split_family"] = requested_split_family
+
+    with stage_profiler.stage("resolve_model_profile", metadata={"model_config": str(model_config_path)}):
+        raw_model_config_payload = load_yaml_file(model_config_path)
+
+    with stage_profiler.stage(
+        "validate_model_config",
+        metadata={"expected_model_name": model_name},
+    ):
+        adapter, model_profile = validate_model_config_payload(
+            raw_model_config_payload,
+            expected_model_name=model_name,
+        )
+        runtime_dtype = adapter.runtime_dtype(model_profile)
+
+    with stage_profiler.stage(
+        "resolve_split_cache_policy",
+        metadata={"split_family": requested_split_family, "requested_policy": use_split_cache},
+    ):
+        split_cache_policy = resolve_split_cache_policy(
+            split_family=requested_split_family,
+            use_split_cache=use_split_cache,
+        )
+        _validate_cache_options(
+            adapter=adapter,
+            use_training_index_cache=use_training_index_cache,
+            use_cluster_artifact_cache=use_cluster_artifact_cache,
+        )
 
     run_context_slug = _run_context_slug(
         requested_split_family=requested_split_family,
@@ -155,6 +180,7 @@ def run_unified_experiment(
 
     config_snapshot_path = run_dir / "config_snapshot.yaml"
     metrics_path = run_dir / "metrics.json"
+    performance_profile_path = run_dir / "performance_profile.json"
     stdout_log_path = run_dir / "stdout.log"
     run_manifest_path = run_dir / "run_manifest.json"
     git = experiment_services.git_snapshot_fn(root)
@@ -177,7 +203,6 @@ def run_unified_experiment(
     cb_semantics = _cb_semantics_for_profile(adapter=adapter, model_profile=model_profile)
 
     with runtime_execution_context(threading_config=threading_config):
-        stage_profiler = StageProfiler()
         base_manifest = build_base_run_manifest(
             timestamp=timestamp,
             run_id=run_id,
@@ -206,10 +231,20 @@ def run_unified_experiment(
         }
         if cb_semantics is not None:
             base_manifest["cb_semantics"] = cb_semantics
+        base_manifest["artifacts"]["performance_profile"] = repo_path_string(performance_profile_path, repo_root=root)
 
-        dump_yaml_file(
-            config_snapshot_path,
-            {
+        with stage_profiler.stage("resolve_model_requirements", metadata={"model_name": adapter.name}) as req_stage:
+            model_requirements = model_requirements_payload(adapter)
+            req_stage["required_artifacts"] = list(model_requirements["required_artifacts"])
+            req_stage["required_artifact_count"] = len(model_requirements["required_artifacts"])
+
+        with stage_profiler.stage(
+            "write_config_snapshot",
+            metadata={"path": repo_path_string(config_snapshot_path, repo_root=root)},
+        ):
+            dump_yaml_file(
+                config_snapshot_path,
+                {
                 "run_id": run_id,
                 "command": command_string,
                 "inputs": {
@@ -222,7 +257,7 @@ def run_unified_experiment(
                 "split_family": requested_split_family,
                 "inner_validation_seed": inner_validation_seed,
                 "model_seed": model_seed,
-                "model_requirements": model_requirements_payload(adapter),
+                "model_requirements": model_requirements,
                 "use_split_cache": split_cache_policy.effective_use_cache,
                 "use_split_cache_policy_requested": split_cache_policy.requested_policy,
                 "use_split_cache_decision_reason": split_cache_policy.decision_reason,
@@ -237,7 +272,7 @@ def run_unified_experiment(
                     "device": device_config_payload,
                 },
             },
-        )
+            )
 
         write_log(
             stdout_log_path,
@@ -247,15 +282,25 @@ def run_unified_experiment(
                 f"processed_manifest={repo_path_string(processed_manifest_path, repo_root=root)}",
             ],
         )
-        write_json(run_manifest_path, base_manifest)
+        with stage_profiler.stage(
+            "write_run_manifest",
+            metadata={"path": repo_path_string(run_manifest_path, repo_root=root), "status": "started"},
+        ):
+            write_json(run_manifest_path, base_manifest)
 
         try:
-            with stage_profiler.stage("data_load", metadata={"processed_manifest": str(processed_manifest_path)}):
+            with stage_profiler.stage(
+                "load_ratings_data",
+                metadata={"processed_manifest": str(processed_manifest_path)},
+            ) as ratings_stage:
                 ratings_data = load_ratings_data_from_manifest(processed_manifest_path)
+                ratings_stage["rows"] = len(ratings_data)
+                ratings_stage["n_users"] = ratings_data.n_users
+                ratings_stage["n_items"] = ratings_data.n_items
 
             split_id_for_cache = str(base_manifest["dataset"]["split_id"])
             with stage_profiler.stage(
-                "split_resolution",
+                "resolve_split_cache",
                 metadata={
                     "split_family": requested_split_family,
                     "split_id": split_id_for_cache,
@@ -281,75 +326,111 @@ def run_unified_experiment(
                     use_cache=split_cache_policy.effective_use_cache,
                 )
                 split_stage["cache_status"] = split_result.metadata.cache_status
+                split_stage["cache_hit"] = _cache_hit(split_result.metadata.cache_status)
+                split_stage["cache_path"] = repo_path_string(
+                    split_result.metadata.cache_manifest_path,
+                    repo_root=root,
+                )
             split = split_result.split
+            with stage_profiler.stage(
+                "load_train_ratings",
+                metadata=_ratings_stage_metadata(split.train),
+            ):
+                train_data = split.train
+            validation_data = None
+            if split.validation is not None:
+                with stage_profiler.stage(
+                    "load_validation_ratings",
+                    metadata=_ratings_stage_metadata(split.validation),
+                ):
+                    validation_data = split.validation
+            with stage_profiler.stage(
+                "load_test_ratings",
+                metadata=_ratings_stage_metadata(split.test),
+            ):
+                test_data = split.test
 
-            with stage_profiler.stage("config_build"):
+            with stage_profiler.stage("build_model_config", metadata={"model_name": adapter.name}) as config_stage:
                 model_config = adapter.build_model_config(
                     model_profile,
                     model_seed=model_seed,
                     runtime_dtype=runtime_dtype,
                 )
                 induction_config = adapter.build_induction_config(model_config, model_seed=model_seed)
+                config_stage.update(_fit_stage_model_config_metadata(model_config))
 
             clustering_seconds = 0.0
             with PeakMemoryMonitor() as memory_monitor:
-                artifact_resolution = _resolve_fit_artifacts(
-                    adapter=adapter,
-                    split=split,
-                    model_profile=model_profile,
-                    model_config=model_config,
-                    induction_config=induction_config,
-                    dataset_short_name=dataset_short_name,
-                    requested_split_family=requested_split_family,
-                    split_id_for_cache=split_id_for_cache,
-                    processed_manifest_path=processed_manifest_path,
-                    root=root,
-                    runtime_config_payload=runtime_config_payload,
-                    runtime_dtype=runtime_dtype,
-                    use_training_index_cache=use_training_index_cache,
-                    use_cluster_artifact_cache=use_cluster_artifact_cache,
-                    stage_profiler=stage_profiler,
-                )
+                with stage_profiler.stage(
+                    "build_fit_artifacts",
+                    metadata={
+                        "model_name": adapter.name,
+                        "required_artifacts": list(model_requirements["required_artifacts"]),
+                    },
+                ):
+                    artifact_resolution = _resolve_fit_artifacts(
+                        adapter=adapter,
+                        split=split,
+                        model_profile=model_profile,
+                        model_config=model_config,
+                        induction_config=induction_config,
+                        dataset_short_name=dataset_short_name,
+                        requested_split_family=requested_split_family,
+                        split_id_for_cache=split_id_for_cache,
+                        processed_manifest_path=processed_manifest_path,
+                        root=root,
+                        runtime_config_payload=runtime_config_payload,
+                        runtime_dtype=runtime_dtype,
+                        use_training_index_cache=use_training_index_cache,
+                        use_cluster_artifact_cache=use_cluster_artifact_cache,
+                        stage_profiler=stage_profiler,
+                    )
                 fit_artifacts = artifact_resolution["artifacts"]
                 clustering_seconds = float(artifact_resolution["cluster_induction_wall_clock_seconds"])
 
-                with stage_profiler.stage("model_initialization"):
+                with stage_profiler.stage(
+                    "initialize_model",
+                    metadata={"model_name": adapter.name},
+                ):
                     model = adapter.instantiate(model_config, artifacts=fit_artifacts)
 
                 training_started = perf_counter()
                 with stage_profiler.stage(
-                    "main_training",
-                    metadata={"epochs": _model_epochs(model_config), "train_rows": len(split.train)},
+                    "fit_model",
+                    metadata={
+                        "train_rows": len(train_data),
+                        **_fit_stage_model_config_metadata(model_config),
+                    },
                 ):
                     adapter.fit(
                         model,
-                        split.train,
+                        train_data,
                         artifacts=fit_artifacts,
                         reuse_precomputed_indices=reuse_precomputed_indices,
                     )
                 training_seconds = perf_counter() - training_started
 
                 inference_started = perf_counter()
-                with stage_profiler.stage("inference_train", metadata={"rows": len(split.train)}):
-                    train_predictions = model.predict_dataset(split.train)
+                with stage_profiler.stage("predict_train", metadata=_ratings_stage_metadata(train_data)):
+                    train_predictions = model.predict_dataset(train_data)
                 validation_predictions = None
-                if split.validation is not None:
-                    with stage_profiler.stage("inference_validation", metadata={"rows": len(split.validation)}):
-                        validation_predictions = model.predict_dataset(split.validation)
+                if validation_data is not None:
+                    with stage_profiler.stage("predict_validation", metadata=_ratings_stage_metadata(validation_data)):
+                        validation_predictions = model.predict_dataset(validation_data)
                 test_predictions = None
                 if evaluate_test:
-                    with stage_profiler.stage("inference_test", metadata={"rows": len(split.test)}):
-                        test_predictions = model.predict_dataset(split.test)
+                    with stage_profiler.stage("predict_test", metadata=_ratings_stage_metadata(test_data)):
+                        test_predictions = model.predict_dataset(test_data)
                 inference_seconds = perf_counter() - inference_started
 
-            inference_rows = len(split.train)
-            if split.validation is not None:
-                inference_rows += len(split.validation)
+            inference_rows = len(train_data)
+            if validation_data is not None:
+                inference_rows += len(validation_data)
             if evaluate_test:
-                inference_rows += len(split.test)
+                inference_rows += len(test_data)
 
             system_metrics = build_system_metrics(
-                train_rows=len(split.train),
+                train_rows=len(train_data),
                 epochs=_model_epochs(model_config),
                 training_wall_clock_seconds=training_seconds,
                 inference_rows=inference_rows,
@@ -373,7 +454,25 @@ def run_unified_experiment(
                 ),
             )
 
-            profiling_payload = stage_profiler.to_payload()
+            with stage_profiler.stage(
+                "build_rating_metrics",
+                metadata={
+                    "train_rows": len(train_data),
+                    "validation_rows": 0 if validation_data is None else len(validation_data),
+                    "test_rows": len(test_data) if evaluate_test else 0,
+                    "test_metrics_available": evaluate_test,
+                },
+            ):
+                rating_metrics_payload = _build_rating_metrics_payload(
+                    train_ratings=train_data.ratings,
+                    train_predictions=train_predictions,
+                    validation_ratings=None if validation_data is None else validation_data.ratings,
+                    validation_predictions=validation_predictions,
+                    test_ratings=test_data.ratings if evaluate_test else None,
+                    test_predictions=test_predictions,
+                    rating_min=ratings_data.rating_min,
+                    rating_max=ratings_data.rating_max,
+                )
             caches_payload = _build_caches_payload(
                 split_result=split_result,
                 artifact_resolution=artifact_resolution,
@@ -395,10 +494,28 @@ def run_unified_experiment(
                 repo_root=root,
                 cb_semantics=cb_semantics,
             )
+            profiling_payload = stage_profiler.to_payload()
+            performance_profile_summary_payload = _build_performance_profile(
+                stage_profiler=stage_profiler,
+                run_id=run_id,
+                dataset_short_name=dataset_short_name,
+                model_name=adapter.name,
+                device_profile_name=device_profile_name,
+                requested_split_family=requested_split_family,
+                split_config=split_config,
+                model_seed=model_seed,
+            )
 
             metrics_payload: dict[str, Any] = {
                 "run_id": run_id,
                 "profiling": profiling_payload,
+                "performance_profile": _performance_profile_summary(
+                    performance_profile_payload=performance_profile_summary_payload,
+                    performance_profile_path=performance_profile_path,
+                ),
+                "artifacts": {
+                    "performance_profile": repo_path_string(performance_profile_path, repo_root=root),
+                },
                 "caches": caches_payload,
                 "dataset": ratings_summary(ratings_data),
                 "split": {
@@ -419,26 +536,28 @@ def run_unified_experiment(
                     ),
                 },
                 "system_metrics": system_metrics,
-                "metrics": _build_rating_metrics_payload(
-                    train_ratings=split.train.ratings,
-                    train_predictions=train_predictions,
-                    validation_ratings=None if split.validation is None else split.validation.ratings,
-                    validation_predictions=validation_predictions,
-                    test_ratings=split.test.ratings if evaluate_test else None,
-                    test_predictions=test_predictions,
-                    rating_min=ratings_data.rating_min,
-                    rating_max=ratings_data.rating_max,
-                ),
+                "metrics": rating_metrics_payload,
             }
             if cb_semantics is not None:
                 metrics_payload["cb_semantics"] = cb_semantics
-                metrics_payload["cb_diagnostics"] = _build_cb_diagnostics(
-                    model=model,
-                    train_data=split.train,
-                    fit_artifacts=fit_artifacts,
-                    cb_semantics=cb_semantics,
-                )
-            write_json(metrics_path, metrics_payload)
+                with stage_profiler.stage(
+                    "build_cb_diagnostics",
+                    metadata={
+                        "alpha": float(cb_semantics["alpha"]),
+                        "train_rows": len(train_data),
+                    },
+                ):
+                    metrics_payload["cb_diagnostics"] = _build_cb_diagnostics(
+                        model=model,
+                        train_data=train_data,
+                        fit_artifacts=fit_artifacts,
+                        cb_semantics=cb_semantics,
+                    )
+            with stage_profiler.stage(
+                "write_metrics_json",
+                metadata={"path": repo_path_string(metrics_path, repo_root=root)},
+            ):
+                write_json(metrics_path, metrics_payload)
 
             finished_at = utc_timestamp()
             validation_rmse = metrics_payload["metrics"]["validation_rmse"]
@@ -452,9 +571,9 @@ def run_unified_experiment(
                     f"command={command_string}",
                     f"processed_manifest={repo_path_string(processed_manifest_path, repo_root=root)}",
                     (
-                        f"train_rows={len(split.train)} "
-                        f"validation_rows={0 if split.validation is None else len(split.validation)} "
-                        f"test_rows={len(split.test)}"
+                        f"train_rows={len(train_data)} "
+                        f"validation_rows={0 if validation_data is None else len(validation_data)} "
+                        f"test_rows={len(test_data)}"
                     ),
                     (
                         "rmse "
@@ -491,8 +610,24 @@ def run_unified_experiment(
                     "finished_at_utc": finished_at,
                 },
             }
-            write_json(run_manifest_path, completed_manifest)
+            with stage_profiler.stage(
+                "write_run_manifest",
+                metadata={"path": repo_path_string(run_manifest_path, repo_root=root), "status": "completed"},
+            ):
+                write_json(run_manifest_path, completed_manifest)
             validate_manifest_file(run_manifest_path, repo_root=root)
+            _write_performance_profile(
+                performance_profile_path=performance_profile_path,
+                stage_profiler=stage_profiler,
+                run_id=run_id,
+                dataset_short_name=dataset_short_name,
+                model_name=adapter.name,
+                device_profile_name=device_profile_name,
+                requested_split_family=requested_split_family,
+                split_config=split_config,
+                model_seed=model_seed,
+                repo_root=root,
+            )
             return {
                 "run_id": run_id,
                 "run_dir": str(run_dir),
@@ -521,9 +656,141 @@ def run_unified_experiment(
                     "finished_at_utc": finished_at,
                 },
             }
-            write_json(run_manifest_path, failed_manifest)
+            with stage_profiler.stage(
+                "write_run_manifest",
+                metadata={"path": repo_path_string(run_manifest_path, repo_root=root), "status": "failed"},
+            ):
+                write_json(run_manifest_path, failed_manifest)
             validate_manifest_file(run_manifest_path, repo_root=root)
+            _write_performance_profile(
+                performance_profile_path=performance_profile_path,
+                stage_profiler=stage_profiler,
+                run_id=run_id,
+                dataset_short_name=dataset_short_name,
+                model_name=adapter.name,
+                device_profile_name=device_profile_name,
+                requested_split_family=requested_split_family,
+                split_config=split_config,
+                model_seed=model_seed,
+                repo_root=root,
+            )
             raise
+
+
+def _write_performance_profile(
+    *,
+    performance_profile_path: Path,
+    stage_profiler: StageProfiler,
+    run_id: str,
+    dataset_short_name: str,
+    model_name: str,
+    device_profile_name: str,
+    requested_split_family: str,
+    split_config: SplitConfig,
+    model_seed: int,
+    repo_root: Path,
+) -> dict[str, Any]:
+    initial_payload = _build_performance_profile(
+        stage_profiler=stage_profiler,
+        run_id=run_id,
+        dataset_short_name=dataset_short_name,
+        model_name=model_name,
+        device_profile_name=device_profile_name,
+        requested_split_family=requested_split_family,
+        split_config=split_config,
+        model_seed=model_seed,
+    )
+    with stage_profiler.stage(
+        "write_performance_profile",
+        metadata={"path": repo_path_string(performance_profile_path, repo_root=repo_root)},
+    ):
+        write_json(performance_profile_path, initial_payload)
+    final_payload = _build_performance_profile(
+        stage_profiler=stage_profiler,
+        run_id=run_id,
+        dataset_short_name=dataset_short_name,
+        model_name=model_name,
+        device_profile_name=device_profile_name,
+        requested_split_family=requested_split_family,
+        split_config=split_config,
+        model_seed=model_seed,
+    )
+    write_json(performance_profile_path, final_payload)
+    return final_payload
+
+
+def _build_performance_profile(
+    *,
+    stage_profiler: StageProfiler,
+    run_id: str,
+    dataset_short_name: str,
+    model_name: str,
+    device_profile_name: str,
+    requested_split_family: str,
+    split_config: SplitConfig,
+    model_seed: int,
+) -> dict[str, Any]:
+    return build_performance_profile_payload(
+        stage_profile=stage_profiler.to_payload(),
+        run_id=run_id,
+        dataset=dataset_short_name,
+        model=model_name,
+        device_profile=device_profile_name,
+        split_family=requested_split_family,
+        split_seed=split_config.seed,
+        model_seed=model_seed,
+    )
+
+
+def _performance_profile_summary(
+    *,
+    performance_profile_payload: dict[str, Any],
+    performance_profile_path: Path,
+) -> dict[str, Any]:
+    return {
+        "path": performance_profile_path.name,
+        "profile_version": performance_profile_payload["profile_version"],
+        "stage_count": performance_profile_payload["stage_count"],
+        "total_profiled_wall_clock_seconds": performance_profile_payload["total_profiled_wall_clock_seconds"],
+        "top_hotspots": performance_profile_payload["hotspots"][:5],
+    }
+
+
+def _cache_hit(cache_status: str) -> bool:
+    return cache_status == "hit"
+
+
+def _cache_metadata_payload(
+    *,
+    cache_status: str,
+    cache_manifest_path: Path,
+    repo_root: Path,
+) -> dict[str, Any]:
+    return {
+        "cache_status": cache_status,
+        "cache_hit": _cache_hit(cache_status),
+        "cache_path": repo_path_string(cache_manifest_path, repo_root=repo_root),
+    }
+
+
+def _ratings_stage_metadata(data) -> dict[str, Any]:
+    return {
+        "rows": len(data),
+        "n_users": int(data.n_users),
+        "n_items": int(data.n_items),
+    }
+
+
+def _fit_stage_model_config_metadata(model_config: object) -> dict[str, Any]:
+    config = cast(Any, model_config)
+    payload = {
+        "epochs": int(config.epochs),
+        "latent_dim": int(config.latent_dim),
+    }
+    training_backend = getattr(config, "training_backend", None)
+    if training_backend is not None:
+        payload["training_backend"] = str(training_backend)
+    return payload
 
 
 def _validate_cache_options(
@@ -775,13 +1042,16 @@ def _resolve_fit_artifacts(
         clustering_config = _clustering_config(model_profile)
         clustering_started = perf_counter()
         with stage_profiler.stage(
-            "cluster_induction",
+            "build_cluster_artifacts",
             metadata={
+                "required_by_model": True,
+                "artifact_name": "cluster_artifacts",
                 "algorithm": clustering_config.algorithm,
                 "n_user_clusters": clustering_config.n_user_clusters,
                 "n_item_clusters": clustering_config.n_item_clusters,
+                "alpha": float(clustering_config.alpha),
                 "kmeans_n_init": clustering_config.kmeans_n_init,
-                "cache_enabled": use_cluster_artifact_cache,
+                "cluster_artifact_cache_enabled": use_cluster_artifact_cache,
             },
         ) as cluster_stage:
             cluster_artifact_result = load_or_build_cluster_artifacts(
@@ -799,53 +1069,101 @@ def _resolve_fit_artifacts(
                 runtime_config_payload=runtime_config_payload,
                 use_cache=use_cluster_artifact_cache,
             )
-            cluster_stage["cache_status"] = cluster_artifact_result.metadata.cache_status
+            cluster_stage.update(
+                _cache_metadata_payload(
+                    cache_status=cluster_artifact_result.metadata.cache_status,
+                    cache_manifest_path=cluster_artifact_result.metadata.cache_manifest_path,
+                    repo_root=root,
+                )
+            )
             cluster_stage["cache_key"] = cluster_artifact_result.metadata.cache_key
         clustering_seconds = perf_counter() - clustering_started
 
-    if requirements.needs_implicit_history:
+    if requirements.needs_implicit_history or requirements.needs_explicit_feedback:
         with stage_profiler.stage(
-            "user_history_index_resolution",
-            metadata={"cache_enabled": use_training_index_cache, "split_id": split_id_for_cache},
-        ) as index_stage:
-            history_result = load_or_build_user_history_index(
-                data=split.train,
-                dtype=runtime_dtype,
-                dataset_short_name=dataset_short_name,
-                split_family=requested_split_family,
-                split_id=split_id_for_cache,
-                processed_manifest_path=processed_manifest_path,
-                repo_root=root,
-                runtime_config_payload=runtime_config_payload,
-                use_cache=use_training_index_cache,
-            )
-            index_stage["cache_status"] = history_result.metadata.cache_status
+            "build_training_indices",
+            metadata={
+                "needs_user_history_index": requirements.needs_implicit_history,
+                "needs_explicit_feedback_index": requirements.needs_explicit_feedback,
+                "cache_enabled": use_training_index_cache,
+            },
+        ):
+            if requirements.needs_implicit_history:
+                with stage_profiler.stage(
+                    "build_user_history_index",
+                    metadata={
+                        "required_by_model": True,
+                        "artifact_name": "user_history_index",
+                        "cache_enabled": use_training_index_cache,
+                        "split_id": split_id_for_cache,
+                    },
+                ) as index_stage:
+                    history_result = load_or_build_user_history_index(
+                        data=split.train,
+                        dtype=runtime_dtype,
+                        dataset_short_name=dataset_short_name,
+                        split_family=requested_split_family,
+                        split_id=split_id_for_cache,
+                        processed_manifest_path=processed_manifest_path,
+                        repo_root=root,
+                        runtime_config_payload=runtime_config_payload,
+                        use_cache=use_training_index_cache,
+                    )
+                    index_stage.update(
+                        _cache_metadata_payload(
+                            cache_status=history_result.metadata.cache_status,
+                            cache_manifest_path=history_result.metadata.cache_manifest_path,
+                            repo_root=root,
+                        )
+                    )
+                    index_stage["rows"] = len(split.train)
+                    index_stage["n_users"] = split.train.n_users
+                    index_stage["n_items"] = split.train.n_items
 
-    if requirements.needs_explicit_feedback:
-        with stage_profiler.stage(
-            "explicit_feedback_index_resolution",
-            metadata={"cache_enabled": use_training_index_cache, "split_id": split_id_for_cache},
-        ) as index_stage:
-            explicit_result = load_or_build_user_explicit_feedback_index(
-                data=split.train,
-                dtype=runtime_dtype,
-                dataset_short_name=dataset_short_name,
-                split_family=requested_split_family,
-                split_id=split_id_for_cache,
-                processed_manifest_path=processed_manifest_path,
-                repo_root=root,
-                runtime_config_payload=runtime_config_payload,
-                use_cache=use_training_index_cache,
-            )
-            index_stage["cache_status"] = explicit_result.metadata.cache_status
+            if requirements.needs_explicit_feedback:
+                with stage_profiler.stage(
+                    "build_explicit_feedback_index",
+                    metadata={
+                        "required_by_model": True,
+                        "artifact_name": "explicit_feedback_index",
+                        "cache_enabled": use_training_index_cache,
+                        "split_id": split_id_for_cache,
+                    },
+                ) as index_stage:
+                    explicit_result = load_or_build_user_explicit_feedback_index(
+                        data=split.train,
+                        dtype=runtime_dtype,
+                        dataset_short_name=dataset_short_name,
+                        split_family=requested_split_family,
+                        split_id=split_id_for_cache,
+                        processed_manifest_path=processed_manifest_path,
+                        repo_root=root,
+                        runtime_config_payload=runtime_config_payload,
+                        use_cache=use_training_index_cache,
+                    )
+                    index_stage.update(
+                        _cache_metadata_payload(
+                            cache_status=explicit_result.metadata.cache_status,
+                            cache_manifest_path=explicit_result.metadata.cache_manifest_path,
+                            repo_root=root,
+                        )
+                    )
+                    index_stage["rows"] = len(split.train)
+                    index_stage["n_users"] = split.train.n_users
+                    index_stage["n_items"] = split.train.n_items
 
     if requirements.needs_user_cluster_history:
         if history_result is None or cluster_artifact_result is None:
             raise ValueError("user-cluster history requires user history and cluster artifacts")
         n_item_clusters = int(cluster_artifact_result.artifacts.r_star_counts.shape[1])
         with stage_profiler.stage(
-            "user_cluster_history_build",
-            metadata={"n_item_clusters": n_item_clusters, "cache_enabled": use_cluster_artifact_cache},
+            "build_user_cluster_history_index",
+            metadata={
+                "required_by_model": True,
+                "artifact_name": "user_cluster_history_index",
+                "n_item_clusters": n_item_clusters,
+                "cluster_artifact_cache_enabled": use_cluster_artifact_cache,
+            },
         ) as cluster_history_stage:
             cluster_history_result = load_or_build_user_cluster_history_index(
                 history_index=history_result.index,
@@ -862,7 +1180,13 @@ def _resolve_fit_artifacts(
                 cluster_cache_fingerprint_sha256=cluster_artifact_result.metadata.cache_fingerprint_sha256,
                 use_cache=use_cluster_artifact_cache,
             )
-            cluster_history_stage["cache_status"] = cluster_history_result.metadata.cache_status
+            cluster_history_stage.update(
+                _cache_metadata_payload(
+                    cache_status=cluster_history_result.metadata.cache_status,
+                    cache_manifest_path=cluster_history_result.metadata.cache_manifest_path,
+                    repo_root=root,
+                )
+            )
             cluster_history_stage["cache_key"] = cluster_history_result.metadata.cache_key
 
     return {

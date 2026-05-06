@@ -259,18 +259,75 @@ def test_unified_pipeline_smoke_trains_all_models_without_model_mocks(tmp_path: 
         run_manifest_path = Path(payload["run_manifest"])
         metrics_path = run_dir / "metrics.json"
         config_snapshot_path = run_dir / "config_snapshot.yaml"
+        performance_profile_path = run_dir / "performance_profile.json"
 
         assert run_manifest_path.exists()
         assert metrics_path.exists()
         assert config_snapshot_path.exists()
+        assert performance_profile_path.exists()
 
         manifest = json.loads(run_manifest_path.read_text(encoding="utf-8"))
         metrics = json.loads(metrics_path.read_text(encoding="utf-8"))
+        performance_profile = json.loads(performance_profile_path.read_text(encoding="utf-8"))
 
         assert manifest["status"] == "completed"
         assert manifest["model"]["name"] == model_name
         assert manifest["profiling"] == metrics["profiling"]
         assert manifest["caches"] == metrics["caches"]
+        assert manifest["artifacts"]["performance_profile"].endswith("performance_profile.json")
+        assert metrics["artifacts"]["performance_profile"].endswith("performance_profile.json")
+        assert metrics["performance_profile"]["path"] == "performance_profile.json"
+        assert metrics["performance_profile"]["profile_version"] == "performance_forensics_v1"
+        assert metrics["performance_profile"]["stage_count"] > 0
+        assert metrics["performance_profile"]["total_profiled_wall_clock_seconds"] >= 0.0
+        assert metrics["performance_profile"]["top_hotspots"]
+        assert "hotspots" not in metrics["performance_profile"]
+        assert performance_profile["profile_version"] == "performance_forensics_v1"
+        assert performance_profile["run_id"] == manifest["run_id"]
+        assert performance_profile["dataset"] == "ml_latest_small"
+        assert performance_profile["model"] == model_name
+        assert performance_profile["device_profile"] == "local_test"
+        assert performance_profile["split_family"] == "benchmark_random_v1"
+        assert performance_profile["split_seed"] == split_config.seed
+        assert performance_profile["model_seed"] == 4
+        assert performance_profile["stage_count"] > 0
+        assert performance_profile["stage_count"] == len(performance_profile["stages"])
+        assert performance_profile["stages"]
+        performance_stage_names = [stage["name"] for stage in performance_profile["stages"]]
+        assert {
+            "resolve_experiment_config",
+            "resolve_dataset_manifest",
+            "resolve_model_profile",
+            "validate_model_config",
+            "resolve_split_cache",
+            "load_train_ratings",
+            "load_validation_ratings",
+            "load_test_ratings",
+            "resolve_model_requirements",
+            "build_fit_artifacts",
+            "initialize_model",
+            "fit_model",
+            "predict_train",
+            "predict_validation",
+            "predict_test",
+            "build_rating_metrics",
+            "write_metrics_json",
+            "write_run_manifest",
+            "write_config_snapshot",
+            "write_performance_profile",
+        }.issubset(performance_stage_names)
+        performance_stages_by_name = {stage["name"]: stage for stage in performance_profile["stages"]}
+        train_metadata = performance_stages_by_name["load_train_ratings"]["metadata"]
+        assert train_metadata["rows"] > 0
+        assert train_metadata["n_users"] == 4
+        assert train_metadata["n_items"] == 4
+        fit_metadata = performance_stages_by_name["fit_model"]["metadata"]
+        assert fit_metadata["epochs"] == 1
+        assert fit_metadata["latent_dim"] == 2
+        assert fit_metadata["train_rows"] == train_metadata["rows"]
+        assert performance_profile["hotspots"]
+        hotspot_seconds = [hotspot["wall_clock_seconds"] for hotspot in performance_profile["hotspots"]]
+        assert hotspot_seconds == sorted(hotspot_seconds, reverse=True)
         assert metrics["metrics"]["train_rmse"] is not None
         assert metrics["metrics"]["validation_rmse"] is not None
         assert metrics["metrics"]["test_rmse"] is not None
@@ -292,6 +349,31 @@ def test_unified_pipeline_smoke_trains_all_models_without_model_mocks(tmp_path: 
         assert metrics["model"]["requirements"]["required_artifacts"] == EXPECTED_REQUIRED_ARTIFACTS[model_name]
         assert metrics["model"]["available_fit_artifacts"] == EXPECTED_AVAILABLE_ARTIFACTS[model_name]
 
+        if model_name == "biased_mf":
+            assert "build_training_indices" not in performance_stage_names
+            assert "build_user_history_index" not in performance_stage_names
+            assert "build_explicit_feedback_index" not in performance_stage_names
+            assert "build_cluster_artifacts" not in performance_stage_names
+            assert "build_user_cluster_history_index" not in performance_stage_names
+
+        if model_name in {"svdpp", "asymmetric_svd", "asvdpp"}:
+            assert "build_training_indices" in performance_stage_names
+            assert "build_user_history_index" in performance_stage_names
+            assert "build_cluster_artifacts" not in performance_stage_names
+            assert "build_user_cluster_history_index" not in performance_stage_names
+            user_history_metadata = performance_stages_by_name["build_user_history_index"]["metadata"]
+            assert user_history_metadata["artifact_name"] == "user_history_index"
+            assert user_history_metadata["required_by_model"] is True
+            assert user_history_metadata["cache_enabled"] is False
+            assert user_history_metadata["cache_hit"] is False
+            assert user_history_metadata["cache_path"].endswith("user_history_manifest.json")
+
+        if model_name in {"asymmetric_svd", "asvdpp"}:
+            assert "build_explicit_feedback_index" in performance_stage_names
+            explicit_metadata = performance_stages_by_name["build_explicit_feedback_index"]["metadata"]
+            assert explicit_metadata["artifact_name"] == "explicit_feedback_index"
+            assert explicit_metadata["cache_enabled"] is False
+
         if model_name.startswith("cb_"):
             cb_semantics = metrics["cb_semantics"]
             assert cb_semantics["cb_claim_eligible"] is False
@@ -303,6 +385,18 @@ def test_unified_pipeline_smoke_trains_all_models_without_model_mocks(tmp_path: 
             assert cb_diagnostics["empty_item_clusters"] == 0
             assert cb_diagnostics["user_cluster_size_min"] > 0
             assert cb_diagnostics["item_cluster_size_min"] > 0
+            assert "build_cluster_artifacts" in performance_stage_names
+            assert "build_user_cluster_history_index" in performance_stage_names
+            cluster_metadata = performance_stages_by_name["build_cluster_artifacts"]["metadata"]
+            assert cluster_metadata["artifact_name"] == "cluster_artifacts"
+            assert cluster_metadata["n_user_clusters"] == 2
+            assert cluster_metadata["n_item_clusters"] == 2
+            assert cluster_metadata["alpha"] == 0.2
+            assert cluster_metadata["cluster_artifact_cache_enabled"] is False
+            assert cluster_metadata["cache_hit"] is False
+            cluster_history_metadata = performance_stages_by_name["build_user_cluster_history_index"]["metadata"]
+            assert cluster_history_metadata["artifact_name"] == "user_cluster_history_index"
+            assert cluster_history_metadata["cache_hit"] is False
 
         if model_name == "cb_asvdpp":
             assert "explicit_feedback_index" in metrics["model"]["requirements"]["required_artifacts"]

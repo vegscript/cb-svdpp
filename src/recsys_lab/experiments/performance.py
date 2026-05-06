@@ -12,6 +12,14 @@ import psutil
 
 _BYTES_PER_MB = 1024.0 * 1024.0
 _PRIMITIVE_TYPES = (str, bytes, int, float, bool, complex, Path, type(None))
+_PERFORMANCE_PROFILE_VERSION = "performance_forensics_v1"
+_FORENSICS_STAGE_NAME_ALIASES = {
+    "cluster_induction": "build_cluster_artifacts",
+    "explicit_feedback_index_resolution": "build_explicit_feedback_index",
+    "main_training": "fit_model",
+    "user_cluster_history_build": "build_user_cluster_history_index",
+    "user_history_index_resolution": "build_user_history_index",
+}
 
 
 class PeakMemoryMonitor:
@@ -97,6 +105,90 @@ class StageProfiler:
                 sum(float(stage["wall_clock_seconds"]) for stage in stages)
             ),
         }
+
+
+def build_performance_profile_payload(
+    *,
+    stage_profile: dict[str, Any],
+    run_id: str,
+    dataset: str,
+    model: str,
+    device_profile: str,
+    split_family: str,
+    split_seed: int,
+    model_seed: int,
+) -> dict[str, Any]:
+    stages = _performance_profile_stages(stage_profile.get("stages"))
+    total_profiled_seconds = float(sum(float(stage["wall_clock_seconds"]) for stage in stages))
+    return {
+        "profile_version": _PERFORMANCE_PROFILE_VERSION,
+        "run_id": str(run_id),
+        "dataset": str(dataset),
+        "model": str(model),
+        "device_profile": str(device_profile),
+        "split_family": str(split_family),
+        "split_seed": int(split_seed),
+        "model_seed": int(model_seed),
+        "total_profiled_wall_clock_seconds": total_profiled_seconds,
+        "stage_count": len(stages),
+        "stages": stages,
+        "hotspots": _performance_profile_hotspots(
+            stages=stages,
+            total_profiled_seconds=total_profiled_seconds,
+        ),
+    }
+
+
+def _performance_profile_stages(raw_stages: Any) -> list[dict[str, Any]]:
+    if not isinstance(raw_stages, list):
+        raise TypeError("performance profile stages must be a list")
+
+    stages: list[dict[str, Any]] = []
+    for raw_stage in raw_stages:
+        if not isinstance(raw_stage, dict):
+            raise TypeError("performance profile stage records must be objects")
+        name = str(raw_stage.get("name", ""))
+        if not name:
+            raise ValueError("performance profile stage names must not be empty")
+        status = str(raw_stage.get("status", ""))
+        if status not in {"completed", "failed"}:
+            raise ValueError("performance profile stage status must be completed or failed")
+        if status == "failed" and not raw_stage.get("exception_type"):
+            raise ValueError("failed performance profile stages must include exception_type")
+
+        stage = {
+            "name": _FORENSICS_STAGE_NAME_ALIASES.get(name, name),
+            "status": status,
+            "wall_clock_seconds": float(raw_stage["wall_clock_seconds"]),
+            "rss_start_mb": float(raw_stage["rss_start_mb"]),
+            "rss_end_mb": float(raw_stage["rss_end_mb"]),
+            "rss_delta_mb": float(raw_stage["rss_delta_mb"]),
+            "metadata": dict(raw_stage.get("metadata", {})),
+        }
+        if "exception_type" in raw_stage:
+            stage["exception_type"] = str(raw_stage["exception_type"])
+        stages.append(stage)
+    return stages
+
+
+def _performance_profile_hotspots(
+    *,
+    stages: list[dict[str, Any]],
+    total_profiled_seconds: float,
+) -> list[dict[str, Any]]:
+    hotspots = [
+        {
+            "name": str(stage["name"]),
+            "wall_clock_seconds": float(stage["wall_clock_seconds"]),
+            "share_of_profiled_time": (
+                float(stage["wall_clock_seconds"]) / total_profiled_seconds
+                if total_profiled_seconds > 0.0
+                else 0.0
+            ),
+        }
+        for stage in stages
+    ]
+    return sorted(hotspots, key=lambda hotspot: float(hotspot["wall_clock_seconds"]), reverse=True)
 
 
 def estimate_numpy_payload_nbytes(root: object) -> int:

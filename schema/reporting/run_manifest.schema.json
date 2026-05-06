@@ -399,6 +399,9 @@
         "metrics": {
           "type": "string"
         },
+        "performance_profile": {
+          "type": "string"
+        },
         "stdout_log": {
           "type": "string"
         },
