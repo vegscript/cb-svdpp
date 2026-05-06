@@ -158,8 +158,6 @@ if njit is not None:
         implicit_factors: np.ndarray,
     ) -> None:
         latent_dim = item_factors.shape[1]
-        q_old = np.empty(latent_dim, dtype=item_factors.dtype)
-        context = np.empty(latent_dim, dtype=item_factors.dtype)
 
         for position in range(order.shape[0]):
             idx = order[position]
@@ -170,9 +168,10 @@ if njit is not None:
             user_bias_old = user_bias[user_id]
             item_bias_old = item_bias[item_id]
 
+            q_old = np.empty(latent_dim, dtype=item_factors.dtype)
+            context = np.zeros(latent_dim, dtype=item_factors.dtype)
             for factor_idx in range(latent_dim):
                 q_old[factor_idx] = item_factors[item_id, factor_idx]
-                context[factor_idx] = 0.0
 
             explicit_start = explicit_indptr[user_id]
             explicit_end = explicit_indptr[user_id + 1]

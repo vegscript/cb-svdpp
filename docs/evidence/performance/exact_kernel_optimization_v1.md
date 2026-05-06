@@ -53,6 +53,17 @@ Same-config confirmation was checked from `run_manifest.json` for dataset
 manifest, model config path, split id, split family, model seed, dtype, and
 device profile. All six pairs matched.
 
+Per-model contract details:
+
+| Model | Model config | Epochs before | Epochs after | Train rows before | Train rows after | Same split id | Same dtype | Same device |
+| --- | --- | ---: | ---: | ---: | ---: | --- | --- | --- |
+| `biased_mf` | `configs/models/selected/ml1m/ml1m_biased_mf_stage0_transfer.yaml` | 25 | 25 | 800193 | 800193 | true | true | true |
+| `svdpp` | `configs/models/svdpp.yaml` | 20 | 20 | 800193 | 800193 | true | true | true |
+| `asymmetric_svd` | `configs/models/asymmetric_svd.yaml` | 20 | 20 | 800193 | 800193 | true | true | true |
+| `asvdpp` | `configs/models/asvdpp.yaml` | 20 | 20 | 800193 | 800193 | true | true | true |
+| `cb_svdpp` | `configs/models/selected/ml1m/ml1m_cb_svdpp_stage0_transfer.yaml` | 20 | 20 | 800193 | 800193 | true | true | true |
+| `cb_asvdpp` | `configs/models/selected/ml1m/ml1m_cb_asvdpp_stage0_transfer.yaml` | 20 | 20 | 800193 | 800193 | true | true | true |
+
 The workspace was dirty for both before and after runs. These runs are valid for
 this local diagnostic before/after readout because the same local artifact
 contract and configuration references were used, but they should not be promoted
@@ -78,6 +89,16 @@ For each before and after run, these artifacts were present:
 - `config_snapshot.yaml`
 - `performance_profile.json`
 - `kernel_profile.json`
+
+Artifact locations follow this convention for every run id listed above:
+
+```text
+artifacts/runs/<run_id>/metrics.json
+artifacts/runs/<run_id>/run_manifest.json
+artifacts/runs/<run_id>/config_snapshot.yaml
+artifacts/runs/<run_id>/performance_profile.json
+artifacts/runs/<run_id>/kernel_profile.json
+```
 
 Collectors were rerun after the benchmark:
 
