@@ -341,8 +341,8 @@ def run_kernel_benchmark(
     timed_repeats: int = 5,
     epochs_per_repeat: int = 1,
 ) -> dict[str, Any]:
-    if warmup_repeats < 0:
-        raise ValueError("warmup_repeats must be non-negative")
+    if warmup_repeats < 1:
+        raise ValueError("warmup_repeats must be at least 1 to exclude Numba compile time from timed repeats")
     if timed_repeats < 1:
         raise ValueError("timed_repeats must be positive")
     if epochs_per_repeat < 1:
@@ -385,6 +385,7 @@ def run_kernel_benchmark(
         "warmup_repeats": warmup_repeats,
         "timed_repeats": timed_repeats,
         "compile_excluded": True,
+        "compile_exclusion_method": "warmup_repeats_before_timed_repeats",
         "state_copy_excluded": True,
         "warmup_wall_seconds": warmup_seconds,
         "warmup_excluded_from_timed": True,

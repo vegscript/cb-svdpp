@@ -23,7 +23,7 @@ from recsys_lab.benchmarks.writers import (
     write_kernel_benchmark_json,
     write_kernel_benchmark_summary_csv,
 )
-from scripts.run_kernel_benchmarks import DEFAULT_OUTPUT_DIR, _parse_args, _select_cases
+from scripts.run_kernel_benchmarks import DEFAULT_OUTPUT_DIR, _parse_args, _select_cases, main
 
 EXPECTED_MODELS = (
     "biased_mf",
@@ -150,6 +150,7 @@ def test_run_kernel_benchmark_payload_contract(monkeypatch: pytest.MonkeyPatch) 
     assert result["model"] == "biased_mf"
     assert result["dataset_profile"] == "synthetic_tiny"
     assert result["compile_excluded"] is True
+    assert result["compile_exclusion_method"] == "warmup_repeats_before_timed_repeats"
     assert result["state_copy_excluded"] is True
     assert result["warmup_excluded_from_timed"] is True
     assert len(result["warmup_wall_seconds"]) == 1
@@ -184,7 +185,7 @@ def test_run_kernel_benchmark_payload_includes_history_and_work(monkeypatch: pyt
 
     monkeypatch.setitem(KERNEL_DISPATCH, "cb_asvdpp", fake_kernel)
 
-    result = run_kernel_benchmark(case, warmup_repeats=0, timed_repeats=1, epochs_per_repeat=2)
+    result = run_kernel_benchmark(case, warmup_repeats=1, timed_repeats=1, epochs_per_repeat=2)
 
     assert result["history_structure"]["implicit"]["total_edges"] == 10
     assert result["history_structure"]["explicit"]["total_edges"] == 9
@@ -201,7 +202,7 @@ def test_run_kernel_benchmark_rejects_invalid_repeat_counts() -> None:
     case = get_synthetic_kernel_case("biased_mf")
 
     with pytest.raises(ValueError, match="warmup_repeats"):
-        run_kernel_benchmark(case, warmup_repeats=-1)
+        run_kernel_benchmark(case, warmup_repeats=0)
     with pytest.raises(ValueError, match="timed_repeats"):
         run_kernel_benchmark(case, timed_repeats=0)
     with pytest.raises(ValueError, match="epochs_per_repeat"):
@@ -350,3 +351,14 @@ def test_run_kernel_benchmarks_script_parser_defaults(monkeypatch: pytest.Monkey
     assert args.warmup_repeats == 1
     assert args.epochs_per_repeat == 1
     assert args.output_dir == DEFAULT_OUTPUT_DIR
+
+
+def test_run_kernel_benchmarks_script_rejects_zero_warmup(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["run_kernel_benchmarks.py", "--case", "biased_mf", "--warmup-repeats", "0", "--timed-repeats", "1"],
+    )
+
+    with pytest.raises(SystemExit, match="warmup-repeats"):
+        main()

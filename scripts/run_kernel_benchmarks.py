@@ -19,6 +19,8 @@ SYNTHETIC_CASE_NAMES = tuple(case.model for case in build_synthetic_kernel_cases
 
 def main() -> int:
     args = _parse_args()
+    if args.warmup_repeats < 1:
+        raise SystemExit("--warmup-repeats must be at least 1 for warm-run benchmarks")
     cases = _select_cases(args.case)
     payloads = []
     for case in cases:

@@ -62,6 +62,15 @@ The payload records `compile_excluded = true`. The first warmup run is the place
 where Numba compilation can occur for the synthetic signature. Timed repeats are
 therefore intended as warm-run kernel measurements for the same synthetic case.
 
+Step 14b hardens this rule:
+
+- `warmup_repeats` must be at least 1.
+- `compile_excluded = true` is backed by validation instead of convention.
+- the payload records
+  `compile_exclusion_method = "warmup_repeats_before_timed_repeats"`.
+- `--warmup-repeats 0` is rejected by the CLI before any benchmark runs.
+- no production code, kernel implementation, or model semantics changed.
+
 ## State-Copy Rule
 
 Training kernels mutate parameter arrays in place. The harness copies only the
@@ -127,7 +136,7 @@ payloads. They are not CPU instruction counts and are not performance claims.
 Focused checks run for this step:
 
 - `ruff check ...`: passed
-- `python -m pytest tests/unit/test_kernel_benchmark_harness.py`: passed, 17 tests
+- `python -m pytest tests/unit/test_kernel_benchmark_harness.py`: passed, 18 tests
 - `python -m pytest tests/integration/test_kernel_benchmark_harness_tiny.py`: passed, 1 test
 - `python -m pytest tests/unit/test_hotpath_coldpath_boundaries.py`: passed, 11 tests
 
