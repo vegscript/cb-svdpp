@@ -1,3 +1,4 @@
+import ast
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -34,6 +35,24 @@ STRICT_FORBIDDEN = [
     "click",
 ]
 
+STRICT_FORBIDDEN_IMPORTS = [
+    "recsys_lab.config",
+    "recsys_lab.cli",
+    "recsys_lab.experiments",
+    "recsys_lab.reporting",
+    "recsys_lab.utils.atomic_io",
+    "recsys_lab.utils.manifests",
+    "recsys_lab.utils.paths",
+    "pydantic",
+    "yaml",
+    "json",
+    "pathlib",
+    "argparse",
+    "typer",
+    "click",
+    "logging",
+]
+
 MODEL_FORBIDDEN = [
     "load_yaml_file",
     "dump_yaml_file",
@@ -46,9 +65,51 @@ MODEL_FORBIDDEN = [
     "reporting",
 ]
 
+MODEL_FORBIDDEN_IMPORTS = [
+    "recsys_lab.config",
+    "recsys_lab.cli",
+    "recsys_lab.experiments",
+    "recsys_lab.reporting",
+    "recsys_lab.utils.atomic_io",
+    "recsys_lab.utils.manifests",
+    "recsys_lab.utils.paths",
+    "pydantic",
+    "yaml",
+    "json",
+    "pathlib",
+    "argparse",
+    "typer",
+    "click",
+    "logging",
+]
+
 
 def _read(path: Path) -> str:
     return path.read_text(encoding="utf-8")
+
+
+def _imported_modules(path: Path) -> set[str]:
+    tree = ast.parse(_read(path), filename=str(path))
+    imports: set[str] = set()
+
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            imports.update(alias.name for alias in node.names)
+        elif isinstance(node, ast.ImportFrom) and node.level == 0 and node.module is not None:
+            imports.add(node.module)
+            imports.update(f"{node.module}.{alias.name}" for alias in node.names if alias.name != "*")
+
+    return imports
+
+
+def _forbidden_import_hits(imports: set[str], forbidden_roots: list[str]) -> list[str]:
+    hits = []
+    for imported in imports:
+        for forbidden in forbidden_roots:
+            if imported == forbidden or imported.startswith(f"{forbidden}."):
+                hits.append(imported)
+                break
+    return sorted(hits)
 
 
 def _assert_no_forbidden_terms(path: Path, forbidden_terms: list[str]) -> None:
@@ -57,8 +118,17 @@ def _assert_no_forbidden_terms(path: Path, forbidden_terms: list[str]) -> None:
     assert hits == [], f"{path.relative_to(REPO_ROOT)} contains forbidden hotpath terms: {hits}"
 
 
+def _assert_no_forbidden_imports(path: Path, forbidden_roots: list[str]) -> None:
+    hits = _forbidden_import_hits(_imported_modules(path), forbidden_roots)
+    assert hits == [], f"{path.relative_to(REPO_ROOT)} imports forbidden hotpath modules: {hits}"
+
+
 def test_strict_hotpath_kernels_has_no_coldpath_imports_or_terms() -> None:
     _assert_no_forbidden_terms(STRICT_HOTPATH, STRICT_FORBIDDEN)
+
+
+def test_strict_hotpath_kernels_has_no_forbidden_ast_imports() -> None:
+    _assert_no_forbidden_imports(STRICT_HOTPATH, STRICT_FORBIDDEN_IMPORTS)
 
 
 def test_strict_hotpath_kernels_has_no_file_io_patterns() -> None:
@@ -86,6 +156,33 @@ def test_strict_hotpath_kernels_has_no_config_manifest_reporting_terms() -> None
 def test_model_hotpath_files_do_not_import_config_loaders_or_manifest_writers() -> None:
     for path in MODEL_HOTPATH_FILES:
         _assert_no_forbidden_terms(path, MODEL_FORBIDDEN)
+
+
+def test_model_hotpath_files_have_no_forbidden_ast_imports() -> None:
+    for path in MODEL_HOTPATH_FILES:
+        _assert_no_forbidden_imports(path, MODEL_FORBIDDEN_IMPORTS)
+
+
+def test_import_extractor_detects_forbidden_from_import(tmp_path: Path) -> None:
+    path = tmp_path / "bad_hotpath.py"
+    path.write_text("from recsys_lab.experiments.performance import StageProfiler\n", encoding="utf-8")
+
+    imports = _imported_modules(path)
+
+    assert "recsys_lab.experiments.performance" in imports
+    assert "recsys_lab.experiments.performance.StageProfiler" in imports
+
+
+def test_import_guard_flags_forbidden_from_import(tmp_path: Path) -> None:
+    path = tmp_path / "bad_hotpath.py"
+    path.write_text("from recsys_lab.experiments.performance import StageProfiler\n", encoding="utf-8")
+
+    hits = _forbidden_import_hits(_imported_modules(path), MODEL_FORBIDDEN_IMPORTS)
+
+    assert hits == [
+        "recsys_lab.experiments.performance",
+        "recsys_lab.experiments.performance.StageProfiler",
+    ]
 
 
 def test_experiment_runner_is_allowed_to_contain_coldpath_terms() -> None:

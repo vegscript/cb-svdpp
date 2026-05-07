@@ -260,7 +260,7 @@ responsibilities.
 
 ## Required Fixes
 
-No code fix is required for this classification phase.
+No production code fix is required for this classification phase.
 
 Static checks found no strict/model hotpath imports of config loaders, manifest
 writers, reporting/evidence modules, CLI frameworks, or filesystem IO helpers.
@@ -275,16 +275,18 @@ The only required action from this phase is documentation of the boundary, the
 identified boundary/cache modules, and the static guard added in
 `tests/unit/test_hotpath_coldpath_boundaries.py`.
 
+Step 13b resolved the previous automated import-boundary deferred item by adding
+AST-based import guards while retaining the original token guards. No whitelist
+was added, and no production code was changed.
+
 ## Deferred Fixes
 
-1. Add automated import-boundary tests that fail if hotpath modules import
-   config, experiment, reporting, manifest, or filesystem-writing utilities.
-2. Consider documenting `data/training_index_cache.py` and `clustering/cache.py`
+1. Consider documenting `data/training_index_cache.py` and `clustering/cache.py`
    in module docstrings as coldpath cache-boundary modules.
-3. Consider a small module ownership note for `models/config_schemas.py` and
+2. Consider a small module ownership note for `models/config_schemas.py` and
    `models/registry.py`, because they live under `models/` but are not training
    hotpaths.
-4. Review whether model epoch timing with `perf_counter` should remain in model
+3. Review whether model epoch timing with `perf_counter` should remain in model
    classes or be treated as accepted lightweight hotpath-adjacent telemetry.
 
 ## Tests/guards Added
@@ -305,8 +307,35 @@ The guard checks:
 - reporting, scripts, and docs paths are not part of the hotpath forbidden-term
   checks.
 
+Step 13b added:
+
+- `_imported_modules(path: Path) -> set[str]`, an AST-based import extractor for
+  `import x`, `import x.y`, `from x import y`, and `from x.y import z`.
+- a strict hotpath AST import guard for `src/recsys_lab/models/kernels.py`
+  against config, CLI, experiment, reporting, manifest/path utilities,
+  Pydantic, YAML, JSON, filesystem path, CLI, and logging imports.
+- a model hotpath AST import guard for the audited model files against config,
+  CLI, experiment, reporting, manifest/path utilities, Pydantic, YAML, JSON,
+  filesystem path, CLI, and logging imports.
+- negative unit tests that build temporary files and prove forbidden
+  `from recsys_lab.experiments.performance import StageProfiler` imports are
+  detected without modifying real hotpath files.
+
 No whitelist was needed for this phase because the audited strict and model
-hotpath files had no legitimate forbidden-term hits.
+hotpath files had no legitimate forbidden-term or forbidden-import hits.
+
+## Gates Run For Step 13b
+
+- `ruff check .`: passed
+- `python -m pytest tests/unit/test_hotpath_coldpath_boundaries.py`: passed,
+  10 tests
+- `python -m pytest tests/unit`: passed, 143 tests
+- `python -m pytest tests/integration/test_unified_pipeline_smoke_all_models.py`:
+  passed, 1 test
+- `python -m pytest`: passed, 214 tests and 3 skipped
+- `rg "guaranteed speedup|production-ready|SOTA speedup|broad performance claim" docs src tests`:
+  completed; hits were existing claim-boundary or claim-prohibition contexts,
+  not new broad performance claims
 
 ## Claim Boundary
 

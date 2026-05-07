@@ -58,6 +58,21 @@ The test guard checks that:
 - reporting, scripts, and docs paths are not included in the hotpath forbidden
   term scan.
 
+Step 13b retained the token guard and added AST import guards:
+
+- `_imported_modules(path: Path) -> set[str]` extracts `import x`,
+  `import x.y`, `from x import y`, and `from x.y import z`.
+- `src/recsys_lab/models/kernels.py` is guarded against AST imports from
+  `recsys_lab.config`, `recsys_lab.cli`, `recsys_lab.experiments`,
+  `recsys_lab.reporting`, selected `recsys_lab.utils.*` coldpath helpers,
+  `pydantic`, `yaml`, `json`, `pathlib`, CLI frameworks, and `logging`.
+- model hotpath files are guarded against AST imports from the same config,
+  CLI, experiment, reporting, manifest/path utility, schema, YAML, JSON,
+  filesystem path, CLI, and logging modules.
+- negative unit tests create temporary files and prove that
+  `from recsys_lab.experiments.performance import StageProfiler` is extracted
+  and rejected without modifying real hotpath files.
+
 No whitelist was added.
 
 ## Findings
@@ -95,7 +110,9 @@ The change is limited to:
   `docs/architecture/hotpath_coldpath_boundary_audit_v1.md`
 - adding the standing architecture note
   `docs/architecture/hotpath_coldpath_boundary.md`
-- adding the static unit guard
+- adding the token-based static unit guard
+  `tests/unit/test_hotpath_coldpath_boundaries.py`
+- adding the Step 13b AST import-boundary guard in
   `tests/unit/test_hotpath_coldpath_boundaries.py`
 - recording this evidence note
 
@@ -104,15 +121,13 @@ training semantics were changed.
 
 ## Deferred Items
 
-1. Add stricter import-graph checks if future changes make simple token guards
-   insufficient.
-2. Consider module docstrings for `src/recsys_lab/data/training_index_cache.py`
+1. Consider module docstrings for `src/recsys_lab/data/training_index_cache.py`
    and `src/recsys_lab/clustering/cache.py` stating that they are coldpath
    cache-boundary modules.
-3. Consider an ownership note for `src/recsys_lab/models/config_schemas.py` and
+2. Consider an ownership note for `src/recsys_lab/models/config_schemas.py` and
    `src/recsys_lab/models/registry.py`, because they live under `models/` but
    are not model training hotpaths.
-4. Revisit whether model-local epoch timing with `perf_counter` should remain
+3. Revisit whether model-local epoch timing with `perf_counter` should remain
    accepted lightweight telemetry or move fully into coldpath profiling.
 
 ## Tests Run
@@ -128,26 +143,25 @@ Focused checks run during this audit:
 
 Result recorded at the time of this note:
 
-- boundary unit test: passed
+- boundary unit test: passed, 10 tests
 - full ruff check: passed
-- full unit suite: passed
-- unified pipeline smoke for all models: passed
-- full pytest suite: passed
-- claim check: `rg` failed locally with `Zugriff verweigert`; PowerShell
-  `Select-String` fallback was used. Text-file hits were existing claim-boundary
-  or claim-prohibition contexts, not new performance claims.
+- full unit suite: passed, 143 tests
+- unified pipeline smoke for all models: passed, 1 test
+- full pytest suite: passed, 214 tests and 3 skipped
+- claim check: `rg` completed. Hits were existing claim-boundary or
+  claim-prohibition contexts, not new performance claims.
 
 ## Gates
 
 Gates run for this Step 13 branch:
 
 - `ruff check .`: passed
-- `pytest tests/unit/test_hotpath_coldpath_boundaries.py`: passed
-- `pytest tests/unit`: passed
-- `pytest tests/integration/test_unified_pipeline_smoke_all_models.py`: passed
-- `pytest`: passed
-- claim check: passed with PowerShell `Select-String` fallback because `rg`
-  could not execute locally
+- `python -m pytest tests/unit/test_hotpath_coldpath_boundaries.py`: passed
+- `python -m pytest tests/unit`: passed
+- `python -m pytest tests/integration/test_unified_pipeline_smoke_all_models.py`: passed
+- `python -m pytest`: passed
+- `rg "guaranteed speedup|production-ready|SOTA speedup|broad performance claim" docs src tests`:
+  passed; hits were existing claim-boundary or claim-prohibition contexts
 
 ## Claim Boundary
 
