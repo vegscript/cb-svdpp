@@ -37,6 +37,7 @@ STRICT_FORBIDDEN = [
 
 STRICT_FORBIDDEN_IMPORTS = [
     "recsys_lab.config",
+    "recsys_lab.benchmarks",
     "recsys_lab.cli",
     "recsys_lab.experiments",
     "recsys_lab.reporting",
@@ -67,6 +68,7 @@ MODEL_FORBIDDEN = [
 
 MODEL_FORBIDDEN_IMPORTS = [
     "recsys_lab.config",
+    "recsys_lab.benchmarks",
     "recsys_lab.cli",
     "recsys_lab.experiments",
     "recsys_lab.reporting",
@@ -182,6 +184,18 @@ def test_import_guard_flags_forbidden_from_import(tmp_path: Path) -> None:
     assert hits == [
         "recsys_lab.experiments.performance",
         "recsys_lab.experiments.performance.StageProfiler",
+    ]
+
+
+def test_import_guard_flags_benchmark_back_import(tmp_path: Path) -> None:
+    path = tmp_path / "bad_hotpath.py"
+    path.write_text("from recsys_lab.benchmarks.kernel_harness import run_kernel_benchmark\n", encoding="utf-8")
+
+    hits = _forbidden_import_hits(_imported_modules(path), MODEL_FORBIDDEN_IMPORTS)
+
+    assert hits == [
+        "recsys_lab.benchmarks.kernel_harness",
+        "recsys_lab.benchmarks.kernel_harness.run_kernel_benchmark",
     ]
 
 
