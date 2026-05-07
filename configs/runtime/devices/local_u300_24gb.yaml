@@ -1,0 +1,29 @@
+metadata:
+  status: validated_local_laptop
+  owner: repo
+  purpose: laptop_device_profile
+
+device_profile:
+  name: local_u300_24gb
+  compute_class: local_cpu
+  cpu_model: intel_processor_u300
+  logical_threads: 6
+  physical_cores: 5
+  ram_gb: 24
+  gpu_enabled: false
+  gpu_note: intel_uhd_graphics_present_but_not_default_hot_path
+
+storage:
+  cache_preference: google_drive_local_mount
+  archive_preference: google_drive_local_mount
+
+threading:
+  omp_num_threads: 6
+  blas_threads: 6
+
+resource_limits:
+  ram_guardrail_fraction: 0.8
+
+precision:
+  default_dtype: float32
+  reference_dtype: float64

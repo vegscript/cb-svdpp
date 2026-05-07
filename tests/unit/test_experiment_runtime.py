@@ -62,6 +62,22 @@ def test_local_device_profile_is_claim_eligible_reference_profile() -> None:
     assert assessment["ram_guardrail_fraction"] == 0.8
 
 
+def test_local_laptop_device_profile_is_claim_eligible_reference_profile() -> None:
+    payload = load_yaml_file(REPO_ROOT / "configs" / "runtime" / "devices" / "local_u300_24gb.yaml")
+
+    assessment = validate_claim_eligible_device_profile(device_config_payload=payload)
+    threading_config = resolve_runtime_threading_config(device_config_payload=payload)
+
+    assert assessment["claim_eligible"] is True
+    assert assessment["profile_name"] == "local_u300_24gb"
+    assert assessment["compute_class"] == "local_cpu"
+    assert assessment["metadata_status"] == "validated_local_laptop"
+    assert assessment["blocking_reasons"] == []
+    assert assessment["ram_guardrail_fraction"] == 0.8
+    assert threading_config.omp_num_threads == 6
+    assert threading_config.blas_threads == 6
+
+
 def test_runtime_execution_context_sets_and_restores_env(monkeypatch) -> None:
     calls: list[tuple[int, str | None, str, str]] = []
 

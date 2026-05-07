@@ -86,6 +86,21 @@ Default-Regeln fuer dieses Profil:
 - aktive Caches und Artefakte auf SSD
 - grosse Rohdaten oder Archive optional auf HDD
 
+Zusaetzliches Laptop-Profil:
+
+- Profil: `configs/runtime/devices/local_u300_24gb.yaml`
+- CPU: `Intel Processor U300`
+- Cores / Threads: `5 / 6`
+- RAM: `24 GB`
+- GPU: `Intel UHD Graphics`, nicht Teil des Default-Hot-Path
+- Storage-Kontext: Google-Drive-lokaler Mount fuer diesen Checkout
+
+Runtime- und Ressourcenmetriken aus `local_i5_2500k_24gb` und
+`local_u300_24gb` duerfen nicht direkt als Fortschritt oder Rueckschritt
+interpretiert werden. Vergleichbare Performance-Claims brauchen dasselbe
+Device-Profil oder einen explizit dokumentierten Cross-Device-Benchmark mit
+separater Einordnung.
+
 ## Environment Variables
 
 Wenn Pfade oder Device-Verhalten per Environment konfiguriert werden, dann nur
