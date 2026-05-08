@@ -66,6 +66,7 @@ def _cluster_artifact_kwargs(data: RatingsData, manifest_path: Path, repo_root: 
         "runtime_config_payload": {"runtime": {"cache_root": "artifacts/local"}},
         "use_cache": True,
         "mmap_mode": None,
+        "model": "cb_svdpp",
     }
 
 
@@ -77,6 +78,29 @@ def test_cluster_artifact_cache_hits_on_second_load(tmp_path: Path) -> None:
 
     assert miss_result.metadata.cache_status == "miss"
     assert hit_result.metadata.cache_status == "hit"
+    assert miss_result.profile is not None
+    assert hit_result.profile is not None
+    assert miss_result.profile.cluster_cache_status == "miss"
+    assert hit_result.profile.cluster_cache_status == "hit"
+    assert miss_result.profile.model == "cb_svdpp"
+    assert miss_result.profile.train_rows == len(data)
+    assert miss_result.profile.induction_seed == _induction_config().seed
+    assert miss_result.profile.timings.cluster_total_seconds >= 0.0
+    assert miss_result.profile.timings.induction_fit_seconds >= 0.0
+    assert miss_result.profile.timings.user_kmeans_seconds >= 0.0
+    assert miss_result.profile.timings.item_kmeans_seconds >= 0.0
+    assert miss_result.profile.timings.r_star_seconds >= 0.0
+    assert miss_result.profile.timings.cluster_artifact_validation_seconds >= 0.0
+    assert miss_result.profile.timings.cluster_cache_write_seconds >= 0.0
+    assert hit_result.profile.timings.cluster_cache_read_seconds >= 0.0
+    assert hit_result.profile.timings.cluster_artifact_validation_seconds >= 0.0
+    assert hit_result.profile.timings.induction_fit_seconds == 0.0
+    assert hit_result.profile.cluster_cache_key == hit_result.metadata.cache_key
+    assert (
+        hit_result.profile.cluster_cache_fingerprint_sha256
+        == hit_result.metadata.cache_fingerprint_sha256
+    )
+    assert hit_result.profile.to_payload()["cluster_cache_status"] == "hit"
     assert hit_result.metadata.cache_key == miss_result.metadata.cache_key
     assert hit_result.metadata.cache_manifest_path.exists()
     assert np.array_equal(miss_result.artifacts.user_clusters, hit_result.artifacts.user_clusters)
@@ -140,6 +164,7 @@ def test_user_cluster_history_cache_hits_on_second_load(tmp_path: Path) -> None:
         "cluster_cache_fingerprint_sha256": cluster_result.metadata.cache_fingerprint_sha256,
         "use_cache": True,
         "mmap_mode": None,
+        "model": "cb_svdpp",
     }
 
     miss_result = load_or_build_user_cluster_history_index(**kwargs)
@@ -147,6 +172,26 @@ def test_user_cluster_history_cache_hits_on_second_load(tmp_path: Path) -> None:
 
     assert miss_result.metadata.cache_status == "miss"
     assert hit_result.metadata.cache_status == "hit"
+    assert miss_result.profile is not None
+    assert hit_result.profile is not None
+    assert miss_result.profile.user_cluster_history_cache_status == "miss"
+    assert hit_result.profile.user_cluster_history_cache_status == "hit"
+    assert miss_result.profile.model == "cb_svdpp"
+    assert miss_result.profile.user_cluster_history_cache_key == miss_result.metadata.cache_key
+    assert (
+        miss_result.profile.user_cluster_history_cache_fingerprint_sha256
+        == miss_result.metadata.cache_fingerprint_sha256
+    )
+    assert miss_result.profile.cluster_cache_key == cluster_result.metadata.cache_key
+    assert miss_result.profile.timings.user_cluster_history_total_seconds >= 0.0
+    assert miss_result.profile.timings.user_cluster_history_build_seconds >= 0.0
+    assert miss_result.profile.timings.user_cluster_history_validation_seconds >= 0.0
+    assert miss_result.profile.timings.user_cluster_history_cache_write_seconds >= 0.0
+    assert hit_result.profile.timings.user_cluster_history_cache_read_seconds >= 0.0
+    assert hit_result.profile.timings.user_cluster_history_validation_seconds >= 0.0
+    assert hit_result.profile.timings.user_cluster_history_build_seconds == 0.0
+    assert "user_cluster_history_validation_seconds" in hit_result.profile.to_payload()
+    assert hit_result.profile.to_payload()["user_cluster_history_cache_status"] == "hit"
     assert hit_result.metadata.cache_key == miss_result.metadata.cache_key
     assert np.array_equal(miss_result.index.indptr, hit_result.index.indptr)
     assert np.array_equal(miss_result.index.cluster_ids, hit_result.index.cluster_ids)
@@ -181,6 +226,7 @@ def test_user_cluster_history_cache_rebuilds_legacy_layout_manifest(tmp_path: Pa
         "cluster_cache_fingerprint_sha256": cluster_result.metadata.cache_fingerprint_sha256,
         "use_cache": True,
         "mmap_mode": None,
+        "model": "cb_svdpp",
     }
 
     initial_result = load_or_build_user_cluster_history_index(**kwargs)

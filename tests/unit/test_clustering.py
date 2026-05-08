@@ -71,3 +71,10 @@ def test_induce_train_only_clusters_builds_dense_r_star() -> None:
     assert artifacts.r_star_means.shape == (2, 2)
     assert artifacts.r_star_counts.shape == (2, 2)
     assert int(artifacts.r_star_counts.sum()) == len(data)
+    assert artifacts.induction_profile is not None
+    assert artifacts.induction_profile.induction_fit_seconds >= 0.0
+    assert artifacts.induction_profile.induction_predict_seconds >= 0.0
+    assert artifacts.induction_profile.induction_train_rmse_seconds >= 0.0
+    assert artifacts.induction_profile.user_kmeans_seconds >= 0.0
+    assert artifacts.induction_profile.item_kmeans_seconds >= 0.0
+    assert artifacts.induction_profile.r_star_seconds >= 0.0

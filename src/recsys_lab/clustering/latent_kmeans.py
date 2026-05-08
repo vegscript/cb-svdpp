@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from time import perf_counter
 
 import numpy as np
 from sklearn.cluster import KMeans
@@ -8,6 +9,16 @@ from sklearn.cluster import KMeans
 from recsys_lab.data.processed import RatingsData
 from recsys_lab.metrics import rmse
 from recsys_lab.models.biased_mf import BiasedMFConfig, BiasedMFRecommender
+
+
+@dataclass(frozen=True, slots=True)
+class ClusterInductionProfile:
+    induction_fit_seconds: float = 0.0
+    induction_predict_seconds: float = 0.0
+    induction_train_rmse_seconds: float = 0.0
+    user_kmeans_seconds: float = 0.0
+    item_kmeans_seconds: float = 0.0
+    r_star_seconds: float = 0.0
 
 
 @dataclass(frozen=True, slots=True)
@@ -21,6 +32,7 @@ class ClusterArtifacts:
     induction_train_rmse: float
     user_kmeans_inertia: float
     item_kmeans_inertia: float
+    induction_profile: ClusterInductionProfile | None = None
 
 
 def _validate_cluster_request(*, n_clusters: int, n_samples: int, axis_name: str) -> None:
@@ -85,12 +97,18 @@ def induce_train_only_clusters(
         axis_name="item",
     )
 
+    started = perf_counter()
     induction_model = BiasedMFRecommender(induction_config).fit(data)
+    induction_fit_seconds = perf_counter() - started
     if induction_model.user_factors is None or induction_model.item_factors is None:
         raise RuntimeError("biased_mf induction model did not initialize latent factors")
 
+    started = perf_counter()
     induction_predictions = induction_model.predict_dataset(data)
+    induction_predict_seconds = perf_counter() - started
+    started = perf_counter()
     induction_train_rmse = rmse(data.ratings, induction_predictions)
+    induction_train_rmse_seconds = perf_counter() - started
 
     user_kmeans = KMeans(
         n_clusters=n_user_clusters,
@@ -103,12 +121,16 @@ def induce_train_only_clusters(
         random_state=induction_config.seed,
     )
 
+    started = perf_counter()
     user_clusters = user_kmeans.fit_predict(induction_model.user_factors.astype(np.float64, copy=False)).astype(
         np.int32, copy=False
     )
+    user_kmeans_seconds = perf_counter() - started
+    started = perf_counter()
     item_clusters = item_kmeans.fit_predict(induction_model.item_factors.astype(np.float64, copy=False)).astype(
         np.int32, copy=False
     )
+    item_kmeans_seconds = perf_counter() - started
 
     user_cluster_sizes = np.bincount(user_clusters, minlength=n_user_clusters).astype(
         np.int32,
@@ -118,6 +140,7 @@ def induce_train_only_clusters(
         np.int32,
         copy=False,
     )
+    started = perf_counter()
     r_star_means, r_star_counts = _compute_r_star(
         data,
         user_clusters=user_clusters,
@@ -126,6 +149,7 @@ def induce_train_only_clusters(
         n_item_clusters=n_item_clusters,
         dtype=induction_config.dtype,
     )
+    r_star_seconds = perf_counter() - started
 
     return ClusterArtifacts(
         user_clusters=user_clusters,
@@ -137,4 +161,12 @@ def induce_train_only_clusters(
         induction_train_rmse=induction_train_rmse,
         user_kmeans_inertia=float(user_kmeans.inertia_),
         item_kmeans_inertia=float(item_kmeans.inertia_),
+        induction_profile=ClusterInductionProfile(
+            induction_fit_seconds=float(induction_fit_seconds),
+            induction_predict_seconds=float(induction_predict_seconds),
+            induction_train_rmse_seconds=float(induction_train_rmse_seconds),
+            user_kmeans_seconds=float(user_kmeans_seconds),
+            item_kmeans_seconds=float(item_kmeans_seconds),
+            r_star_seconds=float(r_star_seconds),
+        ),
     )
