@@ -119,3 +119,48 @@ def test_objective_rejects_test_rmse_as_primary_tuning_metric() -> None:
 
     with pytest.raises(ValidationError, match="test metrics"):
         SearchSpaceSpec.model_validate(payload)
+
+
+def _manual_alpha_payload(
+    *, model: str = "cb_svdpp", target_path: str = "alpha", value: float = 0.2
+) -> dict[str, object]:
+    payload = _valid_search_space_payload()
+    payload["study"]["model"] = model  # type: ignore[index]
+    payload["generator"] = {"type": "manual", "deterministic_order": True}
+    payload["search_space"] = {
+        "cb_alpha": {
+            "type": "categorical",
+            "values": [0.2, 0.5],
+            "target_path": target_path,
+        }
+    }
+    payload["manual_candidates"] = [{"cb_alpha": value}]
+    return payload
+
+
+def test_cb_manual_candidate_rejects_alpha_zero_via_target_path_alpha() -> None:
+    with pytest.raises(ValidationError, match="alpha"):
+        SearchSpaceSpec.model_validate(_manual_alpha_payload(target_path="alpha", value=0.0))
+
+
+def test_cb_manual_candidate_rejects_alpha_one_via_target_path_clustering_alpha() -> None:
+    with pytest.raises(ValidationError, match="alpha"):
+        SearchSpaceSpec.model_validate(_manual_alpha_payload(target_path="clustering.alpha", value=1.0))
+
+
+def test_cb_manual_candidate_accepts_alpha_between_zero_and_one_via_target_path() -> None:
+    spec = SearchSpaceSpec.model_validate(_manual_alpha_payload(target_path="clustering.alpha", value=0.2))
+
+    assert spec.manual_candidates == [{"cb_alpha": 0.2}]
+
+
+def test_cb_manual_candidate_alpha_policy_applies_to_cb_asvdpp() -> None:
+    with pytest.raises(ValidationError, match="alpha"):
+        SearchSpaceSpec.model_validate(_manual_alpha_payload(model="cb_asvdpp", target_path="alpha", value=0.0))
+
+
+def test_non_cb_manual_candidate_not_subject_to_cb_alpha_policy() -> None:
+    spec = SearchSpaceSpec.model_validate(_manual_alpha_payload(model="svdpp", target_path="alpha", value=0.0))
+
+    assert spec.study.model == "svdpp"
+    assert spec.manual_candidates == [{"cb_alpha": 0.0}]

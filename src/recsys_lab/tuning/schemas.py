@@ -155,30 +155,29 @@ class SearchSpaceSpec(StrictSchema):
         if self.study.model not in PRODUCTIVE_CB_MODELS:
             return self
 
-        alpha_dimension = self.search_space.get("alpha")
-        if alpha_dimension is None:
-            for dimension in self.search_space.values():
-                if dimension.target_path in {"alpha", "clustering.alpha"}:
-                    alpha_dimension = dimension
-                    break
-        if alpha_dimension is None:
-            return self
-
-        if alpha_dimension.type == "categorical":
-            values = alpha_dimension.values or []
-            if any(float(value) <= 0.0 or float(value) >= 1.0 for value in values):
-                raise ValueError("productive CB search spaces require alpha values strictly between 0 and 1")
-        elif alpha_dimension.values is not None:
-            if any(float(value) <= 0.0 or float(value) >= 1.0 for value in alpha_dimension.values):
-                raise ValueError("productive CB search spaces require alpha values strictly between 0 and 1")
-        elif alpha_dimension.low is not None and alpha_dimension.high is not None and (
-            float(alpha_dimension.low) <= 0.0 or float(alpha_dimension.high) >= 1.0
-        ):
-            raise ValueError("productive CB search spaces require alpha bounds strictly between 0 and 1")
+        alpha_dimension_names = [
+            name for name, dimension in self.search_space.items() if _is_alpha_dimension(name, dimension)
+        ]
+        for dimension_name in alpha_dimension_names:
+            alpha_dimension = self.search_space[dimension_name]
+            if alpha_dimension.type == "categorical":
+                values = alpha_dimension.values or []
+                if any(float(value) <= 0.0 or float(value) >= 1.0 for value in values):
+                    raise ValueError("productive CB search spaces require alpha values strictly between 0 and 1")
+            elif alpha_dimension.values is not None:
+                if any(float(value) <= 0.0 or float(value) >= 1.0 for value in alpha_dimension.values):
+                    raise ValueError("productive CB search spaces require alpha values strictly between 0 and 1")
+            elif alpha_dimension.low is not None and alpha_dimension.high is not None and (
+                float(alpha_dimension.low) <= 0.0 or float(alpha_dimension.high) >= 1.0
+            ):
+                raise ValueError("productive CB search spaces require alpha bounds strictly between 0 and 1")
         if self.manual_candidates is not None:
             for candidate in self.manual_candidates:
-                if "alpha" in candidate and (float(candidate["alpha"]) <= 0.0 or float(candidate["alpha"]) >= 1.0):
-                    raise ValueError("productive CB manual candidates require alpha strictly between 0 and 1")
+                for dimension_name in alpha_dimension_names:
+                    if dimension_name in candidate and (
+                        float(candidate[dimension_name]) <= 0.0 or float(candidate[dimension_name]) >= 1.0
+                    ):
+                        raise ValueError("productive CB manual candidates require alpha strictly between 0 and 1")
         return self
 
 
@@ -187,3 +186,8 @@ def default_cluster_artifact_reuse_spec() -> ClusterArtifactReuseSpec:
         reuse_across=list(DEFAULT_CLUSTER_ARTIFACT_REUSE_ACROSS),
         invalidate_on=list(DEFAULT_CLUSTER_ARTIFACT_INVALIDATE_ON),
     )
+
+
+def _is_alpha_dimension(name: str, dimension: DimensionSpec) -> bool:
+    target_path = dimension.target_path or name
+    return name == "alpha" or target_path in {"alpha", "clustering.alpha"} or target_path.split(".")[-1] == "alpha"

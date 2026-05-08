@@ -35,8 +35,9 @@ def write_tuning_yaml(payload: BaseModel | dict[str, Any], path: Path) -> Path:
     return path
 
 
-def write_candidate_summary_csv(plan: StudyPlan, path: Path) -> Path:
+def write_candidate_summary_csv(plan: StudyPlan, path: Path, *, output_dir: Path | None = None) -> Path:
     path.parent.mkdir(parents=True, exist_ok=True)
+    resolved_output_dir = output_dir if output_dir is not None else path.parent.parent
     group_ids_by_candidate = _cluster_group_ids_by_candidate(plan)
     rows = [
         {
@@ -51,8 +52,8 @@ def write_candidate_summary_csv(plan: StudyPlan, path: Path) -> Path:
             "latent_dim": _candidate_value(candidate.parameter_values, "latent_dim"),
             "epochs": _candidate_value(candidate.parameter_values, "epochs"),
             "cluster_reuse_group_id": group_ids_by_candidate.get(candidate.candidate_id, ""),
-            "candidate_config_path": _candidate_config_path(plan, candidate.candidate_id),
-            "candidate_manifest_path": _candidate_manifest_path(plan, candidate.candidate_id),
+            "candidate_config_path": str(_candidate_config_path(resolved_output_dir, candidate.candidate_id)),
+            "candidate_manifest_path": str(_candidate_manifest_path(resolved_output_dir, candidate.candidate_id)),
             "status": candidate.objective_status,
         }
         for candidate in plan.candidates
@@ -138,6 +139,7 @@ def write_study_plan(plan: StudyPlan, output_dir: Path, *, repo_root: Path | Non
     paths["candidate_summary"] = write_candidate_summary_csv(
         plan,
         output_dir / "reports" / "candidate_summary.csv",
+        output_dir=output_dir,
     )
 
     candidates_dir = output_dir / "candidates"
@@ -220,9 +222,9 @@ def _cluster_group_ids_by_candidate(plan: StudyPlan) -> dict[str, str]:
     return result
 
 
-def _candidate_config_path(plan: StudyPlan, candidate_id: str) -> str:
-    return f"artifacts/tuning/{plan.study_id}/candidates/{candidate_id}/candidate_config.yaml"
+def _candidate_config_path(output_dir: Path, candidate_id: str) -> Path:
+    return output_dir / "candidates" / candidate_id / "candidate_config.yaml"
 
 
-def _candidate_manifest_path(plan: StudyPlan, candidate_id: str) -> str:
-    return f"artifacts/tuning/{plan.study_id}/candidates/{candidate_id}/candidate_manifest.json"
+def _candidate_manifest_path(output_dir: Path, candidate_id: str) -> Path:
+    return output_dir / "candidates" / candidate_id / "candidate_manifest.json"
