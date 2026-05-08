@@ -135,6 +135,38 @@ KERNEL_ARGUMENTS: dict[str, tuple[str, ...]] = {
         "item_cluster_factors",
         "implicit_cluster_factors",
     ),
+    "cb_svdpp_alpha0": (
+        "order",
+        "user_ids",
+        "item_ids",
+        "ratings",
+        "implicit_indptr",
+        "implicit_items",
+        "implicit_norms",
+        "cluster_indptr",
+        "cluster_ids",
+        "cluster_counts",
+        "user_clusters",
+        "item_clusters",
+        "alpha",
+        "global_mean",
+        "learning_rate",
+        "lambda_b",
+        "lambda_p",
+        "lambda_q",
+        "lambda_y",
+        "lambda_pC",
+        "lambda_qC",
+        "lambda_yC",
+        "user_bias",
+        "item_bias",
+        "user_factors",
+        "item_factors",
+        "implicit_factors",
+        "user_cluster_factors",
+        "item_cluster_factors",
+        "implicit_cluster_factors",
+    ),
     "cb_asvdpp": (
         "order",
         "user_ids",
@@ -183,8 +215,18 @@ KERNEL_NAMES: dict[str, str] = {
     "asymmetric_svd": "train_asymmetric_svd_epoch_numba",
     "asvdpp": "train_asvdpp_epoch_numba",
     "cb_svdpp": "train_cb_svdpp_epoch_numba",
+    "cb_svdpp_alpha0": "train_cb_svdpp_alpha0_epoch_numba",
     "cb_asvdpp": "train_cb_asvdpp_epoch_numba",
 }
+
+STANDARD_SYNTHETIC_MODELS: tuple[str, ...] = (
+    "biased_mf",
+    "svdpp",
+    "asymmetric_svd",
+    "asvdpp",
+    "cb_svdpp",
+    "cb_asvdpp",
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -244,16 +286,67 @@ def build_synthetic_kernel_cases() -> tuple[KernelBenchmarkCase, ...]:
             scalars=_select_scalars_for_model(model, scalars),
             metadata={**metadata, "kernel_arguments": KERNEL_ARGUMENTS[model]},
         )
-        for model in KERNEL_ARGUMENTS
+        for model in STANDARD_SYNTHETIC_MODELS
     )
     for case in cases:
         validate_kernel_benchmark_case(case)
     return cases
 
 
+def build_endpoint_alpha_synthetic_kernel_cases() -> tuple[KernelBenchmarkCase, ...]:
+    base_arrays = _build_base_arrays()
+    scalars: ScalarMap = {
+        "alpha": 0.0,
+        "global_mean": 3.5,
+        "learning_rate": 0.005,
+        "lambda_b": 0.02,
+        "lambda_p": 0.02,
+        "lambda_q": 0.02,
+        "lambda_y": 0.02,
+        "lambda_pC": 0.02,
+        "lambda_qC": 0.02,
+        "lambda_yC": 0.02,
+    }
+    metadata: dict[str, Any] = {
+        "case_id": "cb_svdpp_alpha0",
+        "case_family": "synthetic_endpoint_alpha_kernel_case_v1",
+        "n_users": 4,
+        "n_items": 5,
+        "n_ratings": 16,
+        "n_user_clusters": 2,
+        "n_item_clusters": 3,
+        "rating_min": 1.0,
+        "rating_max": 5.0,
+        "order_policy": "identity_int32",
+        "alpha_endpoint": 0.0,
+        "notes": "Endpoint-alpha synthetic inputs only; no model formula or update rule is implemented here.",
+    }
+
+    cases = (
+        KernelBenchmarkCase(
+            name="tiny_cb_svdpp_alpha0_float32",
+            model="cb_svdpp_alpha0",
+            kernel_name=KERNEL_NAMES["cb_svdpp_alpha0"],
+            dtype="float32",
+            latent_dim=3,
+            train_rows=int(base_arrays["ratings"].shape[0]),
+            arrays=_select_arrays_for_model("cb_svdpp_alpha0", base_arrays),
+            scalars=_select_scalars_for_model("cb_svdpp_alpha0", scalars),
+            metadata={**metadata, "base_model": "cb_svdpp", "kernel_arguments": KERNEL_ARGUMENTS["cb_svdpp_alpha0"]},
+        ),
+    )
+    for case in cases:
+        validate_kernel_benchmark_case(case)
+        _validate_nonzero_cluster_factors(case)
+    return cases
+
+
 def get_synthetic_kernel_case(model: str) -> KernelBenchmarkCase:
     for case in build_synthetic_kernel_cases():
-        if case.model == model:
+        if model in {case.model, case.name}:
+            return case
+    for case in build_endpoint_alpha_synthetic_kernel_cases():
+        if model in {str(case.metadata["case_id"]), case.name}:
             return case
     raise KeyError(f"unknown synthetic kernel case model: {model}")
 
@@ -442,6 +535,13 @@ def _validate_cluster_index(case: KernelBenchmarkCase) -> None:
         raise ValueError(f"{case.name}.user_clusters contains invalid user cluster ids")
     if np.min(item_clusters) < 0 or np.max(item_clusters) >= int(case.metadata["n_item_clusters"]):
         raise ValueError(f"{case.name}.item_clusters contains invalid item cluster ids")
+
+
+def _validate_nonzero_cluster_factors(case: KernelBenchmarkCase) -> None:
+    for name in ("user_cluster_factors", "item_cluster_factors", "implicit_cluster_factors"):
+        array = case.arrays[name]
+        if not np.any(array != np.float32(0.0)):
+            raise ValueError(f"{case.name}.{name} must contain nonzero values")
 
 
 def _counts_from_indptr(indptr: np.ndarray) -> np.ndarray:

@@ -24,6 +24,7 @@ from recsys_lab.models.kernels import (
     train_asymmetric_svd_epoch_numba,
     train_biased_mf_epoch_numba,
     train_cb_asvdpp_epoch_numba,
+    train_cb_svdpp_alpha0_epoch_numba,
     train_cb_svdpp_epoch_numba,
     train_svdpp_epoch_numba,
 )
@@ -65,6 +66,16 @@ MUTATED_ARRAYS_BY_MODEL: dict[str, tuple[str, ...]] = {
         "implicit_factors",
     ),
     "cb_svdpp": (
+        "user_bias",
+        "item_bias",
+        "user_factors",
+        "item_factors",
+        "implicit_factors",
+        "user_cluster_factors",
+        "item_cluster_factors",
+        "implicit_cluster_factors",
+    ),
+    "cb_svdpp_alpha0": (
         "user_bias",
         "item_bias",
         "user_factors",
@@ -280,6 +291,42 @@ def run_cb_svdpp_kernel_once(state: KernelState) -> None:
     )
 
 
+def run_cb_svdpp_alpha0_kernel_once(state: KernelState) -> None:
+    arrays = state.arrays
+    scalars = state.scalars
+    train_cb_svdpp_alpha0_epoch_numba(
+        arrays["order"],
+        arrays["user_ids"],
+        arrays["item_ids"],
+        arrays["ratings"],
+        arrays["implicit_indptr"],
+        arrays["implicit_items"],
+        arrays["implicit_norms"],
+        arrays["cluster_indptr"],
+        arrays["cluster_ids"],
+        arrays["cluster_counts"],
+        arrays["user_clusters"],
+        arrays["item_clusters"],
+        scalars["global_mean"],
+        scalars["learning_rate"],
+        scalars["lambda_b"],
+        scalars["lambda_p"],
+        scalars["lambda_q"],
+        scalars["lambda_y"],
+        scalars["lambda_pC"],
+        scalars["lambda_qC"],
+        scalars["lambda_yC"],
+        arrays["user_bias"],
+        arrays["item_bias"],
+        arrays["user_factors"],
+        arrays["item_factors"],
+        arrays["implicit_factors"],
+        arrays["user_cluster_factors"],
+        arrays["item_cluster_factors"],
+        arrays["implicit_cluster_factors"],
+    )
+
+
 def run_cb_asvdpp_kernel_once(state: KernelState) -> None:
     arrays = state.arrays
     scalars = state.scalars
@@ -331,6 +378,7 @@ KERNEL_DISPATCH: dict[str, KernelRunner] = {
     "asymmetric_svd": run_asymmetric_svd_kernel_once,
     "asvdpp": run_asvdpp_kernel_once,
     "cb_svdpp": run_cb_svdpp_kernel_once,
+    "cb_svdpp_alpha0": run_cb_svdpp_alpha0_kernel_once,
     "cb_asvdpp": run_cb_asvdpp_kernel_once,
 }
 

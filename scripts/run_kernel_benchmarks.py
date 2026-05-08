@@ -5,6 +5,7 @@ from pathlib import Path
 
 from recsys_lab.benchmarks.kernel_harness import run_kernel_benchmark
 from recsys_lab.benchmarks.synthetic_kernel_cases import (
+    build_endpoint_alpha_synthetic_kernel_cases,
     build_synthetic_kernel_cases,
     get_synthetic_kernel_case,
 )
@@ -14,7 +15,9 @@ from recsys_lab.benchmarks.writers import (
 )
 
 DEFAULT_OUTPUT_DIR = Path("artifacts") / "benchmarks" / "kernel"
-SYNTHETIC_CASE_NAMES = tuple(case.model for case in build_synthetic_kernel_cases())
+SYNTHETIC_CASE_NAMES = tuple(
+    case.model for case in (*build_synthetic_kernel_cases(), *build_endpoint_alpha_synthetic_kernel_cases())
+)
 
 
 def main() -> int:

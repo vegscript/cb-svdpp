@@ -15,6 +15,7 @@ from recsys_lab.benchmarks.kernel_harness import (
 )
 from recsys_lab.benchmarks.synthetic_kernel_cases import (
     KERNEL_ARGUMENTS,
+    build_endpoint_alpha_synthetic_kernel_cases,
     build_synthetic_kernel_cases,
     get_synthetic_kernel_case,
 )
@@ -33,6 +34,7 @@ EXPECTED_MODELS = (
     "cb_svdpp",
     "cb_asvdpp",
 )
+EXPECTED_DISPATCH_MODELS = (*EXPECTED_MODELS[:5], "cb_svdpp_alpha0", EXPECTED_MODELS[5])
 
 
 def test_synthetic_cases_exist_for_all_six_models() -> None:
@@ -46,6 +48,26 @@ def test_synthetic_cases_exist_for_all_six_models() -> None:
         assert case.latent_dim == 3
         assert case.train_rows == 16
         assert set(KERNEL_ARGUMENTS[case.model]) == set(case.arrays) | set(case.scalars)
+
+
+def test_endpoint_alpha_cb_svdpp_alpha0_case_uses_valid_layout() -> None:
+    cases = build_endpoint_alpha_synthetic_kernel_cases()
+
+    assert tuple(case.metadata["case_id"] for case in cases) == ("cb_svdpp_alpha0",)
+    case = get_synthetic_kernel_case("cb_svdpp_alpha0")
+
+    assert case.model == "cb_svdpp_alpha0"
+    assert case.name == "tiny_cb_svdpp_alpha0_float32"
+    assert case.kernel_name == "train_cb_svdpp_alpha0_epoch_numba"
+    assert case.scalars["alpha"] == 0.0
+    assert set(KERNEL_ARGUMENTS[case.model]) == set(case.arrays) | set(case.scalars)
+    assert np.all(np.diff(case.arrays["implicit_indptr"]) > 0)
+    assert np.all(np.diff(case.arrays["cluster_indptr"]) > 0)
+    assert np.max(case.arrays["cluster_ids"]) < case.metadata["n_item_clusters"]
+    for name in ("user_cluster_factors", "item_cluster_factors", "implicit_cluster_factors"):
+        assert case.arrays[name].dtype == np.float32
+        assert case.arrays[name].flags.c_contiguous
+        assert np.any(case.arrays[name] != np.float32(0.0))
 
 
 def test_synthetic_cases_have_contiguous_arrays() -> None:
@@ -123,7 +145,7 @@ def test_assert_mutated_state_finite_rejects_non_finite_values() -> None:
 
 
 def test_kernel_dispatch_covers_all_synthetic_models() -> None:
-    assert tuple(KERNEL_DISPATCH) == EXPECTED_MODELS
+    assert tuple(KERNEL_DISPATCH) == EXPECTED_DISPATCH_MODELS
     for model, runner in KERNEL_DISPATCH.items():
         assert runner.__name__ == f"run_{model}_kernel_once"
         assert kernel_runner_for_model(model) is runner
@@ -339,6 +361,7 @@ def test_writer_outputs_json_and_csv(tmp_path) -> None:
 def test_run_kernel_benchmarks_script_selects_cases() -> None:
     assert tuple(case.model for case in _select_cases("all")) == EXPECTED_MODELS
     assert tuple(case.model for case in _select_cases("svdpp")) == ("svdpp",)
+    assert tuple(case.model for case in _select_cases("cb_svdpp_alpha0")) == ("cb_svdpp_alpha0",)
 
 
 def test_run_kernel_benchmarks_script_parser_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
