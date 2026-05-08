@@ -16,8 +16,8 @@ from recsys_lab.experiments.kernel_profile import (
 
 def _history_index(lengths: list[int]) -> UserHistoryIndex:
     counts = np.asarray(lengths, dtype=np.int32)
-    indptr = np.zeros(counts.shape[0] + 1, dtype=np.int64)
-    indptr[1:] = np.cumsum(counts, dtype=np.int64)
+    indptr = np.zeros(counts.shape[0] + 1, dtype=np.int32)
+    indptr[1:] = np.cumsum(counts, dtype=np.int64).astype(np.int32, copy=False)
     return UserHistoryIndex(
         indptr=indptr,
         item_indices=np.arange(int(counts.sum()), dtype=np.int32),

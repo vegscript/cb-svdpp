@@ -154,4 +154,44 @@ def test_user_cluster_history_cache_hits_on_second_load(tmp_path: Path) -> None:
 
     manifest = json.loads(hit_result.metadata.cache_manifest_path.read_text(encoding="utf-8"))
     assert manifest["identity"]["fingerprint"]["cluster_cache_key"] == cluster_result.metadata.cache_key
+    assert manifest["identity"]["layout"] == {
+        "layout_version": "history_data_layout_v1",
+        "index_dtype": "int32",
+        "count_dtype": "int32",
+    }
     assert all(not Path(path_ref).is_absolute() for path_ref in manifest["artifacts"].values())
+
+
+def test_user_cluster_history_cache_rebuilds_legacy_layout_manifest(tmp_path: Path) -> None:
+    data, manifest_path = _toy_data(tmp_path)
+    cluster_result = load_or_build_cluster_artifacts(**_cluster_artifact_kwargs(data, manifest_path, tmp_path))
+    history_index = build_user_history_index(data, dtype="float32")
+    kwargs = {
+        "history_index": history_index,
+        "item_clusters": cluster_result.artifacts.item_clusters,
+        "n_clusters": cluster_result.artifacts.r_star_counts.shape[1],
+        "dataset_short_name": "ml_latest_small",
+        "split_family": "benchmark_random_v1",
+        "split_id": "benchmark_random_v1_tr080_va010_s001",
+        "processed_manifest_path": manifest_path,
+        "repo_root": tmp_path,
+        "runtime_config_payload": {"runtime": {"cache_root": "artifacts/local"}},
+        "train_fingerprint": cluster_result.metadata.train_fingerprint,
+        "cluster_cache_key": cluster_result.metadata.cache_key,
+        "cluster_cache_fingerprint_sha256": cluster_result.metadata.cache_fingerprint_sha256,
+        "use_cache": True,
+        "mmap_mode": None,
+    }
+
+    initial_result = load_or_build_user_cluster_history_index(**kwargs)
+    assert initial_result.metadata.cache_status == "miss"
+
+    cache_manifest = json.loads(initial_result.metadata.cache_manifest_path.read_text(encoding="utf-8"))
+    cache_manifest["identity"].pop("layout")
+    initial_result.metadata.cache_manifest_path.write_text(json.dumps(cache_manifest), encoding="utf-8")
+
+    rebuilt_result = load_or_build_user_cluster_history_index(**kwargs)
+
+    assert rebuilt_result.metadata.cache_status == "miss"
+    rebuilt_manifest = json.loads(rebuilt_result.metadata.cache_manifest_path.read_text(encoding="utf-8"))
+    assert rebuilt_manifest["identity"]["layout"]["layout_version"] == "history_data_layout_v1"

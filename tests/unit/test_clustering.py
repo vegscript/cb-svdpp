@@ -25,7 +25,7 @@ def _toy_data() -> RatingsData:
 def test_build_user_cluster_count_index_aggregates_duplicate_clusters() -> None:
     data = _toy_data()
     history_index = build_user_history_index(data, dtype="float32")
-    item_clusters = np.asarray([0, 0, 1, 1], dtype=np.int32)
+    item_clusters = np.asarray([0, 0, 1, 1], dtype=np.int64)
 
     cluster_history = build_user_cluster_count_index(
         history_index,
@@ -37,6 +37,12 @@ def test_build_user_cluster_count_index_aggregates_duplicate_clusters() -> None:
     assert cluster_history.counts_for_user(0).tolist() == [2]
     assert cluster_history.clusters_for_user(1).tolist() == [0, 1]
     assert cluster_history.counts_for_user(1).tolist() == [1, 1]
+    assert cluster_history.indptr.dtype == np.int32
+    assert cluster_history.cluster_ids.dtype == np.int32
+    assert cluster_history.counts.dtype == np.int32
+    assert cluster_history.indptr.flags.c_contiguous
+    assert cluster_history.cluster_ids.flags.c_contiguous
+    assert cluster_history.counts.flags.c_contiguous
 
 
 def test_induce_train_only_clusters_builds_dense_r_star() -> None:

@@ -324,6 +324,20 @@ Step 13b added:
 No whitelist was needed for this phase because the audited strict and model
 hotpath files had no legitimate forbidden-term or forbidden-import hits.
 
+Step 15 added:
+
+- explicit `int32`/contiguous history data layout validation in
+  `src/recsys_lab/data/histories.py`
+- layout-versioned cache manifests and cache paths for V1 history indices
+- boundary checks that classify `data/histories.py` as stricter hotpath
+  preparation
+- an explicit guard that `data/training_index_cache.py` and
+  `clustering/cache.py` are boundary/coldpath cache modules, not pure hotpath
+  files
+
+No production kernel logic or model formula changed as part of this
+classification hardening.
+
 ## Gates Run For Step 13b
 
 - `ruff check .`: passed

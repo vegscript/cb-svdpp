@@ -151,7 +151,12 @@ class SVDppRecommender:
         if user_histories is None:
             self.user_histories = build_user_history_index(data, dtype=self.config.dtype)
         else:
-            validate_user_history_index(user_histories, n_users=data.n_users)
+            validate_user_history_index(
+                user_histories,
+                n_users=data.n_users,
+                n_items=data.n_items,
+                dtype=self.config.dtype,
+            )
             self.user_histories = user_histories
 
         order = data.training_row_indices()

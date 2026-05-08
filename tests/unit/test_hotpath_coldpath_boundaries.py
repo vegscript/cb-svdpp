@@ -15,6 +15,10 @@ MODEL_HOTPATH_FILES = [
     REPO_ROOT / "src" / "recsys_lab" / "models" / "inference.py",
 ]
 
+HOTPATH_PREPARATION_FILES = [
+    REPO_ROOT / "src" / "recsys_lab" / "data" / "histories.py",
+]
+
 STRICT_FORBIDDEN = [
     "yaml",
     "json",
@@ -76,6 +80,42 @@ MODEL_FORBIDDEN_IMPORTS = [
     "recsys_lab.utils.manifests",
     "recsys_lab.utils.paths",
     "pydantic",
+    "yaml",
+    "json",
+    "pathlib",
+    "argparse",
+    "typer",
+    "click",
+    "logging",
+]
+
+HOTPATH_PREPARATION_FORBIDDEN = [
+    "yaml",
+    "json",
+    "Path",
+    "open(",
+    "atomic_io",
+    "write_json",
+    "dump_yaml_file",
+    "load_yaml_file",
+    "validate_manifest_file",
+    "discover_repo_root",
+    "repo_path_string",
+    "evidence",
+    "experiments",
+    "reporting",
+    "cli",
+]
+
+HOTPATH_PREPARATION_FORBIDDEN_IMPORTS = [
+    "recsys_lab.benchmarks",
+    "recsys_lab.config",
+    "recsys_lab.cli",
+    "recsys_lab.experiments",
+    "recsys_lab.reporting",
+    "recsys_lab.utils.atomic_io",
+    "recsys_lab.utils.manifests",
+    "recsys_lab.utils.paths",
     "yaml",
     "json",
     "pathlib",
@@ -165,6 +205,12 @@ def test_model_hotpath_files_have_no_forbidden_ast_imports() -> None:
         _assert_no_forbidden_imports(path, MODEL_FORBIDDEN_IMPORTS)
 
 
+def test_hotpath_preparation_histories_has_no_coldpath_imports_or_terms() -> None:
+    for path in HOTPATH_PREPARATION_FILES:
+        _assert_no_forbidden_terms(path, HOTPATH_PREPARATION_FORBIDDEN)
+        _assert_no_forbidden_imports(path, HOTPATH_PREPARATION_FORBIDDEN_IMPORTS)
+
+
 def test_import_extractor_detects_forbidden_from_import(tmp_path: Path) -> None:
     path = tmp_path / "bad_hotpath.py"
     path.write_text("from recsys_lab.experiments.performance import StageProfiler\n", encoding="utf-8")
@@ -209,9 +255,16 @@ def test_experiment_runner_is_allowed_to_contain_coldpath_terms() -> None:
 
 
 def test_reporting_scripts_and_docs_are_not_part_of_hotpath_checks() -> None:
-    checked_paths = {STRICT_HOTPATH, *MODEL_HOTPATH_FILES}
+    checked_paths = {STRICT_HOTPATH, *MODEL_HOTPATH_FILES, *HOTPATH_PREPARATION_FILES}
     checked_relative_paths = [path.relative_to(REPO_ROOT) for path in checked_paths]
 
     assert all("reporting" not in path.parts for path in checked_relative_paths)
     assert all("scripts" not in path.parts for path in checked_relative_paths)
     assert all("docs" not in path.parts for path in checked_relative_paths)
+
+
+def test_cache_modules_are_not_checked_as_pure_hotpath_preparation() -> None:
+    checked_paths = {STRICT_HOTPATH, *MODEL_HOTPATH_FILES, *HOTPATH_PREPARATION_FILES}
+
+    assert REPO_ROOT / "src" / "recsys_lab" / "data" / "training_index_cache.py" not in checked_paths
+    assert REPO_ROOT / "src" / "recsys_lab" / "clustering" / "cache.py" not in checked_paths

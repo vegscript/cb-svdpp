@@ -229,7 +229,12 @@ class CBSVDppRecommender:
         if user_histories is None:
             self.user_histories = build_user_history_index(data, dtype=self.config.dtype)
         else:
-            validate_user_history_index(user_histories, n_users=data.n_users)
+            validate_user_history_index(
+                user_histories,
+                n_users=data.n_users,
+                n_items=data.n_items,
+                dtype=self.config.dtype,
+            )
             self.user_histories = user_histories
         if user_cluster_histories is None:
             self.user_cluster_histories = build_user_cluster_count_index(
@@ -238,7 +243,11 @@ class CBSVDppRecommender:
                 n_clusters=self.n_item_clusters,
             )
         else:
-            validate_user_cluster_count_index(user_cluster_histories, n_users=data.n_users)
+            validate_user_cluster_count_index(
+                user_cluster_histories,
+                n_users=data.n_users,
+                n_clusters=self.n_item_clusters,
+            )
             self.user_cluster_histories = user_cluster_histories
 
         order = data.training_row_indices()

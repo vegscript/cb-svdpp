@@ -5,6 +5,15 @@ from typing import Any
 
 import numpy as np
 
+from recsys_lab.data.histories import (
+    UserClusterCountIndex,
+    UserExplicitFeedbackIndex,
+    UserHistoryIndex,
+    validate_user_cluster_count_index,
+    validate_user_explicit_feedback_index,
+    validate_user_history_index,
+)
+
 ArrayMap = dict[str, np.ndarray]
 ScalarMap = dict[str, float | int]
 
@@ -371,27 +380,41 @@ def _validate_history_index(case: KernelBenchmarkCase, prefix: str, *, has_ratin
     indptr = case.arrays[f"{prefix}_indptr"]
     items = case.arrays[f"{prefix}_items"]
     norms = case.arrays[f"{prefix}_norms"]
-
-    if indptr.dtype != np.int32 or items.dtype != np.int32:
-        raise ValueError(f"{case.name}.{prefix} history ids must be int32")
-    if norms.dtype != np.float32:
-        raise ValueError(f"{case.name}.{prefix}_norms must be float32")
-    if indptr.shape[0] != int(case.metadata["n_users"]) + 1:
-        raise ValueError(f"{case.name}.{prefix}_indptr has invalid length")
-    if int(indptr[0]) != 0 or int(indptr[-1]) != int(items.shape[0]):
-        raise ValueError(f"{case.name}.{prefix}_indptr endpoints are invalid")
-    if np.any(np.diff(indptr) <= 0):
-        raise ValueError(f"{case.name}.{prefix} histories must be non-empty for each user")
-    if np.min(items) < 0 or np.max(items) >= int(case.metadata["n_items"]):
-        raise ValueError(f"{case.name}.{prefix}_items contains invalid item ids")
+    counts = _counts_from_indptr(indptr)
+    n_users = int(case.metadata["n_users"])
+    n_items = int(case.metadata["n_items"])
     if has_ratings:
         explicit_ratings = case.arrays[f"{prefix}_ratings"]
-        if explicit_ratings.dtype != np.float32:
-            raise ValueError(f"{case.name}.{prefix}_ratings must be float32")
-        if explicit_ratings.shape != items.shape:
-            raise ValueError(f"{case.name}.{prefix}_ratings must align with items")
+        validate_user_explicit_feedback_index(
+            UserExplicitFeedbackIndex(
+                indptr=indptr,
+                item_indices=items,
+                ratings=explicit_ratings,
+                counts=counts,
+                norms=norms,
+            ),
+            n_users=n_users,
+            n_items=n_items,
+            dtype=case.dtype,
+            name=f"{case.name}.{prefix}",
+        )
         if np.min(explicit_ratings) < 1.0 or np.max(explicit_ratings) > 5.0:
             raise ValueError(f"{case.name}.{prefix}_ratings must be in [1, 5]")
+    else:
+        validate_user_history_index(
+            UserHistoryIndex(
+                indptr=indptr,
+                item_indices=items,
+                counts=counts,
+                norms=norms,
+            ),
+            n_users=n_users,
+            n_items=n_items,
+            dtype=case.dtype,
+            name=f"{case.name}.{prefix}",
+        )
+    if np.any(counts <= 0):
+        raise ValueError(f"{case.name}.{prefix} histories must be non-empty for each user")
 
 
 def _validate_cluster_index(case: KernelBenchmarkCase) -> None:
@@ -401,21 +424,25 @@ def _validate_cluster_index(case: KernelBenchmarkCase) -> None:
     user_clusters = case.arrays["user_clusters"]
     item_clusters = case.arrays["item_clusters"]
 
-    if any(array.dtype != np.int32 for array in (indptr, cluster_ids, cluster_counts, user_clusters, item_clusters)):
-        raise ValueError(f"{case.name} cluster id/count arrays must be int32")
-    if indptr.shape[0] != int(case.metadata["n_users"]) + 1:
-        raise ValueError(f"{case.name}.cluster_indptr has invalid length")
-    if int(indptr[0]) != 0 or int(indptr[-1]) != int(cluster_ids.shape[0]):
-        raise ValueError(f"{case.name}.cluster_indptr endpoints are invalid")
-    if cluster_ids.shape != cluster_counts.shape:
-        raise ValueError(f"{case.name}.cluster_ids and cluster_counts must align")
-    if np.any(np.diff(indptr) <= 0):
+    validate_user_cluster_count_index(
+        UserClusterCountIndex(
+            indptr=indptr,
+            cluster_ids=cluster_ids,
+            counts=cluster_counts,
+        ),
+        n_users=int(case.metadata["n_users"]),
+        n_clusters=int(case.metadata["n_item_clusters"]),
+        name=f"{case.name}.cluster",
+    )
+    if np.any(_counts_from_indptr(indptr) <= 0):
         raise ValueError(f"{case.name}.cluster histories must be non-empty for each user")
-    if np.min(cluster_counts) < 1:
-        raise ValueError(f"{case.name}.cluster_counts must be positive")
-    if np.min(cluster_ids) < 0 or np.max(cluster_ids) >= int(case.metadata["n_item_clusters"]):
-        raise ValueError(f"{case.name}.cluster_ids contains invalid item cluster ids")
+    if user_clusters.dtype != np.int32 or item_clusters.dtype != np.int32:
+        raise ValueError(f"{case.name}.cluster assignment arrays must be int32")
     if np.min(user_clusters) < 0 or np.max(user_clusters) >= int(case.metadata["n_user_clusters"]):
         raise ValueError(f"{case.name}.user_clusters contains invalid user cluster ids")
     if np.min(item_clusters) < 0 or np.max(item_clusters) >= int(case.metadata["n_item_clusters"]):
         raise ValueError(f"{case.name}.item_clusters contains invalid item cluster ids")
+
+
+def _counts_from_indptr(indptr: np.ndarray) -> np.ndarray:
+    return np.ascontiguousarray(np.diff(indptr.astype(np.int64, copy=False)).astype(np.int32, copy=False))

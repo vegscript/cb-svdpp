@@ -38,6 +38,11 @@ Hotpath preparation:
 
 - `src/recsys_lab/data/histories.py`
 
+This module is stricter than cache-boundary modules: it owns in-memory
+CSR-like history layout construction and validation only. It must not grow JSON,
+YAML, `Path`, manifest, reporting, evidence, experiment, CLI, or atomic IO
+responsibilities.
+
 Boundary preparation/cache modules:
 
 - `src/recsys_lab/data/training_index_cache.py`
@@ -152,6 +157,8 @@ The boundary is guarded by:
 - `docs/architecture/hotpath_coldpath_boundary_audit_v1.md`
 - `tests/unit/test_hotpath_coldpath_boundaries.py`
 
-Future changes that add coldpath imports or artifact logic to strict/model
-hotpath files should fail review unless they are moved to coldpath code or
+The unit guard covers strict kernels, model hotpath files, benchmark back-import
+direction, and `data/histories.py` as hotpath preparation. Future changes that
+add coldpath imports or artifact logic to strict/model hotpath files or
+`data/histories.py` should fail review unless they are moved to coldpath code or
 documented as a deliberate architecture change.

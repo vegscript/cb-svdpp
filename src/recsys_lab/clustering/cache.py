@@ -17,6 +17,8 @@ from recsys_lab.data.histories import (
 )
 from recsys_lab.data.processed import RatingsData
 from recsys_lab.data.training_index_cache import (
+    HISTORY_INDEX_DTYPE,
+    HISTORY_LAYOUT_VERSION,
     RatingsDataFingerprint,
     fingerprint_ratings_data,
     resolve_training_index_cache_root,
@@ -177,7 +179,7 @@ def load_or_build_user_cluster_history_index(
     )
     cache_fingerprint_sha256 = _stable_sha256(identity_payload)
     cache_key = cache_fingerprint_sha256[:16]
-    cache_dir = _cache_dir(cache_root=cache_root) / cluster_cache_key / "uch"
+    cache_dir = _cache_dir(cache_root=cache_root) / cluster_cache_key / "uch" / HISTORY_LAYOUT_VERSION / cache_key
     manifest_path = cache_dir / "manifest.json"
 
     if use_cache:
@@ -187,6 +189,7 @@ def load_or_build_user_cluster_history_index(
             expected_cache_fingerprint_sha256=cache_fingerprint_sha256,
             mmap_mode=mmap_mode,
             n_users=history_index.counts.shape[0],
+            n_clusters=n_clusters,
         )
         if cached_index is not None:
             return UserClusterHistoryCacheResult(
@@ -291,6 +294,11 @@ def _cluster_history_identity_payload(
     return {
         "manifest_version": "v1",
         "kind": "user_cluster_history_cache",
+        "layout": {
+            "layout_version": HISTORY_LAYOUT_VERSION,
+            "index_dtype": HISTORY_INDEX_DTYPE,
+            "count_dtype": HISTORY_INDEX_DTYPE,
+        },
         "dataset": {
             "short_name": dataset_short_name,
             "split_family": split_family,
@@ -355,6 +363,7 @@ def _try_load_user_cluster_history_index(
     expected_cache_fingerprint_sha256: str,
     mmap_mode: MMapMode | None,
     n_users: int,
+    n_clusters: int,
 ) -> UserClusterCountIndex | None:
     try:
         payload = _load_and_validate_manifest(
@@ -368,7 +377,7 @@ def _try_load_user_cluster_history_index(
             cluster_ids=np.load(_artifact_path(manifest_path, artifacts["cluster_ids_npy"]), mmap_mode=mmap_mode),
             counts=np.load(_artifact_path(manifest_path, artifacts["counts_npy"]), mmap_mode=mmap_mode),
         )
-        validate_user_cluster_count_index(index, n_users=n_users)
+        validate_user_cluster_count_index(index, n_users=n_users, n_clusters=n_clusters)
         return index
     except Exception:
         return None

@@ -170,12 +170,22 @@ class AsymmetricSVDRecommender:
         if explicit_feedback is None:
             self.explicit_feedback = build_user_explicit_feedback_index(data, dtype=self.config.dtype)
         else:
-            validate_user_explicit_feedback_index(explicit_feedback, n_users=data.n_users)
+            validate_user_explicit_feedback_index(
+                explicit_feedback,
+                n_users=data.n_users,
+                n_items=data.n_items,
+                dtype=self.config.dtype,
+            )
             self.explicit_feedback = explicit_feedback
         if implicit_history is None:
             self.implicit_history = build_user_history_index(data, dtype=self.config.dtype)
         else:
-            validate_user_history_index(implicit_history, n_users=data.n_users)
+            validate_user_history_index(
+                implicit_history,
+                n_users=data.n_users,
+                n_items=data.n_items,
+                dtype=self.config.dtype,
+            )
             self.implicit_history = implicit_history
 
         order = data.training_row_indices()

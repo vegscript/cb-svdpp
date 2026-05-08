@@ -22,6 +22,10 @@ from recsys_lab.utils.atomic_io import atomic_save_array, atomic_write_json
 from recsys_lab.utils.paths import repo_path_string
 
 MMapMode = Literal["r+", "r", "w+", "c"]
+# Part of both cache path and manifest identity so pre-V1 int64 history caches remain
+# available on disk but cannot be loaded as valid V1 hotpath inputs.
+HISTORY_LAYOUT_VERSION = "history_data_layout_v1"
+HISTORY_INDEX_DTYPE = "int32"
 
 
 @dataclass(frozen=True, slots=True)
@@ -183,6 +187,8 @@ def _load_or_build_user_history_index(
             ),
             mmap_mode=mmap_mode,
             n_users=data.n_users,
+            n_items=data.n_items,
+            dtype=dtype,
         )
         if cached_index is not None:
             return UserHistoryIndexCacheResult(
@@ -266,6 +272,8 @@ def _load_or_build_user_explicit_feedback_index(
             ),
             mmap_mode=mmap_mode,
             n_users=data.n_users,
+            n_items=data.n_items,
+            dtype=dtype,
         )
         if cached_index is not None:
             return UserExplicitFeedbackIndexCacheResult(
@@ -314,7 +322,7 @@ def _cache_dir(
     split_id: str,
     dtype: str,
 ) -> Path:
-    return cache_root / "ti" / dataset_short_name / split_id / dtype
+    return cache_root / "ti" / HISTORY_LAYOUT_VERSION / dataset_short_name / split_id / dtype
 
 
 def _expected_manifest_payload(
@@ -341,6 +349,11 @@ def _expected_manifest_payload(
             "processed_manifest_ref": repo_path_string(processed_manifest_path, repo_root=repo_root),
         },
         "dtype": dtype,
+        "layout": {
+            "layout_version": HISTORY_LAYOUT_VERSION,
+            "index_dtype": HISTORY_INDEX_DTYPE,
+            "value_dtype": dtype,
+        },
         "shape": {
             "n_users": int(n_users),
             "n_items": int(n_items),
@@ -358,6 +371,8 @@ def _try_load_user_history_index(
     expected_metadata: dict[str, Any],
     mmap_mode: MMapMode | None,
     n_users: int,
+    n_items: int,
+    dtype: str,
 ) -> UserHistoryIndex | None:
     try:
         payload = _load_and_validate_manifest(
@@ -371,7 +386,7 @@ def _try_load_user_history_index(
             counts=np.load(_artifact_path(manifest_path, artifacts["counts_npy"]), mmap_mode=mmap_mode),
             norms=np.load(_artifact_path(manifest_path, artifacts["norms_npy"]), mmap_mode=mmap_mode),
         )
-        validate_user_history_index(index, n_users=n_users)
+        validate_user_history_index(index, n_users=n_users, n_items=n_items, dtype=dtype)
         return index
     except Exception:
         return None
@@ -383,6 +398,8 @@ def _try_load_user_explicit_feedback_index(
     expected_metadata: dict[str, Any],
     mmap_mode: MMapMode | None,
     n_users: int,
+    n_items: int,
+    dtype: str,
 ) -> UserExplicitFeedbackIndex | None:
     try:
         payload = _load_and_validate_manifest(
@@ -397,7 +414,7 @@ def _try_load_user_explicit_feedback_index(
             counts=np.load(_artifact_path(manifest_path, artifacts["counts_npy"]), mmap_mode=mmap_mode),
             norms=np.load(_artifact_path(manifest_path, artifacts["norms_npy"]), mmap_mode=mmap_mode),
         )
-        validate_user_explicit_feedback_index(index, n_users=n_users)
+        validate_user_explicit_feedback_index(index, n_users=n_users, n_items=n_items, dtype=dtype)
         return index
     except Exception:
         return None
@@ -414,7 +431,7 @@ def _load_and_validate_manifest(
     for key in ("manifest_version", "kind", "index_kind", "dtype"):
         if payload.get(key) != expected_metadata[key]:
             raise ValueError(f"cache manifest mismatch at key '{key}'")
-    for key in ("dataset", "shape", "fingerprint"):
+    for key in ("layout", "dataset", "shape", "fingerprint"):
         if payload.get(key) != expected_metadata[key]:
             raise ValueError(f"cache manifest mismatch at key '{key}'")
     artifacts = payload.get("artifacts")

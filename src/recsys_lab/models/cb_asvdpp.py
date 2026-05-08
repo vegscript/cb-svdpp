@@ -314,12 +314,22 @@ class CBASVDppRecommender:
         if explicit_feedback is None:
             self.explicit_feedback = build_user_explicit_feedback_index(data, dtype=self.config.dtype)
         else:
-            validate_user_explicit_feedback_index(explicit_feedback, n_users=data.n_users)
+            validate_user_explicit_feedback_index(
+                explicit_feedback,
+                n_users=data.n_users,
+                n_items=data.n_items,
+                dtype=self.config.dtype,
+            )
             self.explicit_feedback = explicit_feedback
         if implicit_history is None:
             self.implicit_history = build_user_history_index(data, dtype=self.config.dtype)
         else:
-            validate_user_history_index(implicit_history, n_users=data.n_users)
+            validate_user_history_index(
+                implicit_history,
+                n_users=data.n_users,
+                n_items=data.n_items,
+                dtype=self.config.dtype,
+            )
             self.implicit_history = implicit_history
         if implicit_cluster_history is None:
             self.implicit_cluster_history = build_user_cluster_count_index(
@@ -328,7 +338,11 @@ class CBASVDppRecommender:
                 n_clusters=self.n_item_clusters,
             )
         else:
-            validate_user_cluster_count_index(implicit_cluster_history, n_users=data.n_users)
+            validate_user_cluster_count_index(
+                implicit_cluster_history,
+                n_users=data.n_users,
+                n_clusters=self.n_item_clusters,
+            )
             self.implicit_cluster_history = implicit_cluster_history
 
         order = data.training_row_indices()
