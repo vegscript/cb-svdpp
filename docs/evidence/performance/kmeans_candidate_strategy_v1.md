@@ -74,7 +74,7 @@ The run used `--repeats 2`:
 Final diagnostic command:
 
 ```powershell
-C:\Users\User\AppData\Local\Programs\Python\Python312\python.exe scripts/profile_cluster_artifacts.py --processed-manifest data/processed/ml1m/ml1m_benchmark_random_v1_explicit_v1_float32_manifest.json --model-config configs/models/archive/tuned/ml1m_cb_svdpp_stage0_probe_e003.yaml --runtime-config artifacts/reports/kmeans_candidate_strategy_v1/runtime_local_diagnostic_ml1m.yaml --model cb_svdpp --split-family benchmark_random_v1 --train-ratio 0.8 --validation-ratio 0.1 --split-seed 1 --model-seed 1 --repeats 2 --output-dir artifacts/reports/kmeans_candidate_strategy_v1 --output-stem cluster_artifact_profile_ml1m
+python scripts/profile_cluster_artifacts.py --processed-manifest data/processed/ml1m/ml1m_benchmark_random_v1_explicit_v1_float32_manifest.json --model-config configs/models/archive/tuned/ml1m_cb_svdpp_stage0_probe_e003.yaml --runtime-config artifacts/reports/kmeans_candidate_strategy_v1/runtime_local_diagnostic_ml1m.yaml --model cb_svdpp --split-family benchmark_random_v1 --train-ratio 0.8 --validation-ratio 0.1 --split-seed 1 --model-seed 1 --repeats 2 --output-dir artifacts/reports/kmeans_candidate_strategy_v1 --output-stem cluster_artifact_profile_ml1m
 ```
 
 Generated artifacts:
