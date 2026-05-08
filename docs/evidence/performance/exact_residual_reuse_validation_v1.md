@@ -245,6 +245,13 @@ Synthetic tiny benchmark values from Step 16b are not used as speed evidence.
 
 ## Next Step
 
-Generate after runs for the six ML1M laptop benchmark commands, build the
-after-run index, compare against the before inventory, and update this report
-with results and an acceptance decision.
+Step 16c is accepted as `ACCEPT_AS_EXACT_CLEANUP`.
+
+The next red-thread step is:
+
+17. CB Kernel Specialization
+
+The next step should start as an audit/plan, not as an immediate kernel
+rewrite:
+
+17a. CB Kernel Specialization Audit and Plan V1.
