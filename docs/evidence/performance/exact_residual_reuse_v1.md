@@ -140,7 +140,30 @@ the existing kernel benchmark harness, mutated state remains finite, and the
 payload contract remains valid for target cases. They do not include runtime
 thresholds or speedup assertions.
 
-Full Step 16b gates are still to be run in the final gate phase.
+Full Step 16b gates run after the focused checks:
+
+- `ruff check .`: passed
+- `pytest tests/unit/test_exact_residual_reuse.py`: 12 passed
+- `pytest tests/unit/test_duplication_profile.py`: 7 passed
+- `pytest tests/unit/test_kernel_benchmark_harness.py`: 18 passed
+- `pytest tests/integration/test_kernel_benchmark_harness_tiny.py`: 1 passed
+- `pytest tests/unit/test_hotpath_coldpath_boundaries.py`: 13 passed
+- `pytest tests/unit`: 211 passed
+- `pytest tests/integration/test_unified_pipeline_smoke_all_models.py`: 1 passed
+- `pytest`: 285 passed, 2 skipped
+- `python scripts/run_kernel_benchmarks.py --case all --warmup-repeats 1 --timed-repeats 5 --output-dir artifacts/benchmarks/kernel/exact_residual_reuse_v1`:
+  passed and wrote six payloads plus a summary CSV
+- `python scripts/compare_kernel_benchmarks.py --before artifacts/benchmarks/kernel/residual_history_duplication_baseline_v1/kernel_benchmark_summary.csv --after artifacts/benchmarks/kernel/exact_residual_reuse_v1/kernel_benchmark_summary.csv --output artifacts/benchmarks/kernel/exact_residual_reuse_v1/comparison_vs_baseline.csv`:
+  passed and wrote the comparison CSV
+
+Claim-check note:
+
+- The full requested `rg` scan over `docs src tests` ran and reported existing
+  guardrail/contract strings from earlier project documents and tests.
+- A focused scan over the Step 16b changed files reported no matches:
+  `src/recsys_lab/models/kernels.py`,
+  `tests/unit/test_exact_residual_reuse.py`,
+  `scripts/compare_kernel_benchmarks.py`, and this evidence file.
 
 ## Benchmark Artifacts
 
@@ -204,10 +227,10 @@ behavior on real datasets or other machines.
   kernels to avoid adding duplicate hotpath formulas to tests.
 - The synthetic benchmark artifacts use tiny deterministic cases and are useful
   as harness sanity checks, not as model-level performance evidence.
-- Full Step 16b gates remain pending until the final gate phase.
-- Large dataset benchmarks were intentionally not run in this step.
+- Full Step 16b gates passed locally as listed above.
+- Large dataset validation is handled separately in Step 16c.
 
 ## Recommended Next Step
 
-Run the full Step 16b gates, including the boundary tests, kernel benchmark
-harness tests, script smoke, claim check, and focused exact residual reuse tests.
+Validate the accepted Step 16b slice with same-device ML1M laptop after-runs in
+Step 16c.

@@ -138,92 +138,102 @@ Additional consistency checks:
 
 ## Target Model Results
 
-Pending after-run generation.
+Comparison CSV:
 
-Expected target models:
+- `artifacts/reports/exact_residual_reuse_validation_v1.csv`
 
 | Model | Before run id | After run id | Same-contract status | Quality status | Runtime readout |
 | --- | --- | --- | --- | --- | --- |
-| `asymmetric_svd` | `2026-05-08T005445Z_ml1m_asymmetric_svd_local_u300_24gb_benchmark_random_v1_tr080_va010_s001_s001` | pending | pending | pending | pending |
-| `asvdpp` | `2026-05-08T010531Z_ml1m_asvdpp_local_u300_24gb_benchmark_random_v1_tr080_va010_s001_s001` | pending | pending | pending | pending |
-| `cb_asvdpp` | `2026-05-08T011957Z_ml1m_cb_asvdpp_local_u300_24gb_benchmark_random_v1_tr080_va010_s001_s001` | pending | pending | pending | pending |
+| `asymmetric_svd` | `2026-05-08T005445Z_ml1m_asymmetric_svd_local_u300_24gb_benchmark_random_v1_tr080_va010_s001_s001` | `2026-05-08T124759Z_ml1m_asymmetric_svd_local_u300_24gb_benchmark_random_v1_tr080_va010_s001_s001` | `pass_with_notes` | stable: test RMSE delta `4.1722181265413383e-13`, test MAE delta `9.01708707701232e-11` | local fit-model ratio `0.6827821541007663`; cache status changed from explicit-feedback miss to hit |
+| `asvdpp` | `2026-05-08T010531Z_ml1m_asvdpp_local_u300_24gb_benchmark_random_v1_tr080_va010_s001_s001` | `2026-05-08T125523Z_ml1m_asvdpp_local_u300_24gb_benchmark_random_v1_tr080_va010_s001_s001` | `pass` | stable: test RMSE delta `4.313439605496683e-10`, test MAE delta `-2.9677804658234663e-10` | local fit-model ratio `0.9916830347792213` |
+| `cb_asvdpp` | `2026-05-08T011957Z_ml1m_cb_asvdpp_local_u300_24gb_benchmark_random_v1_tr080_va010_s001_s001` | `2026-05-08T130305Z_ml1m_cb_asvdpp_local_u300_24gb_benchmark_random_v1_tr080_va010_s001_s001` | `pass` | stable: test RMSE delta `1.178921404942912e-10`, test MAE delta `2.710514035442202e-10` | local fit-model ratio `0.9371622788151166` |
 
 ## Control Model Results
 
-Pending after-run generation.
-
-Expected control models:
-
 | Model | Before run id | After run id | Same-contract status | Quality status | Runtime readout |
 | --- | --- | --- | --- | --- | --- |
-| `biased_mf` | `2026-05-08T004817Z_ml1m_biased_mf_local_u300_24gb_benchmark_random_v1_tr080_va010_s001_s001` | pending | pending | pending | pending |
-| `svdpp` | `2026-05-08T004906Z_ml1m_svdpp_local_u300_24gb_benchmark_random_v1_tr080_va010_s001_s001` | pending | pending | pending | pending |
-| `cb_svdpp` | `2026-05-08T011336Z_ml1m_cb_svdpp_local_u300_24gb_benchmark_random_v1_tr080_va010_s001_s001` | pending | pending | pending | pending |
+| `biased_mf` | `2026-05-08T004817Z_ml1m_biased_mf_local_u300_24gb_benchmark_random_v1_tr080_va010_s001_s001` | `2026-05-08T131541Z_ml1m_biased_mf_local_u300_24gb_benchmark_random_v1_tr080_va010_s001_s001` | `pass_with_notes` | stable: test RMSE delta `0.0`, test MAE delta `0.0` | local fit-model ratio `0.5193254460492281`; split cache status changed from miss to hit |
+| `svdpp` | `2026-05-08T004906Z_ml1m_svdpp_local_u300_24gb_benchmark_random_v1_tr080_va010_s001_s001` | `2026-05-08T131609Z_ml1m_svdpp_local_u300_24gb_benchmark_random_v1_tr080_va010_s001_s001` | `pass_with_notes` | stable: test RMSE delta `0.0`, test MAE delta `0.0` | local fit-model ratio `0.6097998909318263`; user-history cache status changed from miss to hit |
+| `cb_svdpp` | `2026-05-08T011336Z_ml1m_cb_svdpp_local_u300_24gb_benchmark_random_v1_tr080_va010_s001_s001` | `2026-05-08T131921Z_ml1m_cb_svdpp_local_u300_24gb_benchmark_random_v1_tr080_va010_s001_s001` | `pass_with_notes` | stable: test RMSE delta `0.0`, test MAE delta `0.0` | local fit-model ratio `0.926872109237755`; cluster cache status changed from miss to hit |
 
 ## Quality Deltas
 
-Pending after-run generation.
+Quality is stable for all six compared models.
 
-Quality comparison should include at least:
+Target model test deltas:
 
-- train RMSE and MAE
-- validation RMSE and MAE
-- test RMSE and MAE
-- prediction clipping/out-of-range rates where present
+| Model | Test RMSE delta | Test MAE delta |
+| --- | ---: | ---: |
+| `asymmetric_svd` | `4.1722181265413383e-13` | `9.01708707701232e-11` |
+| `asvdpp` | `4.313439605496683e-10` | `-2.9677804658234663e-10` |
+| `cb_asvdpp` | `1.178921404942912e-10` | `2.710514035442202e-10` |
 
-The exact residual reuse change is intended to preserve model semantics.
-Numerical deltas should therefore be evaluated conservatively and tied to the
-recorded same-contract status.
+Control model test deltas:
+
+| Model | Test RMSE delta | Test MAE delta |
+| --- | ---: | ---: |
+| `biased_mf` | `0.0` | `0.0` |
+| `svdpp` | `0.0` | `0.0` |
+| `cb_svdpp` | `0.0` | `0.0` |
+
+The target deltas are at floating-point noise scale for this validation
+context. No quality-change evidence requires a revert.
 
 ## Runtime Deltas
 
-Pending after-run generation.
+Runtime deltas are local laptop readouts only.
 
-Runtime comparison should include at least:
+| Model | Role | Same-contract status | Fit-model seconds before | Fit-model seconds after | After/before fit ratio | After/before train-time ratio |
+| --- | --- | --- | ---: | ---: | ---: | ---: |
+| `asymmetric_svd` | target | `pass_with_notes` | `608.6185130999656` | `415.55385939999996` | `0.6827821541007663` | `0.6827898313449888` |
+| `asvdpp` | target | `pass` | `438.50667919998523` | `434.8596343999998` | `0.9916830347792213` | `0.9916899964904987` |
+| `cb_asvdpp` | target | `pass` | `777.1392291000229` | `728.3055709000005` | `0.9371622788151166` | `0.9371539215239106` |
+| `biased_mf` | control | `pass_with_notes` | `14.73108559998218` | `7.6502276000001075` | `0.5193254460492281` | `0.5165728345242372` |
+| `svdpp` | control | `pass_with_notes` | `278.94070240005385` | `170.09800989999985` | `0.6097998909318263` | `0.6098104865453873` |
+| `cb_svdpp` | control | `pass_with_notes` | `291.6227717999718` | `270.29701360000035` | `0.926872109237755` | `0.926918850960623` |
 
-- `fit_seconds_total`
-- `fit_seconds_per_epoch_mean`
-- `ratings_per_second_epoch_mean`
-- `total_profiled_wall_clock_seconds`
-- top performance hotspot and seconds
-- `fit_seconds_per_million_estimated_factor_touches`
-
-Runtime deltas must be reported as local laptop readouts only. Cache hit/miss
-differences and control-model movement must be considered before interpreting
-target-model movement.
+Target readouts do not show a target runtime regression. However, non-target
+controls also moved substantially, especially `biased_mf` and `svdpp`.
+Therefore this evidence must not attribute the target runtime movement solely
+to the Step 16b kernel change.
 
 ## Noise/Control Interpretation
 
 Control models are required because only three kernels changed in Step 16b.
 
-Expected interpretation:
+Observed interpretation:
 
-- movement in `biased_mf`, `svdpp`, or `cb_svdpp` cannot be attributed to the
-  exact residual reuse kernel changes
+- movement in `biased_mf`, `svdpp`, and `cb_svdpp` cannot be attributed to the
+  exact residual reuse kernel changes because those kernels were not changed
 - target-model movement should be read against same-device control movement
-- cache hit/miss differences affect total wall-clock interpretation
+- cache hit/miss differences are documented in the CSV notes and affect
+  end-to-end interpretation
 - `fit_model` and kernel-profile counters are more relevant than full pipeline
   wall-clock when cache status differs
-- one local laptop run per model is useful evidence, but not a portable
-  performance claim
+- one local laptop run per model is useful validation evidence, but not a
+  portable runtime claim
+- the control movement is high enough that this validation cannot support a
+  hard speed interpretation for the target kernels
 
 ## Acceptance Decision
 
-Pending after-run generation and comparison.
+Decision: `ACCEPT_AS_EXACT_CLEANUP`.
 
-Possible outcomes:
+Rationale:
 
-- `ACCEPT`: same-contract checks pass, quality remains stable, target runtime
-  readouts are compatible with accepting the exact reuse slice, and no control
-  signal contradicts the interpretation.
-- `ACCEPT_WITH_LIMITATIONS`: exactness and quality pass, but runtime readout is
-  noisy or mixed; keep the slice because it removes exact duplicated work and
-  does not regress the validation evidence enough to require revert.
-- `DEFER`: evidence is incomplete, same-contract checks are inconclusive, or
-  after runs are missing.
-- `REVERT`: a target model shows unacceptable quality or runtime evidence under
-  a valid same-contract comparison and the issue is attributable to the 16b
-  change.
+- same-contract checks pass for `asvdpp` and `cb_asvdpp`
+- `asymmetric_svd` passes with a documented cache-status note; command-level
+  cache policy and model contract match
+- all three target models preserve quality at floating-point noise scale
+- all three control models preserve quality exactly in the collected metrics
+- target runtime readouts do not show a target regression
+- control models move substantially, so the runtime readout is too noisy for a
+  hard target-kernel speed attribution
+- the implementation remains a narrow exact cleanup: raw residual values are
+  reused within the same rating update, no scaled products are cached, no pass
+  fusion was introduced, and rating/history/update order remains unchanged
+
+No kernel is selected for revert by this evidence.
 
 ## Claim Boundary
 
