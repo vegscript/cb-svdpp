@@ -366,8 +366,17 @@ def test_candidate_summary_csv_contains_required_phase5_columns(tmp_path) -> Non
         "candidate_config_path",
         "candidate_manifest_path",
         "status",
+        "execution_status",
+        "run_id",
+        "validation_rmse",
+        "validation_mae",
+        "fit_model_seconds",
+        "cluster_cache_status",
+        "cluster_total_seconds",
     }
     assert rows[0]["alpha"] == "0.2"
     assert rows[0]["learning_rate"] == ""
     assert rows[0]["cluster_reuse_group_id"].startswith("cluster_rg_")
     assert rows[0]["status"] == "planned"
+    assert rows[0]["execution_status"] == "not_executed"
+    assert rows[0]["validation_rmse"] == ""

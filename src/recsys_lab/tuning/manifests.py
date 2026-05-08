@@ -15,6 +15,7 @@ from recsys_lab.tuning.schemas import (
 )
 
 CLAIM_BOUNDARY = "Dry-run tuning planner only; no performance or quality claim."
+ExecutionStatus = Literal["not_executed", "running", "succeeded", "failed", "skipped"]
 
 
 class CandidateManifest(StrictSchema):
@@ -25,13 +26,20 @@ class CandidateManifest(StrictSchema):
     candidate_index: int = Field(ge=0)
     status: Literal["planned"] = "planned"
     objective_status: Literal["planned"] = "planned"
-    execution_status: Literal["not_executed"] = "not_executed"
+    execution_status: ExecutionStatus = "not_executed"
     study: StudySpec
     base_model_config: str
     parameter_values: dict[str, Any]
     overrides: dict[str, Any]
     materialized_config_payload: dict[str, Any]
     candidate_config_path: str | None = None
+    run_id: str | None = None
+    run_dir: str | None = None
+    metrics_path: str | None = None
+    performance_profile_path: str | None = None
+    kernel_profile_path: str | None = None
+    run_manifest_path: str | None = None
+    error_message: str | None = None
     artifact_reuse_group_ids: dict[str, str] = Field(default_factory=dict)
     claim_boundary: str = CLAIM_BOUNDARY
 
