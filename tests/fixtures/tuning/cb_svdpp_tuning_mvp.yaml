@@ -1,0 +1,71 @@
+search_space_version: tuning_search_space_v1
+
+study:
+  name: ml100k_cb_svdpp_tuning_mvp_v1
+  dataset: ml100k
+  split_family: benchmark_random_v1
+  model: cb_svdpp
+  seed: 1
+
+base_model_config: configs/models/cb_svdpp.yaml
+
+budget:
+  max_candidates: 8
+  max_parallel: 1
+  max_wall_seconds: null
+
+generator:
+  type: grid
+  deterministic_order: true
+
+search_space:
+  alpha:
+    type: categorical
+    values: [0.2, 0.5, 0.8]
+    target_path: clustering.alpha
+  learning_rate:
+    type: categorical
+    values: [0.005, 0.01]
+    target_path: training.learning_rate
+  lambda_p:
+    type: categorical
+    values: [0.01]
+    target_path: training.lambda_p
+
+artifact_reuse:
+  cluster_artifacts:
+    reuse_across:
+      - alpha
+      - learning_rate
+      - lambda_p
+      - lambda_q
+      - lambda_y
+      - lambda_pC
+      - lambda_qC
+      - lambda_yC
+      - epochs
+    invalidate_on:
+      - n_user_clusters
+      - n_item_clusters
+      - induction_config
+      - kmeans_n_init
+      - clustering_algorithm
+      - dataset
+      - split
+      - train_fingerprint
+
+objective:
+  primary:
+    metric: validation_rmse
+    direction: minimize
+    aggregation: mean
+  secondary:
+    - metric: validation_mae
+      direction: minimize
+      aggregation: mean
+    - metric: fit_model_seconds
+      direction: minimize
+      aggregation: mean
+  required_guards:
+    - cluster_cache_status
+    - cluster_total_seconds

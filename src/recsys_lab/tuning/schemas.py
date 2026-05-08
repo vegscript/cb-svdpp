@@ -85,7 +85,11 @@ class DimensionSpec(StrictSchema):
             return self
 
         if self.values is not None:
-            raise ValueError("numeric dimensions must not define values")
+            if len(self.values) == 0:
+                raise ValueError("numeric dimensions with values require non-empty values")
+            if self.distribution is not None or self.low is not None or self.high is not None:
+                raise ValueError("numeric dimensions must use either values or low/high distribution")
+            return self
         if self.low is None or self.high is None:
             raise ValueError("numeric dimensions require low and high")
         if self.low >= self.high:
@@ -132,8 +136,19 @@ class SearchSpaceSpec(StrictSchema):
     budget: BudgetSpec
     generator: GeneratorSpec = Field(default_factory=GeneratorSpec)
     search_space: dict[str, DimensionSpec] = Field(min_length=1)
+    manual_candidates: list[dict[str, Any]] | None = None
     artifact_reuse: ArtifactReuseSpec | None = None
     objective: ObjectiveSpec
+
+    @model_validator(mode="after")
+    def _validate_generator_contract(self) -> "SearchSpaceSpec":
+        if self.generator.type == "manual":
+            if not self.manual_candidates:
+                raise ValueError("manual generator requires manual_candidates")
+            return self
+        if self.manual_candidates is not None:
+            raise ValueError("manual_candidates are only valid for manual generator")
+        return self
 
     @model_validator(mode="after")
     def _validate_productive_cb_alpha_policy(self) -> "SearchSpaceSpec":
@@ -153,12 +168,17 @@ class SearchSpaceSpec(StrictSchema):
             values = alpha_dimension.values or []
             if any(float(value) <= 0.0 or float(value) >= 1.0 for value in values):
                 raise ValueError("productive CB search spaces require alpha values strictly between 0 and 1")
-            return self
-
-        if alpha_dimension.low is None or alpha_dimension.high is None:
-            return self
-        if float(alpha_dimension.low) <= 0.0 or float(alpha_dimension.high) >= 1.0:
+        elif alpha_dimension.values is not None:
+            if any(float(value) <= 0.0 or float(value) >= 1.0 for value in alpha_dimension.values):
+                raise ValueError("productive CB search spaces require alpha values strictly between 0 and 1")
+        elif alpha_dimension.low is not None and alpha_dimension.high is not None and (
+            float(alpha_dimension.low) <= 0.0 or float(alpha_dimension.high) >= 1.0
+        ):
             raise ValueError("productive CB search spaces require alpha bounds strictly between 0 and 1")
+        if self.manual_candidates is not None:
+            for candidate in self.manual_candidates:
+                if "alpha" in candidate and (float(candidate["alpha"]) <= 0.0 or float(candidate["alpha"]) >= 1.0):
+                    raise ValueError("productive CB manual candidates require alpha strictly between 0 and 1")
         return self
 
 

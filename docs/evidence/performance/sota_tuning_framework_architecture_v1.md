@@ -296,7 +296,7 @@ This evidence only states:
 
 ## Next Step
 
-Finish Step 19a gates and then proceed to:
+Step 19a gates are complete. Proceed to:
 
 `19b. Cache-aware Tuning MVP V1`
 
