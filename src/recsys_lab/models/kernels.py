@@ -157,6 +157,12 @@ if njit is not None:
         explicit_factors: np.ndarray,
         implicit_factors: np.ndarray,
     ) -> None:
+        max_explicit_len = 0
+        for user_pos in range(explicit_indptr.shape[0] - 1):
+            explicit_len = int(explicit_indptr[user_pos + 1] - explicit_indptr[user_pos])
+            if explicit_len > max_explicit_len:
+                max_explicit_len = explicit_len
+        explicit_residual_workspace = np.empty(max_explicit_len, dtype=item_factors.dtype)
         latent_dim = item_factors.shape[1]
 
         for position in range(order.shape[0]):
@@ -180,6 +186,7 @@ if njit is not None:
                 history_item = explicit_items[history_pos]
                 history_item_bias = item_bias_old if history_item == item_id else item_bias[history_item]
                 residual_weight = explicit_ratings[history_pos] - (global_mean + user_bias_old + history_item_bias)
+                explicit_residual_workspace[history_pos - explicit_start] = residual_weight
                 for factor_idx in range(latent_dim):
                     context[factor_idx] += explicit_norm * residual_weight * explicit_factors[history_item, factor_idx]
 
@@ -205,8 +212,7 @@ if njit is not None:
 
             for history_pos in range(explicit_start, explicit_end):
                 history_item = explicit_items[history_pos]
-                history_item_bias = item_bias_old if history_item == item_id else item_bias[history_item]
-                residual_weight = explicit_ratings[history_pos] - (global_mean + user_bias_old + history_item_bias)
+                residual_weight = explicit_residual_workspace[history_pos - explicit_start]
                 for factor_idx in range(latent_dim):
                     x_old = explicit_factors[history_item, factor_idx]
                     explicit_factors[history_item, factor_idx] = x_old + learning_rate * (
@@ -252,6 +258,12 @@ if njit is not None:
         p_old = np.empty(latent_dim, dtype=user_factors.dtype)
         q_old = np.empty(latent_dim, dtype=item_factors.dtype)
         context = np.empty(latent_dim, dtype=item_factors.dtype)
+        max_explicit_len = 0
+        for user_pos in range(explicit_indptr.shape[0] - 1):
+            explicit_len = int(explicit_indptr[user_pos + 1] - explicit_indptr[user_pos])
+            if explicit_len > max_explicit_len:
+                max_explicit_len = explicit_len
+        explicit_residual_workspace = np.empty(max_explicit_len, dtype=item_factors.dtype)
 
         for position in range(order.shape[0]):
             idx = order[position]
@@ -274,6 +286,7 @@ if njit is not None:
                 history_item = explicit_items[history_pos]
                 history_item_bias = item_bias_old if history_item == item_id else item_bias[history_item]
                 residual_weight = explicit_ratings[history_pos] - (global_mean + user_bias_old + history_item_bias)
+                explicit_residual_workspace[history_pos - explicit_start] = residual_weight
                 for factor_idx in range(latent_dim):
                     context[factor_idx] += explicit_norm * residual_weight * explicit_factors[history_item, factor_idx]
 
@@ -302,8 +315,7 @@ if njit is not None:
 
             for history_pos in range(explicit_start, explicit_end):
                 history_item = explicit_items[history_pos]
-                history_item_bias = item_bias_old if history_item == item_id else item_bias[history_item]
-                residual_weight = explicit_ratings[history_pos] - (global_mean + user_bias_old + history_item_bias)
+                residual_weight = explicit_residual_workspace[history_pos - explicit_start]
                 for factor_idx in range(latent_dim):
                     x_old = explicit_factors[history_item, factor_idx]
                     explicit_factors[history_item, factor_idx] = x_old + learning_rate * (
@@ -488,6 +500,13 @@ if njit is not None:
         q_cluster_old = np.empty(latent_dim, dtype=item_cluster_factors.dtype)
         q_mix_old = np.empty(latent_dim, dtype=item_factors.dtype)
         context = np.empty(latent_dim, dtype=item_factors.dtype)
+        max_explicit_len = 0
+        for user_pos in range(explicit_indptr.shape[0] - 1):
+            explicit_len = int(explicit_indptr[user_pos + 1] - explicit_indptr[user_pos])
+            if explicit_len > max_explicit_len:
+                max_explicit_len = explicit_len
+        explicit_residual_workspace = np.empty(max_explicit_len, dtype=item_factors.dtype)
+        explicit_cluster_workspace = np.empty(max_explicit_len, dtype=item_clusters.dtype)
 
         for position in range(order.shape[0]):
             idx = order[position]
@@ -512,10 +531,13 @@ if njit is not None:
             explicit_end = explicit_indptr[user_id + 1]
             explicit_norm = explicit_norms[user_id]
             for history_pos in range(explicit_start, explicit_end):
+                explicit_offset = history_pos - explicit_start
                 history_item = int(explicit_items[history_pos])
                 history_cluster = int(item_clusters[history_item])
                 history_item_bias = item_bias_old if history_item == item_id else item_bias[history_item]
                 residual_weight = explicit_ratings[history_pos] - (global_mean + user_bias_old + history_item_bias)
+                explicit_residual_workspace[explicit_offset] = residual_weight
+                explicit_cluster_workspace[explicit_offset] = history_cluster
                 for factor_idx in range(latent_dim):
                     context[factor_idx] += (
                         explicit_norm * one_minus_alpha * residual_weight * explicit_factors[history_item, factor_idx]
@@ -567,10 +589,10 @@ if njit is not None:
                 )
 
             for history_pos in range(explicit_start, explicit_end):
+                explicit_offset = history_pos - explicit_start
                 history_item = int(explicit_items[history_pos])
-                history_cluster = int(item_clusters[history_item])
-                history_item_bias = item_bias_old if history_item == item_id else item_bias[history_item]
-                residual_weight = explicit_ratings[history_pos] - (global_mean + user_bias_old + history_item_bias)
+                history_cluster = int(explicit_cluster_workspace[explicit_offset])
+                residual_weight = explicit_residual_workspace[explicit_offset]
                 for factor_idx in range(latent_dim):
                     x_old = explicit_factors[history_item, factor_idx]
                     explicit_factors[history_item, factor_idx] = x_old + learning_rate * (
