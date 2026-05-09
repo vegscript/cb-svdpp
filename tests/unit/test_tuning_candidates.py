@@ -368,10 +368,17 @@ def test_candidate_summary_csv_contains_required_phase5_columns(tmp_path) -> Non
         "status",
         "execution_status",
         "run_id",
+        "run_dir",
+        "run_manifest_path",
+        "metrics_path",
+        "performance_profile_path",
+        "kernel_profile_path",
         "validation_rmse",
         "validation_mae",
         "fit_model_seconds",
+        "total_wall_seconds",
         "cluster_cache_status",
+        "user_cluster_history_cache_status",
         "cluster_total_seconds",
     }
     assert rows[0]["alpha"] == "0.2"

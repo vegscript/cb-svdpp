@@ -6,6 +6,7 @@ from typing import Any
 
 from recsys_lab.config.loader import load_yaml_file
 from recsys_lab.models.registry import validate_model_config_payload
+from recsys_lab.tuning import SearchSpaceSpec, build_study_plan
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 ACTIVE_TUNING_DIR = REPO_ROOT / "configs" / "experiments" / "tuning" / "active"
@@ -35,7 +36,18 @@ def test_active_tuning_candidate_overrides_validate_as_model_profiles() -> None:
         base_model_config = load_yaml_file(base_model_config_path)
         base_model_name = str(base_model_config["model"]["name"])
 
-        candidates = tuning_config["candidates"]
+        if tuning_config.get("search_space_version") == "tuning_search_space_v1":
+            search_space = SearchSpaceSpec.model_validate(tuning_config)
+            plan = build_study_plan(search_space)
+            candidates = [
+                {
+                    "candidate_id": candidate.candidate_id,
+                    "overrides": candidate.overrides,
+                }
+                for candidate in plan.candidates
+            ]
+        else:
+            candidates = tuning_config["candidates"]
         assert isinstance(candidates, list)
         assert candidates, f"{tuning_config_path} must define at least one candidate"
 

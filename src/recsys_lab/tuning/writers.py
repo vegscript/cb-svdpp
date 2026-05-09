@@ -36,10 +36,17 @@ CANDIDATE_SUMMARY_FIELDS = [
     "status",
     "execution_status",
     "run_id",
+    "run_dir",
+    "run_manifest_path",
+    "metrics_path",
+    "performance_profile_path",
+    "kernel_profile_path",
     "validation_rmse",
     "validation_mae",
     "fit_model_seconds",
+    "total_wall_seconds",
     "cluster_cache_status",
+    "user_cluster_history_cache_status",
     "cluster_total_seconds",
 ]
 
@@ -54,6 +61,25 @@ EXECUTION_SUMMARY_FIELDS = [
     "kernel_profile_path",
     "run_manifest_path",
     "error_message",
+]
+
+MINI_STUDY_SUMMARY_FIELDS = [
+    "study_id",
+    "candidate_id",
+    "candidate_index",
+    "execution_status",
+    "alpha",
+    "learning_rate",
+    "validation_rmse",
+    "validation_mae",
+    "fit_model_seconds",
+    "total_wall_seconds",
+    "cluster_total_seconds",
+    "cluster_cache_status",
+    "user_cluster_history_cache_status",
+    "cluster_reuse_group_id",
+    "run_dir",
+    "notes",
 ]
 
 
@@ -207,7 +233,28 @@ def write_study_execution_artifacts(
         output_dir / "reports" / "candidate_summary.csv",
         output_dir=output_dir,
     )
+    paths.update(write_mini_study_summary(plan, output_dir))
     return paths
+
+
+def write_mini_study_summary(plan: StudyPlan, output_dir: Path) -> dict[str, Path]:
+    reports_dir = output_dir / "reports"
+    reports_dir.mkdir(parents=True, exist_ok=True)
+    candidate_rows = _candidate_summary_rows(reports_dir / "candidate_summary.csv")
+    summary_rows = [_mini_study_summary_row(row) for row in candidate_rows]
+    summary_payload = _mini_study_summary_payload(plan=plan, rows=candidate_rows)
+
+    csv_path = reports_dir / "mini_study_summary.csv"
+    with csv_path.open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=MINI_STUDY_SUMMARY_FIELDS)
+        writer.writeheader()
+        writer.writerows(summary_rows)
+
+    json_path = write_tuning_json(summary_payload, reports_dir / "mini_study_summary.json")
+    return {
+        "mini_study_summary_csv": csv_path,
+        "mini_study_summary_json": json_path,
+    }
 
 
 def write_study_plan(plan: StudyPlan, output_dir: Path, *, repo_root: Path | None = None) -> dict[str, Path]:
@@ -319,10 +366,17 @@ def _candidate_execution_summary(candidate_manifest_path: Path) -> dict[str, Any
     default = {
         "execution_status": "not_executed",
         "run_id": "",
+        "run_dir": "",
+        "run_manifest_path": "",
+        "metrics_path": "",
+        "performance_profile_path": "",
+        "kernel_profile_path": "",
         "validation_rmse": "",
         "validation_mae": "",
         "fit_model_seconds": "",
+        "total_wall_seconds": "",
         "cluster_cache_status": "",
+        "user_cluster_history_cache_status": "",
         "cluster_total_seconds": "",
     }
     if not candidate_manifest_path.exists():
@@ -333,6 +387,11 @@ def _candidate_execution_summary(candidate_manifest_path: Path) -> dict[str, Any
         **default,
         "execution_status": manifest.execution_status,
         "run_id": manifest.run_id or "",
+        "run_dir": manifest.run_dir or "",
+        "run_manifest_path": manifest.run_manifest_path or "",
+        "metrics_path": manifest.metrics_path or "",
+        "performance_profile_path": manifest.performance_profile_path or "",
+        "kernel_profile_path": manifest.kernel_profile_path or "",
     }
 
     metrics_payload = _load_json_payload(manifest.metrics_path)
@@ -348,12 +407,16 @@ def _candidate_execution_summary(candidate_manifest_path: Path) -> dict[str, Any
             cluster_artifacts = caches.get("cluster_artifacts", {})
             if isinstance(cluster_artifacts, dict):
                 row["cluster_cache_status"] = _csv_value(cluster_artifacts.get("status"))
+            user_cluster_history = caches.get("user_cluster_history", {})
+            if isinstance(user_cluster_history, dict):
+                row["user_cluster_history_cache_status"] = _csv_value(user_cluster_history.get("status"))
 
         timing = metrics_payload.get("timing", {})
         if isinstance(timing, dict):
             row["cluster_total_seconds"] = _csv_value(timing.get("cluster_induction_wall_clock_seconds"))
 
     if performance_profile is not None:
+        row["total_wall_seconds"] = _csv_value(performance_profile.get("total_profiled_wall_clock_seconds"))
         fit_seconds = _stage_seconds(performance_profile, "fit_model")
         if fit_seconds is not None:
             row["fit_model_seconds"] = _csv_value(fit_seconds)
@@ -361,6 +424,92 @@ def _candidate_execution_summary(candidate_manifest_path: Path) -> dict[str, Any
         if cluster_seconds is not None:
             row["cluster_total_seconds"] = _csv_value(cluster_seconds)
     return row
+
+
+def _candidate_summary_rows(path: Path) -> list[dict[str, str]]:
+    if not path.exists():
+        return []
+    with path.open(encoding="utf-8", newline="") as handle:
+        return list(csv.DictReader(handle))
+
+
+def _mini_study_summary_row(row: dict[str, str]) -> dict[str, Any]:
+    return {
+        "study_id": row.get("study_id", ""),
+        "candidate_id": row.get("candidate_id", ""),
+        "candidate_index": row.get("candidate_index", ""),
+        "execution_status": row.get("execution_status", ""),
+        "alpha": row.get("alpha", ""),
+        "learning_rate": row.get("learning_rate", ""),
+        "validation_rmse": row.get("validation_rmse", ""),
+        "validation_mae": row.get("validation_mae", ""),
+        "fit_model_seconds": row.get("fit_model_seconds", ""),
+        "total_wall_seconds": row.get("total_wall_seconds", ""),
+        "cluster_total_seconds": row.get("cluster_total_seconds", ""),
+        "cluster_cache_status": row.get("cluster_cache_status", ""),
+        "user_cluster_history_cache_status": row.get("user_cluster_history_cache_status", ""),
+        "cluster_reuse_group_id": row.get("cluster_reuse_group_id", ""),
+        "run_dir": row.get("run_dir", ""),
+        "notes": _mini_study_candidate_note(row),
+    }
+
+
+def _mini_study_summary_payload(*, plan: StudyPlan, rows: list[dict[str, str]]) -> dict[str, Any]:
+    executed_rows = [row for row in rows if row.get("execution_status") not in {"", "not_executed"}]
+    cluster_groups = [group for group in plan.artifact_reuse_groups if group.artifact_type == "cluster_artifacts"]
+    cold_row = _first_cold_cache_row(executed_rows)
+    warm_rows = _warm_cache_rows(
+        executed_rows,
+        cluster_reuse_group_id=None if cold_row is None else cold_row.get("cluster_reuse_group_id", ""),
+    )
+    return {
+        "study_id": plan.study_id,
+        "dataset": plan.search_space.study.dataset,
+        "model": plan.search_space.study.model,
+        "candidate_count": len(plan.candidates),
+        "executed_candidate_count": len(executed_rows),
+        "cluster_reuse_group_count": len(cluster_groups),
+        "cache_reuse_observed": cold_row is not None and bool(warm_rows),
+        "cold_candidate_id": None if cold_row is None else cold_row.get("candidate_id", ""),
+        "warm_candidate_ids": [row.get("candidate_id", "") for row in warm_rows],
+        "claim_boundary": "ML1M cache-aware tuning mini study only; no performance or quality claim.",
+    }
+
+
+def _first_cold_cache_row(rows: list[dict[str, str]]) -> dict[str, str] | None:
+    for row in rows:
+        if row.get("cluster_cache_status") in {"miss", "build"} and row.get(
+            "user_cluster_history_cache_status"
+        ) in {"miss", "build"}:
+            return row
+    return None
+
+
+def _warm_cache_rows(
+    rows: list[dict[str, str]],
+    *,
+    cluster_reuse_group_id: str | None,
+) -> list[dict[str, str]]:
+    return [
+        row
+        for row in rows
+        if row.get("cluster_cache_status") == "hit"
+        and row.get("user_cluster_history_cache_status") == "hit"
+        and (not cluster_reuse_group_id or row.get("cluster_reuse_group_id") == cluster_reuse_group_id)
+    ]
+
+
+def _mini_study_candidate_note(row: dict[str, str]) -> str:
+    if row.get("cluster_cache_status") in {"miss", "build"} and row.get("user_cluster_history_cache_status") in {
+        "miss",
+        "build",
+    }:
+        return "cold_cache_build"
+    if row.get("cluster_cache_status") == "hit" and row.get("user_cluster_history_cache_status") == "hit":
+        return "warm_cache_hit"
+    if row.get("execution_status") == "not_executed":
+        return "not_executed"
+    return "cache_status_incomplete"
 
 
 def _load_json_payload(path: str | None) -> dict[str, Any] | None:

@@ -154,7 +154,10 @@ def test_study_execution_artifacts_write_summaries(tmp_path: Path) -> None:
         json.dumps(
             {
                 "metrics": {"validation_rmse": 1.25, "validation_mae": 0.75},
-                "caches": {"cluster_artifacts": {"status": "hit"}},
+                "caches": {
+                    "cluster_artifacts": {"status": "hit"},
+                    "user_cluster_history": {"status": "hit"},
+                },
                 "timing": {"cluster_induction_wall_clock_seconds": 0.4},
             }
         ),
@@ -163,6 +166,7 @@ def test_study_execution_artifacts_write_summaries(tmp_path: Path) -> None:
     performance_profile_path.write_text(
         json.dumps(
             {
+                "total_profiled_wall_clock_seconds": 4.0,
                 "stages": [
                     {"name": "fit_model", "wall_clock_seconds": 2.5},
                     {"name": "build_cluster_artifacts", "wall_clock_seconds": 0.3},
@@ -197,7 +201,27 @@ def test_study_execution_artifacts_write_summaries(tmp_path: Path) -> None:
     assert candidate_row["validation_rmse"] == "1.25"
     assert candidate_row["validation_mae"] == "0.75"
     assert candidate_row["fit_model_seconds"] == "2.5"
+    assert candidate_row["total_wall_seconds"] == "4.0"
     assert candidate_row["cluster_cache_status"] == "hit"
+    assert candidate_row["user_cluster_history_cache_status"] == "hit"
     assert candidate_row["cluster_total_seconds"] == "0.3"
+    assert candidate_row["run_dir"] == str(run_dir)
+    assert candidate_row["metrics_path"] == str(metrics_path)
+    assert candidate_row["performance_profile_path"] == str(performance_profile_path)
+    assert candidate_row["kernel_profile_path"] == str(kernel_profile_path)
+    assert candidate_row["run_manifest_path"] == str(run_manifest_path)
     assert execution_row["candidate_id"] == manifest.candidate_id
     assert execution_row["run_manifest_path"] == str(run_manifest_path)
+    assert paths["mini_study_summary_csv"].exists()
+    assert paths["mini_study_summary_json"].exists()
+    with paths["mini_study_summary_csv"].open(encoding="utf-8", newline="") as handle:
+        mini_row = next(csv.DictReader(handle))
+    mini_payload = json.loads(paths["mini_study_summary_json"].read_text(encoding="utf-8"))
+    assert mini_row["candidate_id"] == manifest.candidate_id
+    assert mini_row["cluster_cache_status"] == "hit"
+    assert mini_row["user_cluster_history_cache_status"] == "hit"
+    assert mini_row["notes"] == "warm_cache_hit"
+    assert mini_payload["study_id"] == manifest.study_id
+    assert mini_payload["candidate_count"] == 1
+    assert mini_payload["executed_candidate_count"] == 1
+    assert mini_payload["cache_reuse_observed"] is False

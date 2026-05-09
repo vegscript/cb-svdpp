@@ -45,6 +45,9 @@ artifacts/benchmarks/*
 artifacts/reports/*
 !artifacts/reports/.gitkeep
 !artifacts/reports/README.md
+artifacts/tuning/*
+!artifacts/tuning/.gitkeep
+!artifacts/tuning/README.md
 artifacts/figures/*
 !artifacts/figures/.gitkeep
 !artifacts/figures/README.md
