@@ -19,6 +19,8 @@ CLAIM_BOUNDARY = "ML1M cache-aware tuning mini/small study only; no performance 
 DEFAULT_MAX_CANDIDATES = 8
 MAX_CANDIDATE_HARD_CAP = 16
 MIN_SUCCEEDED_CANDIDATES_FOR_SELECTION = 6
+MIN_SUCCEEDED_CANDIDATES_FOR_SMALL_STUDY_SELECTION = 10
+MIN_FOLLOWUP_CACHE_HITS_FOR_SMALL_STUDY = 10
 ExecuteCandidateFn = Callable[..., Any]
 WriteExecutionArtifactsFn = Callable[..., dict[str, Path]]
 RANKING_FIELDS = [
@@ -329,20 +331,30 @@ def _write_ranking_and_selection(plan: Any, study_dir: Path, *, repo_root: Path)
     for rank, row in enumerate(selectable_rows, start=1):
         row["rank"] = str(rank)
 
+    min_succeeded_candidates = _min_succeeded_candidates_for_selection(plan)
     decision = "EXECUTION_UNSTABLE_FIX_BEFORE_TUNING"
     selected_row = None
-    if len(selectable_rows) >= MIN_SUCCEEDED_CANDIDATES_FOR_SELECTION:
-        decision = "SELECTED_CANDIDATE_READY_FOR_BAKEOFF"
-        selected_row = selectable_rows[0]
-        selected_row["selected"] = "true"
-        selected_row["selection_reason"] = (
-            "lowest validation_rmse among succeeded candidates; ties break by validation_mae then fit_model_seconds"
-        )
-        for row in selectable_rows[1:]:
-            row["selection_reason"] = "not selected by validation_rmse ranking"
+    if len(selectable_rows) >= min_succeeded_candidates:
+        reuse_valid, reuse_reason = _selection_cache_reuse_status(plan, ranking_rows_by_candidate)
+        if not reuse_valid:
+            decision = "REUSE_CONTRACT_STILL_BROKEN"
+            for row in selectable_rows:
+                row["selection_reason"] = reuse_reason
+        else:
+            decision = "SELECTED_CANDIDATE_READY_FOR_BAKEOFF"
+            selected_row = selectable_rows[0]
+            selected_row["selected"] = "true"
+            selected_row["selection_reason"] = (
+                "lowest validation_rmse among succeeded candidates; "
+                "ties break by validation_mae then fit_model_seconds"
+            )
+            for row in selectable_rows[1:]:
+                row["selection_reason"] = "not selected by validation_rmse ranking"
     else:
         for row in selectable_rows:
-            row["selection_reason"] = "selection requires at least six succeeded candidates"
+            row["selection_reason"] = (
+                f"selection requires at least {min_succeeded_candidates} succeeded candidates"
+            )
 
     ranked_rows = sorted(
         ranking_rows_by_candidate.values(),
@@ -366,12 +378,22 @@ def _write_ranking_and_selection(plan: Any, study_dir: Path, *, repo_root: Path)
         "selected_candidate_id": selected_row["candidate_id"] if selected_row is not None else None,
         "selected_rank": int(selected_row["rank"]) if selected_row is not None else None,
         "rank": int(selected_row["rank"]) if selected_row is not None else None,
+        "alpha": selected_row["alpha"] if selected_row is not None else None,
+        "learning_rate": selected_row["learning_rate"] if selected_row is not None else None,
+        "lambda_q": _selected_parameter_value(plan, selected_row, "lambda_q") if selected_row is not None else None,
         "validation_rmse": selected_row["validation_rmse"] if selected_row is not None else None,
         "validation_mae": selected_row["validation_mae"] if selected_row is not None else None,
         "fit_model_seconds": selected_row["fit_model_seconds"] if selected_row is not None else None,
         "cluster_total_seconds": selected_row["cluster_total_seconds"] if selected_row is not None else None,
+        "cluster_cache_status": selected_row["cluster_cache_status"] if selected_row is not None else None,
+        "user_cluster_history_cache_status": (
+            selected_row["user_cluster_history_cache_status"] if selected_row is not None else None
+        ),
+        "cluster_reuse_group_id": selected_row["cluster_reuse_group_id"] if selected_row is not None else None,
         "selection_reason": (
-            selected_row["selection_reason"] if selected_row is not None else "fewer than six succeeded candidates"
+            selected_row["selection_reason"]
+            if selected_row is not None
+            else f"fewer than {min_succeeded_candidates} succeeded candidates or cache reuse not validated"
         ),
         "candidate_config_path": selected_row["candidate_config_path"] if selected_row is not None else None,
         "selected_candidate_config_path": (
@@ -393,6 +415,70 @@ def _write_ranking_and_selection(plan: Any, study_dir: Path, *, repo_root: Path)
 def _parameter_value(candidate: Any, name: str) -> str:
     value = candidate.parameter_values.get(name)
     return "" if value is None else str(value)
+
+
+def _selected_parameter_value(plan: Any, selected_row: dict[str, str], name: str) -> str:
+    selected_candidate_id = selected_row["candidate_id"]
+    for candidate in plan.candidates:
+        if candidate.candidate_id == selected_candidate_id:
+            return _parameter_value(candidate, name)
+    return ""
+
+
+def _min_succeeded_candidates_for_selection(plan: Any) -> int:
+    if len(plan.candidates) >= MIN_SUCCEEDED_CANDIDATES_FOR_SMALL_STUDY_SELECTION:
+        return MIN_SUCCEEDED_CANDIDATES_FOR_SMALL_STUDY_SELECTION
+    return min(MIN_SUCCEEDED_CANDIDATES_FOR_SELECTION, len(plan.candidates))
+
+
+def _selection_cache_reuse_status(
+    plan: Any,
+    rows_by_candidate: dict[str, dict[str, str]],
+) -> tuple[bool, str]:
+    succeeded_rows = [
+        rows_by_candidate[candidate.candidate_id]
+        for candidate in plan.candidates
+        if rows_by_candidate.get(candidate.candidate_id, {}).get("execution_status") == "succeeded"
+    ]
+    if len(succeeded_rows) < 2:
+        return False, "cache reuse validation requires at least two succeeded candidates"
+
+    first = succeeded_rows[0]
+    first_cluster = first.get("cluster_cache_status", "")
+    first_history = first.get("user_cluster_history_cache_status", "")
+    if first_cluster not in {"miss", "build"}:
+        return False, f"first succeeded candidate must prove cold cluster cache status, got {first_cluster!r}"
+    if first_history not in {"miss", "build"}:
+        return (
+            False,
+            f"first succeeded candidate must prove cold user-cluster-history cache status, got {first_history!r}",
+        )
+
+    followup_rows = succeeded_rows[1:]
+    required_hits = _required_followup_cache_hits(plan, len(followup_rows))
+    cluster_hit_count = sum(row.get("cluster_cache_status") == "hit" for row in followup_rows)
+    history_hit_count = sum(row.get("user_cluster_history_cache_status") == "hit" for row in followup_rows)
+    if cluster_hit_count < required_hits:
+        return False, f"cluster cache reuse requires at least {required_hits} follow-up hits, got {cluster_hit_count}"
+    if history_hit_count < required_hits:
+        return False, (
+            f"user-cluster-history cache reuse requires at least {required_hits} follow-up hits, "
+            f"got {history_hit_count}"
+        )
+
+    reuse_group_ids = {
+        row.get("cluster_reuse_group_id", "")
+        for row in succeeded_rows[: required_hits + 1]
+    }
+    if len(reuse_group_ids) != 1 or "" in reuse_group_ids:
+        return False, "succeeded candidates must share one non-empty cluster_reuse_group_id"
+    return True, "cache reuse contract validated"
+
+
+def _required_followup_cache_hits(plan: Any, followup_count: int) -> int:
+    if len(plan.candidates) >= 12:
+        return MIN_FOLLOWUP_CACHE_HITS_FOR_SMALL_STUDY
+    return followup_count
 
 
 def _non_selection_reason(execution_status: str, validation_rmse: float | None) -> str:

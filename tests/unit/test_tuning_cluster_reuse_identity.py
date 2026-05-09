@@ -101,6 +101,30 @@ def test_small_study_search_space_does_not_target_induction_fields() -> None:
     assert _cluster_reuse_group_count(payload) == 1
 
 
+def test_v2_small_study_search_space_uses_target_only_variation() -> None:
+    payload = load_yaml_file(
+        Path("configs/experiments/tuning/active/ml1m_cb_svdpp_small_study_v2.yaml")
+    )
+
+    target_paths = {
+        dimension_payload.get("target_path", dimension_name)
+        for dimension_name, dimension_payload in payload["search_space"].items()
+    }
+
+    assert target_paths == {"clustering.alpha", "training.learning_rate", "training.lambda_q"}
+    assert all(not target_path.startswith("clustering.induction.") for target_path in target_paths)
+
+
+def test_v2_small_study_candidates_share_one_cluster_reuse_group() -> None:
+    payload = load_yaml_file(
+        Path("configs/experiments/tuning/active/ml1m_cb_svdpp_small_study_v2.yaml")
+    )
+    plan = build_study_plan(SearchSpaceSpec.model_validate(payload))
+
+    assert len(plan.candidates) == 12
+    assert len(plan.artifact_reuse_groups) == 1
+
+
 def test_cluster_cache_identity_stable_with_same_induction_config() -> None:
     induction_config = BiasedMFConfig(
         latent_dim=64,

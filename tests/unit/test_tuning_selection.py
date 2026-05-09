@@ -30,6 +30,23 @@ def _planned_study(tmp_path: Path) -> tuple[Any, Path]:
     return mini_study_script._load_plan(study_dir), study_dir
 
 
+def _planned_v2_study(tmp_path: Path) -> tuple[Any, Path]:
+    plan_tuning_study(
+        search_space_path=_repo_root()
+        / "configs"
+        / "experiments"
+        / "tuning"
+        / "active"
+        / "ml1m_cb_svdpp_small_study_v2.yaml",
+        output_dir=tmp_path,
+        study_id="selection_v2_test",
+        repo_root=_repo_root(),
+        overwrite=True,
+    )
+    study_dir = tmp_path / "selection_v2_test"
+    return mini_study_script._load_plan(study_dir), study_dir
+
+
 def _write_candidate_summary(
     *,
     plan: Any,
@@ -143,7 +160,7 @@ def test_candidate_ranking_uses_fit_time_second_tiebreaker(tmp_path: Path) -> No
 
 def test_selection_ignores_failed_candidates(tmp_path: Path) -> None:
     plan, study_dir = _planned_study(tmp_path)
-    failed_best = plan.candidates[0]
+    failed_best = plan.candidates[2]
     expected = plan.candidates[1]
     _write_candidate_summary(
         plan=plan,
@@ -212,3 +229,73 @@ def test_small_study_summary_requires_six_successes_for_selection(tmp_path: Path
     assert payload["selected_candidate_id"] is None
     assert result["selected_candidate_config"] is None
     assert not (study_dir / "selected" / "selected_candidate_config.yaml").exists()
+
+
+def test_reuse_validation_requires_hit_after_first_candidate(tmp_path: Path) -> None:
+    plan, study_dir = _planned_v2_study(tmp_path)
+    overrides = {
+        plan.candidates[0].candidate_id: {
+            "cluster_cache_status": "miss",
+            "user_cluster_history_cache_status": "miss",
+        },
+        plan.candidates[1].candidate_id: {
+            "cluster_cache_status": "miss",
+            "user_cluster_history_cache_status": "miss",
+        },
+        plan.candidates[2].candidate_id: {
+            "cluster_cache_status": "miss",
+            "user_cluster_history_cache_status": "miss",
+        },
+    }
+    _write_candidate_summary(plan=plan, study_dir=study_dir, overrides=overrides)
+
+    result = mini_study_script._write_ranking_and_selection(plan, study_dir, repo_root=_repo_root())
+    payload = _selection_payload(study_dir)
+
+    assert payload["decision"] == "REUSE_CONTRACT_STILL_BROKEN"
+    assert payload["selected_candidate_id"] is None
+    assert result["selected_candidate_config"] is None
+
+
+def test_selection_not_ready_when_reuse_contract_broken(tmp_path: Path) -> None:
+    plan, study_dir = _planned_v2_study(tmp_path)
+    _write_candidate_summary(
+        plan=plan,
+        study_dir=study_dir,
+        overrides={
+            plan.candidates[0].candidate_id: {
+                "cluster_cache_status": "hit",
+                "user_cluster_history_cache_status": "hit",
+            }
+        },
+    )
+
+    result = mini_study_script._write_ranking_and_selection(plan, study_dir, repo_root=_repo_root())
+    payload = _selection_payload(study_dir)
+
+    assert payload["decision"] == "REUSE_CONTRACT_STILL_BROKEN"
+    assert payload["selected_candidate_id"] is None
+    assert result["selected_candidate_config"] is None
+
+
+def test_selected_candidate_ready_only_when_reuse_valid_and_success_count_sufficient(tmp_path: Path) -> None:
+    plan, study_dir = _planned_v2_study(tmp_path)
+    expected = plan.candidates[11]
+    _write_candidate_summary(
+        plan=plan,
+        study_dir=study_dir,
+        overrides={expected.candidate_id: {"validation_rmse": "0.4000"}},
+    )
+
+    result = mini_study_script._write_ranking_and_selection(plan, study_dir, repo_root=_repo_root())
+    payload = _selection_payload(study_dir)
+
+    assert payload["decision"] == "SELECTED_CANDIDATE_READY_FOR_BAKEOFF"
+    assert payload["selected_candidate_id"] == expected.candidate_id
+    assert payload["alpha"] == "0.25"
+    assert payload["learning_rate"] == "0.01"
+    assert payload["lambda_q"] == "0.04"
+    assert payload["cluster_cache_status"] == "hit"
+    assert payload["user_cluster_history_cache_status"] == "hit"
+    assert payload["cluster_reuse_group_id"]
+    assert result["selected_candidate_config"] is not None

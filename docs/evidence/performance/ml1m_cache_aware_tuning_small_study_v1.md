@@ -50,6 +50,8 @@ python scripts/run_tuning_mini_study.py --search-space configs/experiments/tunin
 
 The selected candidate from 19e is not promoted to bake-off until target/induction config separation is validated.
 The 19e selected candidate remains a search result, but bake-off requires rerun or confirmation under the corrected induction config contract.
+V1 selection was superseded by V2 because V1 ran before target/induction config separation.
+Do not use the V1 selected candidate for bake-off.
 
 ## Gates
 
