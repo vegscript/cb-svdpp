@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import csv
 import json
+import shutil
 import sys
 from pathlib import Path
 from typing import Any, Callable
@@ -14,10 +15,29 @@ if str(REPO_ROOT) not in sys.path:
 if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
 
-CLAIM_BOUNDARY = "ML1M cache-aware tuning mini study only; no performance or quality claim."
-MAX_CANDIDATE_HARD_CAP = 3
+CLAIM_BOUNDARY = "ML1M cache-aware tuning mini/small study only; no performance or quality claim."
+DEFAULT_MAX_CANDIDATES = 8
+MAX_CANDIDATE_HARD_CAP = 16
+MIN_SUCCEEDED_CANDIDATES_FOR_SELECTION = 6
 ExecuteCandidateFn = Callable[..., Any]
 WriteExecutionArtifactsFn = Callable[..., dict[str, Path]]
+RANKING_FIELDS = [
+    "rank",
+    "candidate_id",
+    "execution_status",
+    "alpha",
+    "learning_rate",
+    "validation_rmse",
+    "validation_mae",
+    "fit_model_seconds",
+    "cluster_total_seconds",
+    "cluster_cache_status",
+    "user_cluster_history_cache_status",
+    "cluster_reuse_group_id",
+    "selected",
+    "selection_reason",
+    "run_dir",
+]
 
 
 def run_tuning_mini_study(
@@ -78,6 +98,7 @@ def run_tuning_mini_study(
     )
 
     results = []
+    selection_paths = _write_ranking_and_selection(plan, study_dir, repo_root=repo_root)
     for candidate_id in candidate_ids:
         candidate_manifest_path = study_dir / "candidates" / candidate_id / "candidate_manifest.json"
         call_kwargs = {
@@ -115,12 +136,13 @@ def run_tuning_mini_study(
         results.append(result)
         writer = write_execution_artifacts_fn or _write_study_execution_artifacts
         writer(plan, study_dir, results)
+        selection_paths = _write_ranking_and_selection(plan, study_dir, repo_root=repo_root)
         if result.execution_status != "succeeded":
             break
 
     cache_reuse_evidence = None
     if require_cache_reuse_evidence and len(results) >= 2 and all(
-        result.execution_status == "succeeded" for result in results
+        result.execution_status == "succeeded" for result in results[:2]
     ):
         cache_reuse_evidence = _validate_cache_reuse_evidence(study_dir, candidate_ids[:2])
 
@@ -136,12 +158,19 @@ def run_tuning_mini_study(
         "cache_reuse_evidence": cache_reuse_evidence,
         "mini_study_summary_csv": str(study_dir / "reports" / "mini_study_summary.csv"),
         "mini_study_summary_json": str(study_dir / "reports" / "mini_study_summary.json"),
+        "candidate_ranking_csv": str(selection_paths["candidate_ranking_csv"]),
+        "selected_candidate_json": str(selection_paths["selected_candidate_json"]),
+        "selected_candidate_config": (
+            str(selection_paths["selected_candidate_config"])
+            if selection_paths.get("selected_candidate_config") is not None
+            else None
+        ),
         "claim_boundary": CLAIM_BOUNDARY,
     }
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Run a tiny sequential cache-aware tuning mini study.")
+    parser = argparse.ArgumentParser(description="Run a sequential cache-aware ML1M tuning mini/small study.")
     parser.add_argument("--search-space", type=Path, required=True)
     parser.add_argument("--output-dir", type=Path, default=Path("artifacts/tuning"))
     parser.add_argument("--study-id", default=None)
@@ -155,7 +184,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="Optional cache root. Defaults to an isolated cache under the study directory.",
     )
     parser.add_argument("--repo-root", type=Path, default=REPO_ROOT)
-    parser.add_argument("--max-candidates", type=int, default=2)
+    parser.add_argument("--max-candidates", type=int, default=DEFAULT_MAX_CANDIDATES)
     parser.add_argument("--overwrite", action="store_true")
     parser.add_argument("--train-ratio", type=float, default=0.8)
     parser.add_argument("--validation-ratio", type=float, default=0.1)
@@ -170,7 +199,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--benchmark-mode",
         action=argparse.BooleanOptionalAction,
         default=True,
-        help="Require the 19d benchmark contract; currently this means dataset ml1m.",
+        help="Require the ML1M benchmark contract; tiny/ML100K are only allowed with --no-benchmark-mode.",
     )
     return parser.parse_args(argv)
 
@@ -241,8 +270,146 @@ def _validate_benchmark_mode_scope(plan: Any) -> None:
     dataset = str(plan.search_space.study.dataset)
     if dataset != "ml1m":
         raise ValueError(
-            "19d benchmark mode requires dataset ml1m; tiny/ML100K may only be used with --no-benchmark-mode"
+            "ML1M benchmark mode requires dataset ml1m; tiny/ML100K may only be used with --no-benchmark-mode"
         )
+
+
+def _write_ranking_and_selection(plan: Any, study_dir: Path, *, repo_root: Path) -> dict[str, Path | None]:
+    reports_dir = study_dir / "reports"
+    reports_dir.mkdir(parents=True, exist_ok=True)
+    ranking_path = reports_dir / "candidate_ranking.csv"
+    selected_dir = study_dir / "selected"
+    selected_dir.mkdir(parents=True, exist_ok=True)
+    selected_path = selected_dir / "selected_candidate.json"
+    selected_config_path = selected_dir / "selected_candidate_config.yaml"
+
+    summary_path = reports_dir / "candidate_summary.csv"
+    summary_rows = _candidate_summary_rows(summary_path) if summary_path.exists() else []
+    rows_by_candidate = {row["candidate_id"]: row for row in summary_rows}
+
+    selectable_rows = []
+    ranking_rows_by_candidate: dict[str, dict[str, str]] = {}
+    for candidate in plan.candidates:
+        summary_row = rows_by_candidate.get(candidate.candidate_id, {})
+        execution_status = summary_row.get("execution_status", "not_executed")
+        validation_rmse = _parse_float(summary_row.get("validation_rmse"))
+        ranking_row = {
+            "rank": "",
+            "candidate_id": candidate.candidate_id,
+            "candidate_index": str(candidate.index),
+            "execution_status": execution_status,
+            "alpha": _parameter_value(candidate, "alpha"),
+            "learning_rate": _parameter_value(candidate, "learning_rate"),
+            "validation_rmse": summary_row.get("validation_rmse", ""),
+            "validation_mae": summary_row.get("validation_mae", ""),
+            "fit_model_seconds": summary_row.get("fit_model_seconds", ""),
+            "cluster_total_seconds": summary_row.get("cluster_total_seconds", ""),
+            "cluster_cache_status": summary_row.get("cluster_cache_status", ""),
+            "user_cluster_history_cache_status": summary_row.get("user_cluster_history_cache_status", ""),
+            "cluster_reuse_group_id": summary_row.get("cluster_reuse_group_id", ""),
+            "selected": "false",
+            "selection_reason": _non_selection_reason(execution_status, validation_rmse),
+            "run_dir": summary_row.get("run_dir", ""),
+            "candidate_config_path": summary_row.get("candidate_config_path", ""),
+        }
+        ranking_rows_by_candidate[candidate.candidate_id] = ranking_row
+        if execution_status == "succeeded" and validation_rmse is not None:
+            selectable_rows.append(ranking_row)
+
+    selectable_rows.sort(
+        key=lambda row: (
+            _parse_float(row["validation_rmse"]) if _parse_float(row["validation_rmse"]) is not None else float("inf"),
+            _parse_float(row["validation_mae"]) if _parse_float(row["validation_mae"]) is not None else float("inf"),
+            _parse_float(row["fit_model_seconds"])
+            if _parse_float(row["fit_model_seconds"]) is not None
+            else float("inf"),
+            int(row["candidate_index"]),
+        )
+    )
+    for rank, row in enumerate(selectable_rows, start=1):
+        row["rank"] = str(rank)
+
+    decision = "EXECUTION_UNSTABLE_FIX_BEFORE_TUNING"
+    selected_row = None
+    if len(selectable_rows) >= MIN_SUCCEEDED_CANDIDATES_FOR_SELECTION:
+        decision = "SELECTED_CANDIDATE_READY_FOR_BAKEOFF"
+        selected_row = selectable_rows[0]
+        selected_row["selected"] = "true"
+        selected_row["selection_reason"] = (
+            "lowest validation_rmse among succeeded candidates; ties break by validation_mae then fit_model_seconds"
+        )
+        for row in selectable_rows[1:]:
+            row["selection_reason"] = "not selected by validation_rmse ranking"
+    else:
+        for row in selectable_rows:
+            row["selection_reason"] = "selection requires at least six succeeded candidates"
+
+    ranked_rows = sorted(
+        ranking_rows_by_candidate.values(),
+        key=lambda row: (int(row["rank"]) if row["rank"] else 10**9, int(row["candidate_index"])),
+    )
+    with ranking_path.open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=RANKING_FIELDS, extrasaction="ignore")
+        writer.writeheader()
+        writer.writerows(ranked_rows)
+
+    selected_candidate_config: Path | None = None
+    if selected_row is not None:
+        source_config = _resolve_path(Path(selected_row["candidate_config_path"]), repo_root=repo_root)
+        shutil.copyfile(source_config, selected_config_path)
+        selected_candidate_config = selected_config_path
+    elif selected_config_path.exists():
+        selected_config_path.unlink()
+
+    selected_payload = {
+        "study_id": plan.study_id,
+        "selected_candidate_id": selected_row["candidate_id"] if selected_row is not None else None,
+        "selected_rank": int(selected_row["rank"]) if selected_row is not None else None,
+        "rank": int(selected_row["rank"]) if selected_row is not None else None,
+        "validation_rmse": selected_row["validation_rmse"] if selected_row is not None else None,
+        "validation_mae": selected_row["validation_mae"] if selected_row is not None else None,
+        "fit_model_seconds": selected_row["fit_model_seconds"] if selected_row is not None else None,
+        "cluster_total_seconds": selected_row["cluster_total_seconds"] if selected_row is not None else None,
+        "selection_reason": (
+            selected_row["selection_reason"] if selected_row is not None else "fewer than six succeeded candidates"
+        ),
+        "candidate_config_path": selected_row["candidate_config_path"] if selected_row is not None else None,
+        "selected_candidate_config_path": (
+            str(selected_candidate_config) if selected_candidate_config is not None else None
+        ),
+        "selected_config_path": str(selected_candidate_config) if selected_candidate_config is not None else None,
+        "candidate_ranking_path": str(ranking_path),
+        "decision": decision,
+        "claim_boundary": CLAIM_BOUNDARY,
+    }
+    selected_path.write_text(json.dumps(selected_payload, indent=2, sort_keys=True), encoding="utf-8")
+    return {
+        "candidate_ranking_csv": ranking_path,
+        "selected_candidate_json": selected_path,
+        "selected_candidate_config": selected_candidate_config,
+    }
+
+
+def _parameter_value(candidate: Any, name: str) -> str:
+    value = candidate.parameter_values.get(name)
+    return "" if value is None else str(value)
+
+
+def _non_selection_reason(execution_status: str, validation_rmse: float | None) -> str:
+    if execution_status != "succeeded":
+        return f"not selectable: execution_status={execution_status}"
+    if validation_rmse is None:
+        return "not selectable: missing validation_rmse"
+    return "pending selection"
+
+
+def _parse_float(value: Any) -> float | None:
+    if value in (None, ""):
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
 
 
 def _runtime_config_with_cache_root(

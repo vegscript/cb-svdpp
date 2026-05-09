@@ -61,15 +61,15 @@ def test_run_tuning_mini_study_help() -> None:
     assert "--max-candidates" in result.stdout
 
 
-def test_mini_study_script_rejects_max_candidates_above_three(tmp_path: Path) -> None:
+def test_small_study_script_caps_candidates_at_16(tmp_path: Path) -> None:
     kwargs = _runner_kwargs(tmp_path)
-    kwargs["max_candidates"] = 4
+    kwargs["max_candidates"] = 17
 
-    with pytest.raises(ValueError, match="--max-candidates must be <= 3"):
+    with pytest.raises(ValueError, match="--max-candidates must be <= 16"):
         mini_study_script.run_tuning_mini_study(**kwargs)
 
 
-def test_mini_study_script_requires_ml1m_for_benchmark_mode(tmp_path: Path) -> None:
+def test_small_study_requires_ml1m_for_benchmark_mode(tmp_path: Path) -> None:
     kwargs = _runner_kwargs(tmp_path)
     kwargs["benchmark_mode"] = True
 
@@ -77,7 +77,7 @@ def test_mini_study_script_requires_ml1m_for_benchmark_mode(tmp_path: Path) -> N
         mini_study_script.run_tuning_mini_study(**kwargs)
 
 
-def test_mini_study_script_plans_and_runs_two_candidates_with_fake_runner(tmp_path: Path) -> None:
+def test_mini_study_script_plans_and_runs_six_candidates_with_fake_runner(tmp_path: Path) -> None:
     write_counts: list[int] = []
 
     execution_index = 0
@@ -140,19 +140,19 @@ def test_mini_study_script_plans_and_runs_two_candidates_with_fake_runner(tmp_pa
         return write_study_execution_artifacts(plan, study_dir, results)
 
     result = mini_study_script.run_tuning_mini_study(
-        **_runner_kwargs(tmp_path),
+        **(_runner_kwargs(tmp_path) | {"max_candidates": 6}),
         execute_candidate_fn=_fake_execute_candidate,
         write_execution_artifacts_fn=_write_artifacts,
     )
 
     study_dir = Path(result["study_dir"])
-    assert result["executed_candidate_count"] == 2
-    assert write_counts == [1, 2]
+    assert result["executed_candidate_count"] == 6
+    assert write_counts == [1, 2, 3, 4, 5, 6]
     assert (study_dir / "reports" / "candidate_summary.csv").exists()
     assert (study_dir / "reports" / "execution_summary.csv").exists()
     with (study_dir / "reports" / "execution_summary.csv").open(encoding="utf-8", newline="") as handle:
         rows = list(csv.DictReader(handle))
-    assert len(rows) == 2
+    assert len(rows) == 6
     assert {row["execution_status"] for row in rows} == {"succeeded"}
     with (study_dir / "reports" / "candidate_summary.csv").open(encoding="utf-8", newline="") as handle:
         summary_rows = list(csv.DictReader(handle))
@@ -162,13 +162,26 @@ def test_mini_study_script_plans_and_runs_two_candidates_with_fake_runner(tmp_pa
     assert result["cache_reuse_evidence"]["status"] == "validated"
     assert Path(result["mini_study_summary_csv"]).exists()
     assert Path(result["mini_study_summary_json"]).exists()
+    assert Path(result["candidate_ranking_csv"]).exists()
+    assert Path(result["selected_candidate_json"]).exists()
+    assert Path(result["selected_candidate_config"]).exists()
+    assert Path(result["selected_candidate_json"]).parent.name == "selected"
+    assert Path(result["selected_candidate_config"]).parent.name == "selected"
     with Path(result["mini_study_summary_csv"]).open(encoding="utf-8", newline="") as handle:
         mini_rows = list(csv.DictReader(handle))
     mini_payload = json.loads(Path(result["mini_study_summary_json"]).read_text(encoding="utf-8"))
+    with Path(result["candidate_ranking_csv"]).open(encoding="utf-8", newline="") as handle:
+        ranking_rows = list(csv.DictReader(handle))
+    selected_payload = json.loads(Path(result["selected_candidate_json"]).read_text(encoding="utf-8"))
     assert [row["notes"] for row in mini_rows[:2]] == ["cold_cache_build", "warm_cache_hit"]
     assert mini_payload["cache_reuse_observed"] is True
     assert mini_payload["cold_candidate_id"] == summary_rows[0]["candidate_id"]
-    assert mini_payload["warm_candidate_ids"] == [summary_rows[1]["candidate_id"]]
+    assert mini_payload["warm_candidate_ids"] == [row["candidate_id"] for row in summary_rows[1:6]]
+    ranked_rows = [row for row in ranking_rows if row["rank"]]
+    assert [row["rank"] for row in ranked_rows] == ["1", "2", "3", "4", "5", "6"]
+    assert ranked_rows[0]["selected"] == "true"
+    assert selected_payload["selected_candidate_id"] == ranking_rows[0]["candidate_id"]
+    assert selected_payload["decision"] == "SELECTED_CANDIDATE_READY_FOR_BAKEOFF"
 
 
 def test_mini_study_stops_after_first_failed_candidate(tmp_path: Path) -> None:
@@ -187,6 +200,11 @@ def test_mini_study_stops_after_first_failed_candidate(tmp_path: Path) -> None:
 
     assert result["executed_candidate_count"] == 1
     assert list(result["execution_statuses"].values()) == ["failed"]
+    assert Path(result["candidate_ranking_csv"]).exists()
+    assert result["selected_candidate_config"] is None
+    selected_payload = json.loads(Path(result["selected_candidate_json"]).read_text(encoding="utf-8"))
+    assert selected_payload["selected_candidate_id"] is None
+    assert selected_payload["decision"] == "EXECUTION_UNSTABLE_FIX_BEFORE_TUNING"
 
 
 def test_mini_study_rejects_both_candidates_hit_for_cache_reuse_evidence(tmp_path: Path) -> None:
