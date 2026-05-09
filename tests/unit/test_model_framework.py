@@ -189,6 +189,48 @@ def test_cb_alpha_outside_unit_interval_fails_validation(alpha: float) -> None:
     assert "alpha" in str(exc_info.value)
 
 
+def test_cb_svdpp_induction_config_is_separate_from_target_training_params() -> None:
+    payload = yaml.safe_load(Path("configs/models/cb_svdpp.yaml").read_text(encoding="utf-8"))
+    payload["training"]["learning_rate"] = 0.123
+    payload["training"]["lambda_q"] = 0.456
+    adapter, profile = validate_model_config_payload(payload, expected_model_name="cb_svdpp")
+    model_config = adapter.build_model_config(profile, model_seed=99, runtime_dtype="float32")
+
+    induction_config = adapter.build_induction_config(model_config, model_seed=99, model_profile=profile)
+
+    assert induction_config.learning_rate == payload["clustering"]["induction"]["learning_rate"]
+    assert induction_config.lambda_q == payload["clustering"]["induction"]["lambda_q"]
+    assert induction_config.seed == payload["clustering"]["induction"]["seed"]
+    assert induction_config.learning_rate != payload["training"]["learning_rate"]
+    assert induction_config.lambda_q != payload["training"]["lambda_q"]
+
+
+def test_cb_asvdpp_induction_config_is_separate_from_target_training_params() -> None:
+    payload = yaml.safe_load(Path("configs/models/cb_asvdpp.yaml").read_text(encoding="utf-8"))
+    payload["training"]["learning_rate"] = 0.123
+    payload["training"]["lambda_q"] = 0.456
+    adapter, profile = validate_model_config_payload(payload, expected_model_name="cb_asvdpp")
+    model_config = adapter.build_model_config(profile, model_seed=99, runtime_dtype="float32")
+
+    induction_config = adapter.build_induction_config(model_config, model_seed=99, model_profile=profile)
+
+    assert induction_config.learning_rate == payload["clustering"]["induction"]["learning_rate"]
+    assert induction_config.lambda_q == payload["clustering"]["induction"]["lambda_q"]
+    assert induction_config.seed == payload["clustering"]["induction"]["seed"]
+    assert induction_config.learning_rate != payload["training"]["learning_rate"]
+    assert induction_config.lambda_q != payload["training"]["lambda_q"]
+
+
+def test_cb_svdpp_unified_path_requires_explicit_induction_config() -> None:
+    payload = yaml.safe_load(Path("configs/models/cb_svdpp.yaml").read_text(encoding="utf-8"))
+    del payload["clustering"]["induction"]
+    adapter, profile = validate_model_config_payload(payload, expected_model_name="cb_svdpp")
+    model_config = adapter.build_model_config(profile, model_seed=1, runtime_dtype="float32")
+
+    with pytest.raises(ValueError, match="requires explicit clustering.induction config"):
+        adapter.build_induction_config(model_config, model_seed=1, model_profile=profile)
+
+
 def test_validated_training_overrides_do_not_fill_missing_source_fields() -> None:
     payload = yaml.safe_load(Path("configs/models/cb_asvdpp.yaml").read_text(encoding="utf-8"))
     del payload["training"]["lambda_xC"]
@@ -672,6 +714,18 @@ def test_unified_runner_writes_alpha_zero_cb_semantics(monkeypatch: pytest.Monke
                 "alpha": 0.0,
                 "algorithm": "kmeans",
                 "kmeans_n_init": 1,
+                "induction": {
+                    "latent_dim": 2,
+                    "epochs": 1,
+                    "learning_rate": 0.01,
+                    "lambda_b": 0.01,
+                    "lambda_p": 0.01,
+                    "lambda_q": 0.01,
+                    "seed": 1,
+                    "init_std": 0.02,
+                    "dtype": "float64",
+                    "training_backend": "auto",
+                },
             },
             "notes": ["test profile"],
         },

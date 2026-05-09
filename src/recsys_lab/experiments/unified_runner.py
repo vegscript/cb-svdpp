@@ -359,7 +359,11 @@ def run_unified_experiment(
                     model_seed=model_seed,
                     runtime_dtype=runtime_dtype,
                 )
-                induction_config = adapter.build_induction_config(model_config, model_seed=model_seed)
+                induction_config = adapter.build_induction_config(
+                    model_config,
+                    model_seed=model_seed,
+                    model_profile=model_profile,
+                )
                 config_stage.update(_fit_stage_model_config_metadata(model_config))
 
             clustering_seconds = 0.0

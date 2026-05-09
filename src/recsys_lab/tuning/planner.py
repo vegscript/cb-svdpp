@@ -73,7 +73,8 @@ def _build_artifact_reuse_groups(
                 invalidate_on=list(cluster_contract.invalidate_on),
                 notes=(
                     "Contract-level dry-run group; hash excludes declared reuse_across "
-                    "coordinates such as alpha, lambdas, learning rate, and epochs."
+                    "target-model coordinates such as alpha, lambdas, learning rate, "
+                    "and epochs, while preserving induction identity coordinates."
                 ),
             )
         )
@@ -90,8 +91,11 @@ def _candidate_reuse_key(
     for dimension_name, value in candidate.parameter_values.items():
         dimension = search_space.search_space[dimension_name]
         target_path = dimension.target_path or dimension_name
-        target_leaf = target_path.split(".")[-1]
-        if dimension_name in reuse_across or target_path in reuse_across or target_leaf in reuse_across:
+        if _is_cluster_reuse_across_coordinate(
+            dimension_name=dimension_name,
+            target_path=target_path,
+            reuse_across=reuse_across,
+        ):
             continue
         retained_coordinates[dimension_name] = value
     return {
@@ -104,6 +108,16 @@ def _candidate_reuse_key(
         else [],
         "retained_coordinates": retained_coordinates,
     }
+
+
+def _is_cluster_reuse_across_coordinate(
+    *, dimension_name: str, target_path: str, reuse_across: set[str]
+) -> bool:
+    if target_path.startswith("clustering.induction."):
+        return dimension_name in reuse_across or target_path in reuse_across
+
+    target_leaf = target_path.split(".")[-1]
+    return dimension_name in reuse_across or target_path in reuse_across or target_leaf in reuse_across
 
 
 def _study_id(search_space: SearchSpaceSpec) -> str:

@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import csv
+from pathlib import Path
 
 import pytest
 
+from recsys_lab.config.loader import load_yaml_file
 from recsys_lab.tuning import (
     SearchSpaceSpec,
     build_study_plan,
@@ -233,6 +235,24 @@ def test_cb_candidates_share_cluster_reuse_group_when_only_learning_rate_changes
     ]
 
 
+def test_cb_candidates_share_cluster_reuse_group_when_only_target_lambda_q_changes() -> None:
+    payload = _base_payload()
+    payload["budget"] = {"max_candidates": 2}
+    payload["search_space"] = {
+        "target_lambda_q": {
+            "type": "float",
+            "values": [0.015, 0.04],
+            "target_path": "training.lambda_q",
+        }
+    }
+    plan = build_study_plan(SearchSpaceSpec.model_validate(payload))
+
+    assert len(plan.artifact_reuse_groups) == 1
+    assert plan.artifact_reuse_groups[0].candidate_ids == [
+        candidate.candidate_id for candidate in plan.candidates
+    ]
+
+
 def test_cb_candidates_have_different_cluster_reuse_group_when_cluster_count_changes() -> None:
     payload = _base_payload()
     payload["budget"] = {"max_candidates": 2}
@@ -246,6 +266,46 @@ def test_cb_candidates_have_different_cluster_reuse_group_when_cluster_count_cha
     plan = build_study_plan(SearchSpaceSpec.model_validate(payload))
 
     assert len(plan.artifact_reuse_groups) == 2
+
+
+def test_cb_candidates_have_different_cluster_reuse_group_when_induction_learning_rate_changes() -> None:
+    payload = _base_payload()
+    payload["budget"] = {"max_candidates": 2}
+    payload["search_space"] = {
+        "induction_learning_rate": {
+            "type": "float",
+            "values": [0.005, 0.01],
+            "target_path": "clustering.induction.learning_rate",
+        }
+    }
+    plan = build_study_plan(SearchSpaceSpec.model_validate(payload))
+
+    assert len(plan.artifact_reuse_groups) == 2
+
+
+def test_cb_candidates_have_different_cluster_reuse_group_when_induction_lambda_q_changes() -> None:
+    payload = _base_payload()
+    payload["budget"] = {"max_candidates": 2}
+    payload["search_space"] = {
+        "induction_lambda_q": {
+            "type": "float",
+            "values": [0.015, 0.04],
+            "target_path": "clustering.induction.lambda_q",
+        }
+    }
+    plan = build_study_plan(SearchSpaceSpec.model_validate(payload))
+
+    assert len(plan.artifact_reuse_groups) == 2
+
+
+def test_ml1m_small_study_target_only_variation_uses_one_cluster_reuse_group() -> None:
+    payload = load_yaml_file(
+        Path("configs/experiments/tuning/active/ml1m_cb_svdpp_small_study_v1.yaml")
+    )
+    plan = build_study_plan(SearchSpaceSpec.model_validate(payload))
+
+    assert len(plan.candidates) == 12
+    assert len(plan.artifact_reuse_groups) == 1
 
 
 def test_materialize_candidate_config_applies_overrides_without_mutating_base() -> None:

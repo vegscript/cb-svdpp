@@ -32,6 +32,17 @@ clustering:
   alpha: 0.10
   algorithm: kmeans
   kmeans_n_init: 10
+  induction:
+    latent_dim: 50
+    epochs: 20
+    learning_rate: 0.01
+    lambda_b: 0.02
+    lambda_p: 0.02
+    lambda_q: 0.02
+    seed: 1
+    init_std: 0.1
+    dtype: float32
+    training_backend: auto
 
 notes:
   - draft defaults only

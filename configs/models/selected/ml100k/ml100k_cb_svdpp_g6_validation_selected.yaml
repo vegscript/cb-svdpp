@@ -42,6 +42,17 @@ clustering:
   alpha: 0.00
   algorithm: kmeans
   kmeans_n_init: 10
+  induction:
+    latent_dim: 32
+    epochs: 2
+    learning_rate: 0.01
+    lambda_b: 0.02
+    lambda_p: 0.02
+    lambda_q: 0.02
+    seed: 1
+    init_std: 0.1
+    dtype: float32
+    training_backend: auto
 
 notes:
   - selected by validation RMSE only in the G6 validation grid

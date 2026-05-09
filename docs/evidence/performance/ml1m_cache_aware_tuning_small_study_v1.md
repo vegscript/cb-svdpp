@@ -46,6 +46,11 @@ python scripts/run_tuning_mini_study.py --search-space configs/experiments/tunin
 
 `SELECTED_CANDIDATE_READY_FOR_BAKEOFF`
 
+## Follow-up Status
+
+The selected candidate from 19e is not promoted to bake-off until target/induction config separation is validated.
+The 19e selected candidate remains a search result, but bake-off requires rerun or confirmation under the corrected induction config contract.
+
 ## Gates
 
 - `ruff check tests/unit/test_tuning_selection.py tests/unit/test_run_tuning_mini_study_script.py scripts/run_tuning_mini_study.py`: passed

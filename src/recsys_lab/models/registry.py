@@ -84,7 +84,13 @@ class ModelAdapter:
         raise NotImplementedError
 
     @classmethod
-    def build_induction_config(cls, model_config: object, *, model_seed: int) -> BiasedMFConfig | None:
+    def build_induction_config(
+        cls,
+        model_config: object,
+        *,
+        model_seed: int,
+        model_profile: ModelProfileSchema | None = None,
+    ) -> BiasedMFConfig | None:
         return None
 
     @classmethod
@@ -109,6 +115,50 @@ class ModelAdapter:
     @classmethod
     def cb_alpha(cls, profile: ModelProfileSchema) -> float | None:
         return None
+
+
+def _resolve_cb_induction_config(
+    *,
+    adapter_name: str,
+    model_config: Any,
+    model_seed: int,
+    model_profile: ModelProfileSchema | None,
+    expected_profile_type: type[ModelProfileSchema],
+) -> BiasedMFConfig:
+    if model_profile is not None:
+        if not isinstance(model_profile, expected_profile_type):
+            raise TypeError(f"{adapter_name} induction config requires a {expected_profile_type.__name__}")
+        induction = model_profile.clustering.induction  # type: ignore[attr-defined]
+        if induction is None:
+            raise ValueError(f"{adapter_name} requires explicit clustering.induction config")
+        return BiasedMFConfig(
+            latent_dim=induction.latent_dim,
+            epochs=induction.epochs,
+            learning_rate=induction.learning_rate,
+            lambda_b=induction.lambda_b,
+            lambda_p=induction.lambda_p,
+            lambda_q=induction.lambda_q,
+            seed=induction.seed,
+            init_std=induction.init_std,
+            dtype=induction.dtype,
+            training_backend=induction.training_backend,
+        )
+
+    # Legacy fallback for static wrappers/tests that only have a constructed
+    # CB model config. The unified experiment path passes model_profile and
+    # therefore requires the explicit clustering.induction contract.
+    return BiasedMFConfig(
+        latent_dim=model_config.latent_dim,
+        epochs=model_config.epochs,
+        learning_rate=model_config.learning_rate,
+        lambda_b=model_config.lambda_b,
+        lambda_p=model_config.lambda_p,
+        lambda_q=model_config.lambda_q,
+        seed=model_seed,
+        init_std=model_config.init_std,
+        dtype=model_config.dtype,
+        training_backend="auto",
+    )
 
 
 class BiasedMFAdapter(ModelAdapter):
@@ -347,18 +397,19 @@ class CBSVDppAdapter(ModelAdapter):
         )
 
     @classmethod
-    def build_induction_config(cls, model_config: CBSVDppConfig, *, model_seed: int) -> BiasedMFConfig:
-        return BiasedMFConfig(
-            latent_dim=model_config.latent_dim,
-            epochs=model_config.epochs,
-            learning_rate=model_config.learning_rate,
-            lambda_b=model_config.lambda_b,
-            lambda_p=model_config.lambda_p,
-            lambda_q=model_config.lambda_q,
-            seed=model_seed,
-            init_std=model_config.init_std,
-            dtype=model_config.dtype,
-            training_backend="auto",
+    def build_induction_config(
+        cls,
+        model_config: CBSVDppConfig,
+        *,
+        model_seed: int,
+        model_profile: ModelProfileSchema | None = None,
+    ) -> BiasedMFConfig:
+        return _resolve_cb_induction_config(
+            adapter_name=cls.name,
+            model_config=model_config,
+            model_seed=model_seed,
+            model_profile=model_profile,
+            expected_profile_type=CBSVDppModelProfile,
         )
 
     @classmethod
@@ -437,18 +488,19 @@ class CBASVDppAdapter(ModelAdapter):
         )
 
     @classmethod
-    def build_induction_config(cls, model_config: CBASVDppConfig, *, model_seed: int) -> BiasedMFConfig:
-        return BiasedMFConfig(
-            latent_dim=model_config.latent_dim,
-            epochs=model_config.epochs,
-            learning_rate=model_config.learning_rate,
-            lambda_b=model_config.lambda_b,
-            lambda_p=model_config.lambda_p,
-            lambda_q=model_config.lambda_q,
-            seed=model_seed,
-            init_std=model_config.init_std,
-            dtype=model_config.dtype,
-            training_backend="auto",
+    def build_induction_config(
+        cls,
+        model_config: CBASVDppConfig,
+        *,
+        model_seed: int,
+        model_profile: ModelProfileSchema | None = None,
+    ) -> BiasedMFConfig:
+        return _resolve_cb_induction_config(
+            adapter_name=cls.name,
+            model_config=model_config,
+            model_seed=model_seed,
+            model_profile=model_profile,
+            expected_profile_type=CBASVDppModelProfile,
         )
 
     @classmethod

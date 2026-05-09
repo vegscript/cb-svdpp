@@ -41,6 +41,19 @@ class BiasedMFTrainingSchema(StrictSchema):
     training_backend: TrainingBackend
 
 
+class ClusterInductionSchema(StrictSchema):
+    latent_dim: int = Field(gt=0)
+    epochs: int = Field(gt=0)
+    learning_rate: float = Field(gt=0)
+    lambda_b: float = Field(ge=0)
+    lambda_p: float = Field(ge=0)
+    lambda_q: float = Field(ge=0)
+    seed: int
+    init_std: float = Field(gt=0)
+    dtype: RuntimeDType
+    training_backend: TrainingBackend = "auto"
+
+
 class SVDppTrainingSchema(BiasedMFTrainingSchema):
     lambda_y: float = Field(ge=0)
     implicit_policy: ImplicitPolicy
@@ -92,6 +105,7 @@ class ClusteringSchema(StrictSchema):
     alpha: float = Field(ge=0.0, le=1.0)
     algorithm: ClusteringAlgorithm
     kmeans_n_init: int = Field(gt=0)
+    induction: ClusterInductionSchema | None = None
 
 
 class ModelProfileSchema(StrictSchema):

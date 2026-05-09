@@ -113,6 +113,18 @@ _BASE_CLUSTERING = {
     "alpha": 0.2,
     "algorithm": "kmeans",
     "kmeans_n_init": 5,
+    "induction": {
+        "latent_dim": 8,
+        "epochs": 8,
+        "learning_rate": 0.02,
+        "lambda_b": 0.01,
+        "lambda_p": 0.01,
+        "lambda_q": 0.01,
+        "seed": 1,
+        "init_std": 0.05,
+        "dtype": "float32",
+        "training_backend": "auto",
+    },
 }
 
 
