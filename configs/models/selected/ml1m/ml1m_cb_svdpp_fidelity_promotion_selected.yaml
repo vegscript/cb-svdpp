@@ -9,6 +9,8 @@ metadata:
     source_candidate_id: cand_0007_7111cfbbc311
     promotion_step: ml1m_fidelity_promotion_v1
     selection_basis: validation_rmse_ml1m_benchmark_random_v1
+    final_bakeoff: docs/evidence/performance/ml1m_final_bakeoff_v1.md
+    decision: ADOPT_PROMOTED_CONFIG
 
 model:
   name: cb_svdpp
