@@ -42,6 +42,9 @@ artifacts/runs/*
 artifacts/benchmarks/*
 !artifacts/benchmarks/.gitkeep
 !artifacts/benchmarks/README.md
+artifacts/bakeoff/*
+!artifacts/bakeoff/.gitkeep
+!artifacts/bakeoff/README.md
 artifacts/reports/*
 !artifacts/reports/.gitkeep
 !artifacts/reports/README.md
