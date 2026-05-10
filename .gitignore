@@ -45,6 +45,9 @@ artifacts/benchmarks/*
 artifacts/bakeoff/*
 !artifacts/bakeoff/.gitkeep
 !artifacts/bakeoff/README.md
+artifacts/fidelity_promotion/*
+!artifacts/fidelity_promotion/.gitkeep
+!artifacts/fidelity_promotion/README.md
 artifacts/reports/*
 !artifacts/reports/.gitkeep
 !artifacts/reports/README.md

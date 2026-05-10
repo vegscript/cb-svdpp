@@ -8,9 +8,10 @@ def test_model_config_structure_is_frozen() -> None:
 
     top_level_dirs = {path.name for path in model_config_dir.iterdir() if path.is_dir()}
 
-    assert top_level_dirs == {"selected", "archive"}
+    assert top_level_dirs == {"selected", "archive", "candidates"}
     assert (model_config_dir / "archive" / "development").is_dir()
     assert (model_config_dir / "archive" / "tuned").is_dir()
+    assert (model_config_dir / "candidates" / "ml1m").is_dir()
     assert not (model_config_dir / "tuned").exists()
     assert not (model_config_dir / "development").exists()
 

@@ -1,0 +1,52 @@
+metadata:
+  status: fidelity_promotion_candidate
+  owner: repo
+  purpose: model_profile
+  provenance:
+    derived_from: configs/models/selected/ml1m/ml1m_cb_svdpp_stage0_transfer.yaml
+    source_study: ml1m_cb_svdpp_small_study_v2
+    source_candidate_id: cand_0001_9b2f164d471c
+    promotion_step: ml1m_fidelity_promotion_v1
+
+model:
+  name: cb_svdpp
+  family: clustering_based_factorization
+  scope: paper_inspired
+
+training:
+  latent_dim: 64
+  epochs: 20
+  learning_rate: 0.0075
+  lambda_b: 0.025
+  lambda_p: 0.025
+  lambda_q: 0.025
+  lambda_y: 0.025
+  lambda_pC: 0.025
+  lambda_qC: 0.025
+  lambda_yC: 0.025
+  init_std: 0.1
+  dtype: float32
+  implicit_policy: ratings_as_implicit
+
+clustering:
+  n_user_clusters: 80
+  n_item_clusters: 80
+  alpha: 0.1
+  algorithm: kmeans
+  kmeans_n_init: 10
+  induction:
+    latent_dim: 64
+    epochs: 20
+    learning_rate: 0.0075
+    lambda_b: 0.025
+    lambda_p: 0.025
+    lambda_q: 0.025
+    seed: 1
+    init_std: 0.1
+    dtype: float32
+    training_backend: auto
+
+notes:
+  - promoted from ML1M small study v2 to baseline fidelity
+  - not final selected
+  - only clustering.alpha, training.learning_rate, and training.lambda_q differ from the stage0 transfer baseline contract
