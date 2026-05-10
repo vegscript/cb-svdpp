@@ -140,6 +140,31 @@ def test_stage_training_epochs_override_does_not_change_reuse_key() -> None:
     assert plan.artifact_reuse_groups[0].reuse_key["retained_stage_overrides"] == {}
 
 
+def test_stage2_inner_override_does_not_contaminate_stage1_reuse_key() -> None:
+    payload = _payload_for_dimension("alpha", "clustering.alpha", [0.2, 0.3])
+    payload["schedule"] = {
+        "stages": [
+            {
+                "name": "stage1_low_fidelity",
+                "max_candidates": 2,
+                "overrides": {"training.epochs": 3},
+            },
+            {
+                "name": "stage2_mid_fidelity",
+                "max_candidates": 2,
+                "overrides": {"clustering.induction.epochs": 3},
+            },
+        ]
+    }
+    plan = build_study_plan(
+        SearchSpaceSpec.model_validate(payload),
+        stage_name="stage1_low_fidelity",
+        stage_overrides={"training.epochs": 3},
+    )
+
+    assert plan.artifact_reuse_groups[0].reuse_key["retained_stage_overrides"] == {}
+
+
 def test_stage_induction_epochs_override_changes_reuse_key() -> None:
     payload = _payload_for_dimension("alpha", "clustering.alpha", [0.2, 0.3])
     payload["schedule"] = {
@@ -151,8 +176,48 @@ def test_stage_induction_epochs_override_changes_reuse_key() -> None:
             }
         ]
     }
-    plan = build_study_plan(SearchSpaceSpec.model_validate(payload))
+    plan = build_study_plan(
+        SearchSpaceSpec.model_validate(payload),
+        stage_name="stage1_low_fidelity",
+        stage_overrides={"clustering.induction.epochs": 3},
+    )
 
     assert plan.artifact_reuse_groups[0].reuse_key["retained_stage_overrides"] == {
         "stage1_low_fidelity": {"clustering.induction.epochs": 3}
     }
+
+
+def test_only_current_stage_outer_override_affects_reuse_key() -> None:
+    payload = _payload_for_dimension("alpha", "clustering.alpha", [0.2, 0.3])
+    payload["schedule"] = {
+        "stages": [
+            {
+                "name": "stage1_low_fidelity",
+                "max_candidates": 2,
+                "overrides": {"clustering.induction.epochs": 3},
+            },
+            {
+                "name": "stage2_mid_fidelity",
+                "max_candidates": 2,
+                "overrides": {"clustering.induction.epochs": 10},
+            },
+        ]
+    }
+    stage1_plan = build_study_plan(
+        SearchSpaceSpec.model_validate(payload),
+        stage_name="stage1_low_fidelity",
+        stage_overrides={"clustering.induction.epochs": 3},
+    )
+    stage2_plan = build_study_plan(
+        SearchSpaceSpec.model_validate(payload),
+        stage_name="stage2_mid_fidelity",
+        stage_overrides={"clustering.induction.epochs": 10},
+    )
+
+    assert stage1_plan.artifact_reuse_groups[0].reuse_key["retained_stage_overrides"] == {
+        "stage1_low_fidelity": {"clustering.induction.epochs": 3}
+    }
+    assert stage2_plan.artifact_reuse_groups[0].reuse_key["retained_stage_overrides"] == {
+        "stage2_mid_fidelity": {"clustering.induction.epochs": 10}
+    }
+    assert stage1_plan.artifact_reuse_groups[0].group_id != stage2_plan.artifact_reuse_groups[0].group_id

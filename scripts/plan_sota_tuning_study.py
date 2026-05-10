@@ -21,6 +21,7 @@ from recsys_lab.tuning import (  # noqa: E402
     build_study_plan,
     materialize_promoted_candidates,
     materialize_stage_candidates,
+    validate_promotion_stage_contract,
 )
 
 CLAIM_BOUNDARY = "Dry-run SOTA tuning planner only; no execution, performance, or quality claim."
@@ -50,6 +51,8 @@ def plan_sota_tuning_study(
             overwrite=overwrite,
             repo_root=repo_root,
         )
+    if from_stage is not None or to_stage is not None:
+        raise ValueError("--from-stage and --to-stage are only valid with --promote-from-results")
     return _plan_stage(
         search_space=search_space,
         output_dir=output_dir,
@@ -110,6 +113,7 @@ def _plan_stage(
         search_space,
         stage_name=None if stage is None else stage.name,
         max_candidates=None if stage is None else stage.max_candidates,
+        stage_overrides=None if stage is None else stage.overrides,
     )
     plan = _with_study_id(plan, study_id)
     study_dir = output_dir / plan.study_id
@@ -144,25 +148,38 @@ def _plan_promotion(
 ) -> dict[str, Any]:
     if to_stage is None:
         raise ValueError("--to-stage is required when --promote-from-results is set")
-    next_stage = _resolve_stage(search_space, to_stage)
-    if next_stage is None:
+    if from_stage is None:
+        raise ValueError("--from-stage is required when --promote-from-results is set")
+    source_stage = _resolve_stage(search_space, from_stage)
+    target_stage = _resolve_stage(search_space, to_stage)
+    if source_stage is None or target_stage is None:
         raise ValueError("promotion planning requires a scheduled target stage")
+    validate_promotion_stage_contract(
+        source_stage_spec=source_stage,
+        target_stage_spec=target_stage,
+        stage_order=_stage_order(search_space),
+    )
     plan = _with_study_id(build_study_plan(search_space), study_id)
     study_dir = output_dir / plan.study_id
-    promotion_dir = study_dir / "promotions" / next_stage.name
+    promotion_dir = study_dir / "promotions" / target_stage.name
     if promotion_dir.exists():
         if not overwrite:
             raise FileExistsError(f"promotion output directory already exists: {promotion_dir}")
         shutil.rmtree(promotion_dir)
 
-    promotion_plan = build_promotion_plan(_resolve_path(promote_from_results, repo_root), next_stage)
+    promotion_plan = build_promotion_plan(
+        _resolve_path(promote_from_results, repo_root),
+        source_stage,
+        target_stage,
+        study_id=plan.study_id,
+    )
     paths = materialize_promoted_candidates(promotion_plan, study_dir)
     return {
         "mode": "promotion_planning",
         "study_id": plan.study_id,
         "study_dir": str(study_dir),
-        "from_stage": from_stage,
-        "to_stage": next_stage.name,
+        "from_stage": source_stage.name,
+        "to_stage": target_stage.name,
         "promoted_candidate_count": len(promotion_plan.promoted_candidates),
         "paths": {name: str(path) for name, path in paths.items()},
         "claim_boundary": CLAIM_BOUNDARY,
@@ -182,6 +199,12 @@ def _resolve_stage(search_space: SearchSpaceSpec, stage_name: str | None) -> Fid
     raise ValueError(f"unknown fidelity stage: {stage_name}")
 
 
+def _stage_order(search_space: SearchSpaceSpec) -> list[str]:
+    if search_space.schedule is None:
+        return []
+    return [stage.name for stage in search_space.schedule.stages]
+
+
 def _with_study_id(plan: StudyPlan, study_id: str | None) -> StudyPlan:
     if study_id is None or study_id == plan.study_id:
         return plan
@@ -190,6 +213,8 @@ def _with_study_id(plan: StudyPlan, study_id: str | None) -> StudyPlan:
         search_space=plan.search_space,
         candidates=plan.candidates,
         artifact_reuse_groups=plan.artifact_reuse_groups,
+        stage_name=plan.stage_name,
+        stage_overrides=plan.stage_overrides,
     )
 
 

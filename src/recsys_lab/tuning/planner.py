@@ -28,6 +28,8 @@ class StudyPlan:
     search_space: SearchSpaceSpec
     candidates: list[CandidateSpec]
     artifact_reuse_groups: list[ArtifactReuseGroup]
+    stage_name: str | None = None
+    stage_overrides: dict[str, Any] | None = None
 
 
 def build_study_plan(
@@ -35,6 +37,7 @@ def build_study_plan(
     *,
     stage_name: str | None = None,
     max_candidates: int | None = None,
+    stage_overrides: dict[str, Any] | None = None,
 ) -> StudyPlan:
     study_id = _study_id(search_space)
     candidates = generate_candidates(search_space, study_id=study_id, stage_name=stage_name)
@@ -44,12 +47,23 @@ def build_study_plan(
         study_id=study_id,
         search_space=search_space,
         candidates=candidates,
-        artifact_reuse_groups=_build_artifact_reuse_groups(search_space=search_space, candidates=candidates),
+        artifact_reuse_groups=_build_artifact_reuse_groups(
+            search_space=search_space,
+            candidates=candidates,
+            stage_name=stage_name,
+            stage_overrides=stage_overrides,
+        ),
+        stage_name=stage_name,
+        stage_overrides=dict(stage_overrides or {}),
     )
 
 
 def _build_artifact_reuse_groups(
-    *, search_space: SearchSpaceSpec, candidates: list[CandidateSpec]
+    *,
+    search_space: SearchSpaceSpec,
+    candidates: list[CandidateSpec],
+    stage_name: str | None,
+    stage_overrides: dict[str, Any] | None,
 ) -> list[ArtifactReuseGroup]:
     if search_space.artifact_reuse is None or search_space.artifact_reuse.cluster_artifacts is None:
         return []
@@ -63,6 +77,8 @@ def _build_artifact_reuse_groups(
             candidate=candidate,
             search_space=search_space,
             reuse_across=reuse_across,
+            stage_name=stage_name,
+            stage_overrides=stage_overrides,
         )
         encoded = _stable_json(reuse_key)
         groups.setdefault(encoded, []).append(candidate)
@@ -94,6 +110,8 @@ def _candidate_reuse_key(
     candidate: CandidateSpec,
     search_space: SearchSpaceSpec,
     reuse_across: set[str],
+    stage_name: str | None,
+    stage_overrides: dict[str, Any] | None,
 ) -> dict[str, Any]:
     retained_coordinates: dict[str, Any] = {}
     for dimension_name, value in candidate.parameter_values.items():
@@ -115,7 +133,10 @@ def _candidate_reuse_key(
         if search_space.artifact_reuse is not None and search_space.artifact_reuse.cluster_artifacts is not None
         else [],
         "retained_coordinates": retained_coordinates,
-        "retained_stage_overrides": _stage_reuse_overrides(search_space),
+        "retained_stage_overrides": _stage_reuse_overrides(
+            stage_name=stage_name,
+            stage_overrides=stage_overrides,
+        ),
     }
 
 
@@ -131,19 +152,19 @@ def _is_cluster_reuse_across_coordinate(
     return dimension_name in reuse_across or target_path in reuse_across or target_leaf in reuse_across
 
 
-def _stage_reuse_overrides(search_space: SearchSpaceSpec) -> dict[str, Any]:
-    if search_space.schedule is None:
+def _stage_reuse_overrides(
+    *,
+    stage_name: str | None,
+    stage_overrides: dict[str, Any] | None,
+) -> dict[str, Any]:
+    if stage_name is None or not stage_overrides:
         return {}
-    retained: dict[str, Any] = {}
-    for stage in search_space.schedule.stages:
-        retained_stage_overrides = {
-            target_path: value
-            for target_path, value in stage.overrides.items()
-            if not is_inner_target_coordinate(target_path)
-        }
-        if retained_stage_overrides:
-            retained[stage.name] = retained_stage_overrides
-    return retained
+    retained_stage_overrides = {
+        target_path: value
+        for target_path, value in stage_overrides.items()
+        if not is_inner_target_coordinate(target_path)
+    }
+    return {stage_name: retained_stage_overrides} if retained_stage_overrides else {}
 
 
 def _study_id(search_space: SearchSpaceSpec) -> str:

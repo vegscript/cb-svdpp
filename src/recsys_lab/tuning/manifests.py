@@ -11,6 +11,7 @@ from recsys_lab.tuning.schemas import (
     GeneratorSpec,
     ObjectiveSpec,
     StrictSchema,
+    StudyScheduleSpec,
     StudySpec,
 )
 
@@ -27,6 +28,7 @@ class CandidateManifest(StrictSchema):
     status: Literal["planned"] = "planned"
     objective_status: Literal["planned"] = "planned"
     execution_status: ExecutionStatus = "not_executed"
+    stage_name: str | None = None
     study: StudySpec
     base_model_config: str
     parameter_values: dict[str, Any]
@@ -59,6 +61,8 @@ class StudyManifest(StrictSchema):
     base_model_config: str
     budget: BudgetSpec
     generator: GeneratorSpec
+    schedule: StudyScheduleSpec | None = None
+    current_stage: str | None = None
     objective: ObjectiveSpec
     candidate_count: int = Field(ge=0)
     candidate_ids: list[str]
@@ -88,6 +92,8 @@ def build_study_manifest(plan: StudyPlan, *, created_at_utc: str) -> StudyManife
         base_model_config=plan.search_space.base_model_config,
         budget=plan.search_space.budget,
         generator=plan.search_space.generator,
+        schedule=plan.search_space.schedule,
+        current_stage=plan.stage_name,
         objective=plan.search_space.objective,
         candidate_count=len(plan.candidates),
         candidate_ids=[candidate.candidate_id for candidate in plan.candidates],
@@ -105,6 +111,7 @@ def build_candidate_manifests(plan: StudyPlan, *, output_dir: str | None = None)
             candidate_id=candidate.candidate_id,
             candidate_index=candidate.index,
             objective_status="planned",
+            stage_name=candidate.stage_name or plan.stage_name,
             study=plan.search_space.study,
             base_model_config=plan.search_space.base_model_config,
             parameter_values=candidate.parameter_values,

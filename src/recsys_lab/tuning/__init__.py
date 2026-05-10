@@ -52,6 +52,7 @@ from recsys_lab.tuning.staged_planner import (
     materialize_promoted_candidates,
     materialize_stage_candidates,
     plan_stage_1_candidates,
+    validate_promotion_stage_contract,
 )
 from recsys_lab.tuning.writers import (
     update_candidate_manifest_with_execution_result,
@@ -109,6 +110,7 @@ __all__ = [
     "resolve_candidate_config_path",
     "skipped_candidate_result",
     "update_candidate_manifest_with_execution_result",
+    "validate_promotion_stage_contract",
     "write_artifact_reuse_summary_csv",
     "write_candidate_summary_csv",
     "write_execution_summary_csv",

@@ -139,6 +139,36 @@ def _write_search_space(tmp_path: Path) -> Path:
     return search_space_path
 
 
+def _write_stage_results(tmp_path: Path, candidate_config_path: Path | None = None) -> Path:
+    result_path = tmp_path / "stage_results.csv"
+    with result_path.open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.DictWriter(
+            handle,
+            fieldnames=[
+                "candidate_id",
+                "study_id",
+                "stage_name",
+                "execution_status",
+                "validation_rmse",
+                "validation_mae",
+                "fit_model_seconds",
+                "candidate_config_path",
+            ],
+        )
+        writer.writeheader()
+        writer.writerow(
+            {
+                "candidate_id": "candidate",
+                "execution_status": "succeeded",
+                "validation_rmse": "0.90",
+                "validation_mae": "0.71",
+                "fit_model_seconds": "13.0",
+                "candidate_config_path": str(candidate_config_path or tmp_path / "candidate.yaml"),
+            }
+        )
+    return result_path
+
+
 def test_plan_sota_tuning_study_help() -> None:
     result = subprocess.run(
         [sys.executable, "scripts/plan_sota_tuning_study.py", "--help"],
@@ -304,6 +334,8 @@ def test_plan_sota_tuning_promotion_writes_plan_and_promoted_configs(tmp_path: P
             handle,
             fieldnames=[
                 "candidate_id",
+                "study_id",
+                "stage_name",
                 "execution_status",
                 "validation_rmse",
                 "validation_mae",
@@ -315,6 +347,8 @@ def test_plan_sota_tuning_promotion_writes_plan_and_promoted_configs(tmp_path: P
         writer.writerow(
             {
                 "candidate_id": rows[0]["candidate_id"],
+                "study_id": "sota_unit_study",
+                "stage_name": "stage1_low_fidelity",
                 "execution_status": "succeeded",
                 "validation_rmse": "0.91",
                 "validation_mae": "0.72",
@@ -325,6 +359,8 @@ def test_plan_sota_tuning_promotion_writes_plan_and_promoted_configs(tmp_path: P
         writer.writerow(
             {
                 "candidate_id": rows[1]["candidate_id"],
+                "study_id": "sota_unit_study",
+                "stage_name": "stage1_low_fidelity",
                 "execution_status": "succeeded",
                 "validation_rmse": "0.90",
                 "validation_mae": "0.71",
@@ -366,5 +402,160 @@ def test_plan_sota_tuning_promotion_requires_to_stage(tmp_path: Path) -> None:
             search_space_path=search_space_path,
             output_dir=tmp_path / "out",
             promote_from_results=result_path,
+            repo_root=_repo_root(),
+        )
+
+
+def test_plan_sota_tuning_promotion_requires_from_stage(tmp_path: Path) -> None:
+    search_space_path = _write_search_space(tmp_path)
+    result_path = _write_stage_results(tmp_path)
+
+    with pytest.raises(ValueError, match="--from-stage is required"):
+        plan_sota_tuning_study(
+            search_space_path=search_space_path,
+            output_dir=tmp_path / "out",
+            promote_from_results=result_path,
+            to_stage="stage2_mid_fidelity",
+            repo_root=_repo_root(),
+        )
+
+
+def test_plan_sota_tuning_promotion_rejects_same_stage(tmp_path: Path) -> None:
+    search_space_path = _write_search_space(tmp_path)
+    result_path = _write_stage_results(tmp_path)
+
+    with pytest.raises(ValueError, match="must be different"):
+        plan_sota_tuning_study(
+            search_space_path=search_space_path,
+            output_dir=tmp_path / "out",
+            promote_from_results=result_path,
+            from_stage="stage1_low_fidelity",
+            to_stage="stage1_low_fidelity",
+            repo_root=_repo_root(),
+        )
+
+
+def test_plan_sota_tuning_promotion_rejects_backward_stage_order(tmp_path: Path) -> None:
+    search_space_path = _write_search_space(tmp_path)
+    result_path = _write_stage_results(tmp_path)
+
+    with pytest.raises(ValueError, match="target stage must come after source stage"):
+        plan_sota_tuning_study(
+            search_space_path=search_space_path,
+            output_dir=tmp_path / "out",
+            promote_from_results=result_path,
+            from_stage="stage2_mid_fidelity",
+            to_stage="stage1_low_fidelity",
+            repo_root=_repo_root(),
+        )
+
+
+def test_plan_sota_tuning_promotion_rejects_target_capacity_below_promote_top_k(tmp_path: Path) -> None:
+    base_config_path = tmp_path / "base_model.yaml"
+    search_space_path = tmp_path / "search_space.yaml"
+    payload = _search_space_payload(str(base_config_path))
+    payload["schedule"]["stages"][0]["promote_top_k"] = 3  # type: ignore[index]
+    payload["schedule"]["stages"][1]["max_candidates"] = 2  # type: ignore[index]
+    dump_yaml_file(base_config_path, _base_model_config())
+    dump_yaml_file(search_space_path, payload)
+    result_path = _write_stage_results(tmp_path)
+
+    with pytest.raises(ValueError, match="target stage max_candidates"):
+        plan_sota_tuning_study(
+            search_space_path=search_space_path,
+            output_dir=tmp_path / "out",
+            promote_from_results=result_path,
+            from_stage="stage1_low_fidelity",
+            to_stage="stage2_mid_fidelity",
+            repo_root=_repo_root(),
+        )
+
+
+def test_plan_sota_tuning_promotion_rejects_foreign_stage_results(tmp_path: Path) -> None:
+    search_space_path = _write_search_space(tmp_path)
+    result_path = tmp_path / "stage_results.csv"
+    candidate_path = tmp_path / "candidate.yaml"
+    dump_yaml_file(candidate_path, _base_model_config())
+    with result_path.open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.DictWriter(
+            handle,
+            fieldnames=[
+                "candidate_id",
+                "study_id",
+                "stage_name",
+                "execution_status",
+                "validation_rmse",
+                "validation_mae",
+                "fit_model_seconds",
+                "candidate_config_path",
+            ],
+        )
+        writer.writeheader()
+        writer.writerow(
+            {
+                "candidate_id": "candidate",
+                "study_id": "sota_unit_study",
+                "stage_name": "foreign_stage",
+                "execution_status": "succeeded",
+                "validation_rmse": "0.90",
+                "validation_mae": "0.71",
+                "fit_model_seconds": "13.0",
+                "candidate_config_path": str(candidate_path),
+            }
+        )
+
+    with pytest.raises(ValueError, match="stage_name"):
+        plan_sota_tuning_study(
+            search_space_path=search_space_path,
+            output_dir=tmp_path / "out",
+            study_id="sota_unit_study",
+            promote_from_results=result_path,
+            from_stage="stage1_low_fidelity",
+            to_stage="stage2_mid_fidelity",
+            repo_root=_repo_root(),
+        )
+
+
+def test_plan_sota_tuning_promotion_rejects_foreign_study_results(tmp_path: Path) -> None:
+    search_space_path = _write_search_space(tmp_path)
+    result_path = tmp_path / "stage_results.csv"
+    candidate_path = tmp_path / "candidate.yaml"
+    dump_yaml_file(candidate_path, _base_model_config())
+    with result_path.open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.DictWriter(
+            handle,
+            fieldnames=[
+                "candidate_id",
+                "study_id",
+                "stage_name",
+                "execution_status",
+                "validation_rmse",
+                "validation_mae",
+                "fit_model_seconds",
+                "candidate_config_path",
+            ],
+        )
+        writer.writeheader()
+        writer.writerow(
+            {
+                "candidate_id": "candidate",
+                "study_id": "foreign_study",
+                "stage_name": "stage1_low_fidelity",
+                "execution_status": "succeeded",
+                "validation_rmse": "0.90",
+                "validation_mae": "0.71",
+                "fit_model_seconds": "13.0",
+                "candidate_config_path": str(candidate_path),
+            }
+        )
+
+    with pytest.raises(ValueError, match="study_id"):
+        plan_sota_tuning_study(
+            search_space_path=search_space_path,
+            output_dir=tmp_path / "out",
+            study_id="sota_unit_study",
+            promote_from_results=result_path,
+            from_stage="stage1_low_fidelity",
+            to_stage="stage2_mid_fidelity",
             repo_root=_repo_root(),
         )

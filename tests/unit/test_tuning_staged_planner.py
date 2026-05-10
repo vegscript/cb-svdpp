@@ -113,6 +113,44 @@ def _write_base_config(tmp_path: Path) -> Path:
     return path
 
 
+def _source_stage(*, promote_top_k: int = 1) -> FidelityStageSpec:
+    return FidelityStageSpec(
+        name="stage1_low_fidelity",
+        max_candidates=4,
+        promote_top_k=promote_top_k,
+        overrides={"training.epochs": 3},
+    )
+
+
+def _target_stage(*, max_candidates: int = 1) -> FidelityStageSpec:
+    return FidelityStageSpec(
+        name="stage2_mid_fidelity",
+        max_candidates=max_candidates,
+        overrides={"training.epochs": 10},
+    )
+
+
+def _promotion_rows(tmp_path: Path) -> list[dict[str, str]]:
+    config_path = tmp_path / "candidate.yaml"
+    dump_yaml_file(config_path, _base_model_config())
+    return [
+        {
+            "candidate_id": "candidate",
+            "execution_status": "succeeded",
+            "validation_rmse": "0.900",
+            "validation_mae": "0.650",
+            "fit_model_seconds": "12.0",
+            "candidate_config_path": str(config_path),
+        }
+    ]
+
+
+def _candidate_config_path(tmp_path: Path, name: str) -> str:
+    path = tmp_path / name
+    dump_yaml_file(path, _base_model_config())
+    return str(path)
+
+
 def test_plan_stage_1_candidates_uses_first_stage_budget_and_stage_ids(tmp_path: Path) -> None:
     base_config_path = _write_base_config(tmp_path)
     spec = SearchSpaceSpec.model_validate(_search_space_payload(str(base_config_path)))
@@ -120,6 +158,8 @@ def test_plan_stage_1_candidates_uses_first_stage_budget_and_stage_ids(tmp_path:
     plan = plan_stage_1_candidates(spec)
 
     assert len(plan.candidates) == 2
+    assert plan.stage_name == "stage1_low_fidelity"
+    assert plan.stage_overrides == {"training.epochs": 3}
     assert {candidate.stage_name for candidate in plan.candidates} == {"stage1_low_fidelity"}
     assert all(candidate.candidate_id.startswith(f"cand_{candidate.index:04d}_") for candidate in plan.candidates)
 
@@ -146,9 +186,15 @@ def test_materialize_stage_candidates_applies_stage_overrides_without_changing_i
         path for key, path in paths.items() if key.startswith("candidate_config:")
     ]
     materialized = load_yaml_file(candidate_config_paths[0])
+    study_manifest = json.loads(paths["study_manifest"].read_text(encoding="utf-8"))
+    candidate_manifest_path = next(path for key, path in paths.items() if key.startswith("candidate_manifest:"))
+    candidate_manifest = json.loads(candidate_manifest_path.read_text(encoding="utf-8"))
 
     assert materialized["training"]["epochs"] == 3
     assert materialized["clustering"]["induction"]["epochs"] == 20
+    assert study_manifest["current_stage"] == "stage1_low_fidelity"
+    assert study_manifest["schedule"]["stages"][0]["name"] == "stage1_low_fidelity"
+    assert candidate_manifest["stage_name"] == "stage1_low_fidelity"
     assert paths["candidate_summary"].exists()
 
 
@@ -187,7 +233,7 @@ def test_build_promotion_plan_selects_succeeded_by_rmse_mae_fit_time(tmp_path: P
             "validation_rmse": "0.800",
             "validation_mae": "0.600",
             "fit_model_seconds": "10.0",
-            "candidate_config_path": str(tmp_path / "failed.yaml"),
+            "candidate_config_path": _candidate_config_path(tmp_path, "failed.yaml"),
         },
         {
             "candidate_id": "best_by_mae",
@@ -195,7 +241,7 @@ def test_build_promotion_plan_selects_succeeded_by_rmse_mae_fit_time(tmp_path: P
             "validation_rmse": "0.900",
             "validation_mae": "0.650",
             "fit_model_seconds": "20.0",
-            "candidate_config_path": str(tmp_path / "best_by_mae.yaml"),
+            "candidate_config_path": _candidate_config_path(tmp_path, "best_by_mae.yaml"),
         },
         {
             "candidate_id": "best_by_fit_time",
@@ -203,7 +249,7 @@ def test_build_promotion_plan_selects_succeeded_by_rmse_mae_fit_time(tmp_path: P
             "validation_rmse": "0.900",
             "validation_mae": "0.650",
             "fit_model_seconds": "12.0",
-            "candidate_config_path": str(tmp_path / "best_by_fit_time.yaml"),
+            "candidate_config_path": _candidate_config_path(tmp_path, "best_by_fit_time.yaml"),
         },
         {
             "candidate_id": "worse_rmse",
@@ -211,22 +257,110 @@ def test_build_promotion_plan_selects_succeeded_by_rmse_mae_fit_time(tmp_path: P
             "validation_rmse": "0.910",
             "validation_mae": "0.640",
             "fit_model_seconds": "5.0",
-            "candidate_config_path": str(tmp_path / "worse_rmse.yaml"),
+            "candidate_config_path": _candidate_config_path(tmp_path, "worse_rmse.yaml"),
         },
     ]
-    next_stage = FidelityStageSpec(
-        name="stage2_mid_fidelity",
-        max_candidates=2,
-        overrides={"training.epochs": 10},
-    )
-
-    plan = build_promotion_plan(result_rows, next_stage)
+    plan = build_promotion_plan(result_rows, _source_stage(promote_top_k=2), _target_stage(max_candidates=2))
 
     assert [candidate.source_candidate_id for candidate in plan.promoted_candidates] == [
         "best_by_fit_time",
         "best_by_mae",
     ]
     assert all(candidate.promoted_candidate_id.startswith("prom_") for candidate in plan.promoted_candidates)
+    assert plan.from_stage == "stage1_low_fidelity"
+    assert plan.to_stage == "stage2_mid_fidelity"
+
+
+def test_promotion_count_uses_source_promote_top_k_not_target_max_candidates(tmp_path: Path) -> None:
+    rows = [
+        {
+            "candidate_id": f"candidate_{index}",
+            "execution_status": "succeeded",
+            "validation_rmse": str(0.9 + index * 0.001),
+            "validation_mae": "0.650",
+            "fit_model_seconds": "12.0",
+            "candidate_config_path": _candidate_config_path(tmp_path, f"candidate_{index}.yaml"),
+        }
+        for index in range(4)
+    ]
+
+    plan = build_promotion_plan(rows, _source_stage(promote_top_k=2), _target_stage(max_candidates=4))
+
+    assert len(plan.promoted_candidates) == 2
+
+
+def test_promotion_requires_source_promote_top_k(tmp_path: Path) -> None:
+    source_stage = FidelityStageSpec(name="stage1_low_fidelity", max_candidates=4, promote_top_k=None)
+
+    with pytest.raises(ValueError, match="promote_top_k"):
+        build_promotion_plan(_promotion_rows(tmp_path), source_stage, _target_stage(max_candidates=1))
+
+
+def test_promotion_rejects_target_capacity_smaller_than_source_promote_top_k(tmp_path: Path) -> None:
+    with pytest.raises(ValueError, match="target stage max_candidates"):
+        build_promotion_plan(
+            _promotion_rows(tmp_path),
+            _source_stage(promote_top_k=2),
+            _target_stage(max_candidates=1),
+        )
+
+
+def test_promotion_rejects_same_source_and_target_stage(tmp_path: Path) -> None:
+    stage = FidelityStageSpec(name="stage1_low_fidelity", max_candidates=4, promote_top_k=1)
+
+    with pytest.raises(ValueError, match="must be different"):
+        build_promotion_plan(_promotion_rows(tmp_path), stage, stage)
+
+
+def test_promotion_rejects_stage_name_mismatch(tmp_path: Path) -> None:
+    rows = _promotion_rows(tmp_path)
+    rows[0]["stage_name"] = "wrong_stage"
+
+    with pytest.raises(ValueError, match="stage_name"):
+        build_promotion_plan(rows, _source_stage(promote_top_k=1), _target_stage(max_candidates=1))
+
+
+def test_promotion_rejects_study_id_mismatch(tmp_path: Path) -> None:
+    rows = _promotion_rows(tmp_path)
+    rows[0]["study_id"] = "foreign_study"
+
+    with pytest.raises(ValueError, match="study_id"):
+        build_promotion_plan(
+            rows,
+            _source_stage(promote_top_k=1),
+            _target_stage(max_candidates=1),
+            study_id="current_study",
+        )
+
+
+def test_promotion_rejects_missing_candidate_config_path(tmp_path: Path) -> None:
+    rows = _promotion_rows(tmp_path)
+    rows[0]["candidate_config_path"] = str(tmp_path / "missing.yaml")
+
+    with pytest.raises(ValueError, match="candidate_config_path"):
+        build_promotion_plan(rows, _source_stage(promote_top_k=1), _target_stage(max_candidates=1))
+
+
+def test_promotion_can_disable_candidate_config_path_existence_for_unit_rows(tmp_path: Path) -> None:
+    rows = _promotion_rows(tmp_path)
+    rows[0]["candidate_config_path"] = str(tmp_path / "missing.yaml")
+
+    plan = build_promotion_plan(
+        rows,
+        _source_stage(promote_top_k=1),
+        _target_stage(max_candidates=1),
+        require_candidate_config_exists=False,
+    )
+
+    assert plan.promoted_candidates[0].source_candidate_id == "candidate"
+
+
+def test_promotion_rejects_insufficient_succeeded_candidates(tmp_path: Path) -> None:
+    rows = _promotion_rows(tmp_path)
+    rows[0]["execution_status"] = "failed"
+
+    with pytest.raises(ValueError, match="succeeded candidates"):
+        build_promotion_plan(rows, _source_stage(promote_top_k=1), _target_stage(max_candidates=1))
 
 
 def test_promotion_selects_top_k_by_validation_rmse(tmp_path: Path) -> None:
@@ -237,7 +371,7 @@ def test_promotion_selects_top_k_by_validation_rmse(tmp_path: Path) -> None:
             "validation_rmse": "0.910",
             "validation_mae": "0.700",
             "fit_model_seconds": "10.0",
-            "candidate_config_path": str(tmp_path / "candidate_a.yaml"),
+            "candidate_config_path": _candidate_config_path(tmp_path, "candidate_a.yaml"),
         },
         {
             "candidate_id": "candidate_b",
@@ -245,11 +379,11 @@ def test_promotion_selects_top_k_by_validation_rmse(tmp_path: Path) -> None:
             "validation_rmse": "0.900",
             "validation_mae": "0.710",
             "fit_model_seconds": "20.0",
-            "candidate_config_path": str(tmp_path / "candidate_b.yaml"),
+            "candidate_config_path": _candidate_config_path(tmp_path, "candidate_b.yaml"),
         },
     ]
 
-    plan = build_promotion_plan(rows, FidelityStageSpec(name="stage2_mid_fidelity", max_candidates=1))
+    plan = build_promotion_plan(rows, _source_stage(promote_top_k=1), _target_stage(max_candidates=1))
 
     assert [candidate.source_candidate_id for candidate in plan.promoted_candidates] == ["candidate_b"]
 
@@ -262,7 +396,7 @@ def test_promotion_uses_validation_mae_tiebreaker(tmp_path: Path) -> None:
             "validation_rmse": "0.900",
             "validation_mae": "0.720",
             "fit_model_seconds": "5.0",
-            "candidate_config_path": str(tmp_path / "higher_mae.yaml"),
+            "candidate_config_path": _candidate_config_path(tmp_path, "higher_mae.yaml"),
         },
         {
             "candidate_id": "lower_mae",
@@ -270,11 +404,11 @@ def test_promotion_uses_validation_mae_tiebreaker(tmp_path: Path) -> None:
             "validation_rmse": "0.900",
             "validation_mae": "0.710",
             "fit_model_seconds": "20.0",
-            "candidate_config_path": str(tmp_path / "lower_mae.yaml"),
+            "candidate_config_path": _candidate_config_path(tmp_path, "lower_mae.yaml"),
         },
     ]
 
-    plan = build_promotion_plan(rows, FidelityStageSpec(name="stage2_mid_fidelity", max_candidates=1))
+    plan = build_promotion_plan(rows, _source_stage(promote_top_k=1), _target_stage(max_candidates=1))
 
     assert [candidate.source_candidate_id for candidate in plan.promoted_candidates] == ["lower_mae"]
 
@@ -287,7 +421,7 @@ def test_promotion_uses_fit_time_second_tiebreaker(tmp_path: Path) -> None:
             "validation_rmse": "0.900",
             "validation_mae": "0.710",
             "fit_model_seconds": "20.0",
-            "candidate_config_path": str(tmp_path / "slow.yaml"),
+            "candidate_config_path": _candidate_config_path(tmp_path, "slow.yaml"),
         },
         {
             "candidate_id": "fast",
@@ -295,11 +429,11 @@ def test_promotion_uses_fit_time_second_tiebreaker(tmp_path: Path) -> None:
             "validation_rmse": "0.900",
             "validation_mae": "0.710",
             "fit_model_seconds": "5.0",
-            "candidate_config_path": str(tmp_path / "fast.yaml"),
+            "candidate_config_path": _candidate_config_path(tmp_path, "fast.yaml"),
         },
     ]
 
-    plan = build_promotion_plan(rows, FidelityStageSpec(name="stage2_mid_fidelity", max_candidates=1))
+    plan = build_promotion_plan(rows, _source_stage(promote_top_k=1), _target_stage(max_candidates=1))
 
     assert [candidate.source_candidate_id for candidate in plan.promoted_candidates] == ["fast"]
 
@@ -312,7 +446,7 @@ def test_promotion_ignores_failed_candidates(tmp_path: Path) -> None:
             "validation_rmse": "0.100",
             "validation_mae": "0.100",
             "fit_model_seconds": "1.0",
-            "candidate_config_path": str(tmp_path / "failed.yaml"),
+            "candidate_config_path": _candidate_config_path(tmp_path, "failed.yaml"),
         },
         {
             "candidate_id": "succeeded",
@@ -320,11 +454,11 @@ def test_promotion_ignores_failed_candidates(tmp_path: Path) -> None:
             "validation_rmse": "0.900",
             "validation_mae": "0.710",
             "fit_model_seconds": "5.0",
-            "candidate_config_path": str(tmp_path / "succeeded.yaml"),
+            "candidate_config_path": _candidate_config_path(tmp_path, "succeeded.yaml"),
         },
     ]
 
-    plan = build_promotion_plan(rows, FidelityStageSpec(name="stage2_mid_fidelity", max_candidates=1))
+    plan = build_promotion_plan(rows, _source_stage(promote_top_k=1), _target_stage(max_candidates=1))
 
     assert [candidate.source_candidate_id for candidate in plan.promoted_candidates] == ["succeeded"]
 
@@ -337,14 +471,12 @@ def test_build_promotion_plan_rejects_test_metrics(tmp_path: Path) -> None:
             "validation_rmse": "0.900",
             "validation_mae": "0.650",
             "fit_model_seconds": "12.0",
-            "candidate_config_path": str(tmp_path / "candidate.yaml"),
+            "candidate_config_path": _candidate_config_path(tmp_path, "candidate.yaml"),
             "test_rmse": "0.880",
         }
     ]
-    next_stage = FidelityStageSpec(name="stage2_mid_fidelity", max_candidates=1)
-
     with pytest.raises(ValueError, match="test metrics"):
-        build_promotion_plan(rows, next_stage)
+        build_promotion_plan(rows, _source_stage(promote_top_k=1), _target_stage(max_candidates=1))
 
 
 def test_promotion_rejects_test_metric_objective() -> None:
@@ -354,6 +486,7 @@ def test_promotion_rejects_test_metric_objective() -> None:
 
 def test_build_promotion_plan_reads_csv_results(tmp_path: Path) -> None:
     config_path = tmp_path / "candidate.yaml"
+    dump_yaml_file(config_path, _base_model_config())
     result_path = tmp_path / "stage1_results.csv"
     with result_path.open("w", encoding="utf-8", newline="") as handle:
         writer = csv.DictWriter(
@@ -381,7 +514,8 @@ def test_build_promotion_plan_reads_csv_results(tmp_path: Path) -> None:
 
     plan = build_promotion_plan(
         result_path,
-        FidelityStageSpec(name="stage2_mid_fidelity", max_candidates=1),
+        _source_stage(promote_top_k=1),
+        _target_stage(max_candidates=1),
     )
 
     assert plan.promoted_candidates[0].source_candidate_id == "candidate"
@@ -405,11 +539,8 @@ def test_materialize_promoted_candidates_applies_stage_overrides_and_writes_plan
                 "candidate_config_path": str(source_config_path),
             }
         ],
-        FidelityStageSpec(
-            name="stage2_mid_fidelity",
-            max_candidates=1,
-            overrides={"training.epochs": 10},
-        ),
+        _source_stage(promote_top_k=1),
+        _target_stage(max_candidates=1),
     )
 
     paths = materialize_promoted_candidates(promotion_plan, tmp_path / "study")
@@ -418,7 +549,15 @@ def test_materialize_promoted_candidates_applies_stage_overrides_and_writes_plan
 
     assert promoted_config["training"]["epochs"] == 10
     assert promoted_config["clustering"]["induction"]["epochs"] == 20
+    assert promoted_config["metadata"]["promotion"] == {
+        "source_candidate_id": "candidate",
+        "source_stage": "stage1_low_fidelity",
+        "target_stage": "stage2_mid_fidelity",
+        "promotion_rank": 1,
+        "stage_overrides_applied": {"training.epochs": 10},
+    }
     assert promotion_payload["to_stage"] == "stage2_mid_fidelity"
+    assert promotion_payload["from_stage"] == "stage1_low_fidelity"
     assert promotion_payload["promoted_candidates"][0]["promoted_candidate_config_path"].endswith(
         "candidate_config.yaml"
     )
@@ -442,6 +581,7 @@ def test_materialize_promoted_candidates_can_apply_induction_stage_override(tmp_
                 "candidate_config_path": str(source_config_path),
             }
         ],
+        _source_stage(promote_top_k=1),
         FidelityStageSpec(
             name="stage_outer_fidelity",
             max_candidates=1,

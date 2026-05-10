@@ -377,6 +377,8 @@ def test_study_manifest_contains_required_phase5_fields() -> None:
     assert manifest.base_model_config == "configs/models/cb_svdpp.yaml"
     assert manifest.budget.max_candidates == 3
     assert manifest.generator.type == "grid"
+    assert manifest.schedule is None
+    assert manifest.current_stage is None
     assert manifest.objective.primary.metric == "validation_rmse"
     assert manifest.candidate_count == 3
     assert manifest.artifact_reuse_contract is not None
@@ -392,6 +394,7 @@ def test_candidate_manifest_contains_required_phase5_fields() -> None:
     assert manifest.candidate_id.startswith("cand_0000_")
     assert manifest.candidate_index == 0
     assert manifest.study_id
+    assert manifest.stage_name is None
     assert manifest.parameter_values == {"alpha": 0.2, "lambda_q": 0.01}
     assert manifest.base_model_config == "configs/models/cb_svdpp.yaml"
     assert manifest.candidate_config_path.endswith("/candidate_config.yaml")

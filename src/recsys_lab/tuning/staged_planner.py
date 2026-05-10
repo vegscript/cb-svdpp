@@ -43,6 +43,7 @@ class PromotionCandidate:
 
 @dataclass(frozen=True)
 class PromotionPlan:
+    from_stage: str
     to_stage: str
     stage_overrides: dict[str, Any]
     promoted_candidates: list[PromotionCandidate]
@@ -59,6 +60,7 @@ def plan_stage_1_candidates(search_space_spec: SearchSpaceSpec) -> StudyPlan:
         search_space_spec,
         stage_name=stage.name,
         max_candidates=stage.max_candidates,
+        stage_overrides=stage.overrides,
     )
 
 
@@ -117,11 +119,30 @@ def materialize_stage_candidates(
 
 def build_promotion_plan(
     previous_stage_results: Path | list[dict[str, Any]],
-    next_stage_spec: FidelityStageSpec,
+    source_stage_spec: FidelityStageSpec,
+    target_stage_spec: FidelityStageSpec,
+    *,
+    study_id: str | None = None,
+    require_candidate_config_exists: bool = True,
 ) -> PromotionPlan:
+    _validate_promotion_stage_contract(
+        source_stage_spec=source_stage_spec,
+        target_stage_spec=target_stage_spec,
+        stage_order=None,
+    )
     rows = _load_result_rows(previous_stage_results)
-    _validate_result_rows(rows)
+    _validate_result_rows(
+        rows,
+        source_stage_spec=source_stage_spec,
+        study_id=study_id,
+        require_candidate_config_exists=require_candidate_config_exists,
+    )
     succeeded = [row for row in rows if row.get("execution_status") == "succeeded"]
+    promoted_count = source_stage_spec.promote_top_k
+    if len(succeeded) < promoted_count:
+        raise ValueError(
+            f"promotion requires at least {promoted_count} succeeded candidates, got {len(succeeded)}"
+        )
     ranked = sorted(
         succeeded,
         key=lambda row: (
@@ -130,10 +151,10 @@ def build_promotion_plan(
             _required_float(row, "fit_model_seconds"),
         ),
     )
-    selected_rows = ranked[: next_stage_spec.max_candidates]
+    selected_rows = ranked[:promoted_count]
     promoted_candidates = [
         PromotionCandidate(
-            promoted_candidate_id=_promoted_candidate_id(row=row, rank=rank, next_stage=next_stage_spec),
+            promoted_candidate_id=_promoted_candidate_id(row=row, rank=rank, target_stage=target_stage_spec),
             source_candidate_id=str(row["candidate_id"]),
             rank=rank,
             validation_rmse=_required_float(row, "validation_rmse"),
@@ -144,11 +165,12 @@ def build_promotion_plan(
         for rank, row in enumerate(selected_rows, start=1)
     ]
     return PromotionPlan(
-        to_stage=next_stage_spec.name,
-        stage_overrides=dict(next_stage_spec.overrides),
+        from_stage=source_stage_spec.name,
+        to_stage=target_stage_spec.name,
+        stage_overrides=dict(target_stage_spec.overrides),
         promoted_candidates=promoted_candidates,
-        objective_metric=next_stage_spec.objective_metric,
-        tie_breakers=list(next_stage_spec.tie_breakers),
+        objective_metric=target_stage_spec.objective_metric,
+        tie_breakers=list(target_stage_spec.tie_breakers),
     )
 
 
@@ -160,6 +182,11 @@ def materialize_promoted_candidates(promotion_plan: PromotionPlan, output_dir: P
     for promoted_candidate in promotion_plan.promoted_candidates:
         source_payload = load_yaml_file(Path(promoted_candidate.source_candidate_config_path))
         materialized_payload = _strict_deep_merge(source_payload, stage_overrides)
+        materialized_payload = _with_promotion_metadata(
+            materialized_payload,
+            promotion_plan=promotion_plan,
+            promoted_candidate=promoted_candidate,
+        )
         candidate_dir = promotion_dir / "candidates" / promoted_candidate.promoted_candidate_id
         config_path = candidate_dir / "candidate_config.yaml"
         paths[f"promoted_config:{promoted_candidate.promoted_candidate_id}"] = write_tuning_yaml(
@@ -179,6 +206,7 @@ def materialize_promoted_candidates(promotion_plan: PromotionPlan, output_dir: P
             )
         )
     updated_plan = PromotionPlan(
+        from_stage=promotion_plan.from_stage,
         to_stage=promotion_plan.to_stage,
         stage_overrides=promotion_plan.stage_overrides,
         promoted_candidates=updated_candidates,
@@ -207,17 +235,32 @@ def _load_result_rows(previous_stage_results: Path | list[dict[str, Any]]) -> li
         return list(csv.DictReader(handle))
 
 
-def _validate_result_rows(rows: list[dict[str, Any]]) -> None:
+def _validate_result_rows(
+    rows: list[dict[str, Any]],
+    *,
+    source_stage_spec: FidelityStageSpec,
+    study_id: str | None,
+    require_candidate_config_exists: bool,
+) -> None:
     for row in rows:
         missing = sorted(field for field in REQUIRED_PROMOTION_RESULT_FIELDS if row.get(field) in {None, ""})
         if missing:
             raise ValueError(f"promotion result row missing required fields: {missing}")
+        if row.get("stage_name") not in {None, "", source_stage_spec.name}:
+            raise ValueError(
+                f"promotion result row stage_name must match source stage {source_stage_spec.name!r}"
+            )
+        if study_id is not None and row.get("study_id") not in {None, "", study_id}:
+            raise ValueError(f"promotion result row study_id must match current study {study_id!r}")
+        if require_candidate_config_exists and not Path(str(row["candidate_config_path"])).exists():
+            raise ValueError(f"candidate_config_path does not exist: {row['candidate_config_path']}")
         if row.get("test_rmse") not in {None, ""} or row.get("test_mae") not in {None, ""}:
             raise ValueError("test metrics must not be present in promotion result inputs")
 
 
 def _promotion_plan_payload(plan: PromotionPlan) -> dict[str, Any]:
     return {
+        "from_stage": plan.from_stage,
         "to_stage": plan.to_stage,
         "stage_overrides": plan.stage_overrides,
         "objective_metric": plan.objective_metric,
@@ -239,14 +282,68 @@ def _promotion_plan_payload(plan: PromotionPlan) -> dict[str, Any]:
     }
 
 
-def _promoted_candidate_id(*, row: dict[str, Any], rank: int, next_stage: FidelityStageSpec) -> str:
+def _with_promotion_metadata(
+    payload: dict[str, Any],
+    *,
+    promotion_plan: PromotionPlan,
+    promoted_candidate: PromotionCandidate,
+) -> dict[str, Any]:
+    metadata = payload.setdefault("metadata", {})
+    if not isinstance(metadata, dict):
+        raise ValueError("candidate config metadata must be a mapping when writing promotion metadata")
+    metadata["promotion"] = {
+        "source_candidate_id": promoted_candidate.source_candidate_id,
+        "source_stage": promotion_plan.from_stage,
+        "target_stage": promotion_plan.to_stage,
+        "promotion_rank": promoted_candidate.rank,
+        "stage_overrides_applied": promotion_plan.stage_overrides,
+    }
+    return payload
+
+
+def validate_promotion_stage_contract(
+    *,
+    source_stage_spec: FidelityStageSpec,
+    target_stage_spec: FidelityStageSpec,
+    stage_order: list[str],
+) -> None:
+    _validate_promotion_stage_contract(
+        source_stage_spec=source_stage_spec,
+        target_stage_spec=target_stage_spec,
+        stage_order=stage_order,
+    )
+
+
+def _validate_promotion_stage_contract(
+    *,
+    source_stage_spec: FidelityStageSpec,
+    target_stage_spec: FidelityStageSpec,
+    stage_order: list[str] | None,
+) -> None:
+    if source_stage_spec.name == target_stage_spec.name:
+        raise ValueError("source and target promotion stages must be different")
+    if source_stage_spec.promote_top_k is None:
+        raise ValueError("source stage promote_top_k is required for promotion planning")
+    if target_stage_spec.max_candidates < source_stage_spec.promote_top_k:
+        raise ValueError("target stage max_candidates must be greater than or equal to source promote_top_k")
+    if stage_order is None:
+        return
+    if source_stage_spec.name not in stage_order:
+        raise ValueError(f"source stage is not in schedule: {source_stage_spec.name}")
+    if target_stage_spec.name not in stage_order:
+        raise ValueError(f"target stage is not in schedule: {target_stage_spec.name}")
+    if stage_order.index(target_stage_spec.name) <= stage_order.index(source_stage_spec.name):
+        raise ValueError("target stage must come after source stage")
+
+
+def _promoted_candidate_id(*, row: dict[str, Any], rank: int, target_stage: FidelityStageSpec) -> str:
     encoded = json.dumps(
         {
             "candidate_id": row["candidate_id"],
             "candidate_config_path": row["candidate_config_path"],
             "rank": rank,
-            "stage": next_stage.name,
-            "stage_overrides": next_stage.overrides,
+            "stage": target_stage.name,
+            "stage_overrides": target_stage.overrides,
         },
         sort_keys=True,
         separators=(",", ":"),

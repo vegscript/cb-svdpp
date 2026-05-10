@@ -176,6 +176,8 @@ def _load_plan(study_dir: Path) -> Any:
         search_space=plan.search_space,
         candidates=plan.candidates,
         artifact_reuse_groups=plan.artifact_reuse_groups,
+        stage_name=plan.stage_name,
+        stage_overrides=plan.stage_overrides,
     )
 
 

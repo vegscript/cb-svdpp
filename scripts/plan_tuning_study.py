@@ -84,6 +84,8 @@ def plan_tuning_study(
             search_space=plan.search_space,
             candidates=plan.candidates,
             artifact_reuse_groups=plan.artifact_reuse_groups,
+            stage_name=plan.stage_name,
+            stage_overrides=plan.stage_overrides,
         )
 
     study_dir = output_dir / resolved_study_id
