@@ -15,7 +15,7 @@ ProductiveModelName = Literal[
 SearchSpaceVersion = Literal["tuning_search_space_v1"]
 DimensionType = Literal["categorical", "float", "int"]
 DistributionName = Literal["uniform", "loguniform"]
-GeneratorName = Literal["grid", "manual"]
+GeneratorName = Literal["grid", "manual", "random", "latin_hypercube"]
 ObjectiveDirection = Literal["minimize", "maximize"]
 MetricAggregation = Literal["mean", "std", "min", "max"]
 
@@ -65,6 +65,16 @@ class BudgetSpec(StrictSchema):
 class GeneratorSpec(StrictSchema):
     type: GeneratorName = "grid"
     deterministic_order: bool = True
+    seed: int | None = None
+    n_candidates: int | None = Field(default=None, gt=0)
+
+    @model_validator(mode="after")
+    def _validate_generator_shape(self) -> "GeneratorSpec":
+        if self.type in {"random", "latin_hypercube"} and self.n_candidates is None:
+            raise ValueError("random and latin_hypercube generators require n_candidates")
+        if self.type in {"grid", "manual"} and self.n_candidates is not None:
+            raise ValueError("n_candidates is only valid for random and latin_hypercube generators")
+        return self
 
 
 class DimensionSpec(StrictSchema):
@@ -129,6 +139,43 @@ class ObjectiveSpec(StrictSchema):
         return self
 
 
+class FidelityStageSpec(StrictSchema):
+    name: str = Field(min_length=1)
+    max_candidates: int = Field(gt=0)
+    promote_top_k: int | None = Field(default=None, gt=0)
+    overrides: dict[str, Any] = Field(default_factory=dict)
+    objective_metric: str = "validation_rmse"
+    tie_breakers: list[str] = Field(default_factory=lambda: ["validation_mae", "fit_model_seconds"])
+    requires_execution: bool = True
+
+    @model_validator(mode="after")
+    def _validate_fidelity_stage(self) -> "FidelityStageSpec":
+        if self.promote_top_k is not None and self.promote_top_k > self.max_candidates:
+            raise ValueError("promote_top_k must be less than or equal to max_candidates")
+        metric = self.objective_metric.lower()
+        if metric in FORBIDDEN_PRIMARY_TUNING_METRICS or metric.startswith("test_"):
+            raise ValueError("test metrics must not be fidelity-stage objectives")
+        forbidden_tie_breakers = [
+            metric_name
+            for metric_name in self.tie_breakers
+            if metric_name.lower() in FORBIDDEN_PRIMARY_TUNING_METRICS or metric_name.lower().startswith("test_")
+        ]
+        if forbidden_tie_breakers:
+            raise ValueError("test metrics must not be fidelity-stage tie-breakers")
+        return self
+
+
+class StudyScheduleSpec(StrictSchema):
+    stages: list[FidelityStageSpec] = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def _validate_stage_names_unique(self) -> "StudyScheduleSpec":
+        names = [stage.name for stage in self.stages]
+        if len(names) != len(set(names)):
+            raise ValueError("fidelity stage names must be unique")
+        return self
+
+
 class SearchSpaceSpec(StrictSchema):
     search_space_version: SearchSpaceVersion
     study: StudySpec
@@ -137,6 +184,7 @@ class SearchSpaceSpec(StrictSchema):
     generator: GeneratorSpec = Field(default_factory=GeneratorSpec)
     search_space: dict[str, DimensionSpec] = Field(min_length=1)
     manual_candidates: list[dict[str, Any]] | None = None
+    schedule: StudyScheduleSpec | None = None
     artifact_reuse: ArtifactReuseSpec | None = None
     objective: ObjectiveSpec
 
@@ -148,6 +196,9 @@ class SearchSpaceSpec(StrictSchema):
             return self
         if self.manual_candidates is not None:
             raise ValueError("manual_candidates are only valid for manual generator")
+        if self.generator.type in {"random", "latin_hypercube"} and self.generator.n_candidates is not None:
+            if self.generator.n_candidates > self.budget.max_candidates:
+                raise ValueError("generator n_candidates must not exceed budget.max_candidates")
         return self
 
     @model_validator(mode="after")

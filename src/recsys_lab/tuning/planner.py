@@ -8,6 +8,7 @@ from typing import Any
 
 from recsys_lab.tuning.candidates import CandidateSpec, generate_candidates
 from recsys_lab.tuning.schemas import SearchSpaceSpec
+from recsys_lab.tuning.search_roles import is_inner_target_coordinate
 
 
 @dataclass(frozen=True)
@@ -29,9 +30,16 @@ class StudyPlan:
     artifact_reuse_groups: list[ArtifactReuseGroup]
 
 
-def build_study_plan(search_space: SearchSpaceSpec) -> StudyPlan:
+def build_study_plan(
+    search_space: SearchSpaceSpec,
+    *,
+    stage_name: str | None = None,
+    max_candidates: int | None = None,
+) -> StudyPlan:
     study_id = _study_id(search_space)
-    candidates = generate_candidates(search_space, study_id=study_id)
+    candidates = generate_candidates(search_space, study_id=study_id, stage_name=stage_name)
+    if max_candidates is not None:
+        candidates = candidates[:max_candidates]
     return StudyPlan(
         study_id=study_id,
         search_space=search_space,
@@ -107,17 +115,35 @@ def _candidate_reuse_key(
         if search_space.artifact_reuse is not None and search_space.artifact_reuse.cluster_artifacts is not None
         else [],
         "retained_coordinates": retained_coordinates,
+        "retained_stage_overrides": _stage_reuse_overrides(search_space),
     }
 
 
 def _is_cluster_reuse_across_coordinate(
     *, dimension_name: str, target_path: str, reuse_across: set[str]
 ) -> bool:
+    if is_inner_target_coordinate(target_path):
+        return True
     if target_path.startswith("clustering.induction."):
-        return dimension_name in reuse_across or target_path in reuse_across
+        return False
 
     target_leaf = target_path.split(".")[-1]
     return dimension_name in reuse_across or target_path in reuse_across or target_leaf in reuse_across
+
+
+def _stage_reuse_overrides(search_space: SearchSpaceSpec) -> dict[str, Any]:
+    if search_space.schedule is None:
+        return {}
+    retained: dict[str, Any] = {}
+    for stage in search_space.schedule.stages:
+        retained_stage_overrides = {
+            target_path: value
+            for target_path, value in stage.overrides.items()
+            if not is_inner_target_coordinate(target_path)
+        }
+        if retained_stage_overrides:
+            retained[stage.name] = retained_stage_overrides
+    return retained
 
 
 def _study_id(search_space: SearchSpaceSpec) -> str:

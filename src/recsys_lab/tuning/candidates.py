@@ -20,17 +20,40 @@ class CandidateSpec:
     materialized_config_payload: dict[str, Any]
     materialized_config_path: str | None = None
     objective_status: str = "planned"
+    stage_name: str | None = None
 
 
-def generate_candidates(search_space: SearchSpaceSpec, *, study_id: str | None = None) -> list[CandidateSpec]:
+def generate_candidates(
+    search_space: SearchSpaceSpec,
+    *,
+    study_id: str | None = None,
+    stage_name: str | None = None,
+) -> list[CandidateSpec]:
     """Materialize deterministic dry-run candidates from a search-space contract."""
     resolved_study_id = study_id or search_space.study.name
     if search_space.generator.type == "manual":
-        return _manual_candidates(search_space=search_space, study_id=resolved_study_id)
-    return _grid_candidates(search_space=search_space, study_id=resolved_study_id)
+        return _manual_candidates(search_space=search_space, study_id=resolved_study_id, stage_name=stage_name)
+    if search_space.generator.type == "random":
+        from recsys_lab.tuning.sampling import generate_random_candidates
+
+        return generate_random_candidates(search_space=search_space, study_id=resolved_study_id, stage_name=stage_name)
+    if search_space.generator.type == "latin_hypercube":
+        from recsys_lab.tuning.sampling import generate_latin_hypercube_candidates
+
+        return generate_latin_hypercube_candidates(
+            search_space=search_space,
+            study_id=resolved_study_id,
+            stage_name=stage_name,
+        )
+    return _grid_candidates(search_space=search_space, study_id=resolved_study_id, stage_name=stage_name)
 
 
-def _grid_candidates(search_space: SearchSpaceSpec, *, study_id: str) -> list[CandidateSpec]:
+def _grid_candidates(
+    search_space: SearchSpaceSpec,
+    *,
+    study_id: str,
+    stage_name: str | None = None,
+) -> list[CandidateSpec]:
     dimension_names = (
         sorted(search_space.search_space)
         if search_space.generator.deterministic_order
@@ -50,12 +73,18 @@ def _grid_candidates(search_space: SearchSpaceSpec, *, study_id: str) -> list[Ca
                 study_id=study_id,
                 index=index,
                 parameter_values=parameter_values,
+                stage_name=stage_name,
             )
         )
     return candidates
 
 
-def _manual_candidates(search_space: SearchSpaceSpec, *, study_id: str) -> list[CandidateSpec]:
+def _manual_candidates(
+    search_space: SearchSpaceSpec,
+    *,
+    study_id: str,
+    stage_name: str | None = None,
+) -> list[CandidateSpec]:
     candidates: list[CandidateSpec] = []
     manual_candidates = search_space.manual_candidates or []
     dimension_names = set(search_space.search_space)
@@ -72,6 +101,7 @@ def _manual_candidates(search_space: SearchSpaceSpec, *, study_id: str) -> list[
                 study_id=study_id,
                 index=index,
                 parameter_values=dict(parameter_values),
+                stage_name=stage_name,
             )
         )
     return candidates
@@ -83,6 +113,7 @@ def _build_candidate(
     study_id: str,
     index: int,
     parameter_values: dict[str, Any],
+    stage_name: str | None = None,
 ) -> CandidateSpec:
     overrides = _coordinates_to_overrides(parameter_values, search_space.search_space)
     materialized_config_payload = {
@@ -95,6 +126,7 @@ def _build_candidate(
             study_name=search_space.study.name,
             base_model_config=search_space.base_model_config,
             parameter_values=parameter_values,
+            stage_name=stage_name,
         ),
         study_id=study_id,
         index=index,
@@ -102,6 +134,7 @@ def _build_candidate(
         base_model_config=search_space.base_model_config,
         overrides=overrides,
         materialized_config_payload=materialized_config_payload,
+        stage_name=stage_name,
     )
 
 
@@ -144,15 +177,15 @@ def _candidate_id(
     study_name: str,
     base_model_config: str,
     parameter_values: dict[str, Any],
+    stage_name: str | None = None,
 ) -> str:
-    encoded = json.dumps(
-        {
-            "base_model_config": base_model_config,
-            "parameter_values": parameter_values,
-            "study_name": study_name,
-        },
-        sort_keys=True,
-        separators=(",", ":"),
-    ).encode("utf-8")
+    identity_payload = {
+        "base_model_config": base_model_config,
+        "parameter_values": parameter_values,
+        "study_name": study_name,
+    }
+    if stage_name is not None:
+        identity_payload["stage_name"] = stage_name
+    encoded = json.dumps(identity_payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
     digest = hashlib.sha256(encoded).hexdigest()[:12]
     return f"cand_{index:04d}_{digest}"
