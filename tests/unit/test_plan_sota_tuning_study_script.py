@@ -169,6 +169,47 @@ def _write_stage_results(tmp_path: Path, candidate_config_path: Path | None = No
     return result_path
 
 
+def _write_stage_results_from_summary(
+    *,
+    result_path: Path,
+    summary_path: Path,
+    study_id: str,
+    stage_name: str,
+    row_count: int,
+) -> list[dict[str, str]]:
+    rows = list(csv.DictReader(summary_path.open(encoding="utf-8", newline="")))
+    selected_rows = rows[:row_count]
+    with result_path.open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.DictWriter(
+            handle,
+            fieldnames=[
+                "candidate_id",
+                "study_id",
+                "stage_name",
+                "execution_status",
+                "validation_rmse",
+                "validation_mae",
+                "fit_model_seconds",
+                "candidate_config_path",
+            ],
+        )
+        writer.writeheader()
+        for index, row in enumerate(selected_rows):
+            writer.writerow(
+                {
+                    "candidate_id": row["candidate_id"],
+                    "study_id": study_id,
+                    "stage_name": stage_name,
+                    "execution_status": "succeeded",
+                    "validation_rmse": f"0.9{index}",
+                    "validation_mae": f"0.7{index}",
+                    "fit_model_seconds": f"{10 + index}.0",
+                    "candidate_config_path": row["candidate_config_path"],
+                }
+            )
+    return selected_rows
+
+
 def test_plan_sota_tuning_study_help() -> None:
     result = subprocess.run(
         [sys.executable, "scripts/plan_sota_tuning_study.py", "--help"],
@@ -203,6 +244,23 @@ def test_plan_sota_tuning_stage_writes_stage_outputs(tmp_path: Path) -> None:
     assert (study_dir / "reports" / "candidate_summary.csv").exists()
     assert (study_dir / "reports" / "artifact_reuse_summary.csv").exists()
     assert len(candidate_configs) == 4
+
+
+def test_plan_sota_tuning_stage_defaults_to_first_stage(tmp_path: Path) -> None:
+    search_space_path = _write_search_space(tmp_path)
+
+    result = plan_sota_tuning_study(
+        search_space_path=search_space_path,
+        output_dir=tmp_path / "out",
+        study_id="sota_unit_study",
+        repo_root=_repo_root(),
+    )
+    manifest_payload = json.loads(
+        (tmp_path / "out" / "sota_unit_study" / "study_manifest.json").read_text(encoding="utf-8")
+    )
+
+    assert result["stage"] == "stage1_low_fidelity"
+    assert manifest_payload["current_stage"] == "stage1_low_fidelity"
 
 
 def test_plan_sota_tuning_study_writes_stage1_candidates(tmp_path: Path) -> None:
@@ -290,6 +348,19 @@ def test_plan_sota_tuning_rejects_unknown_stage(tmp_path: Path) -> None:
             search_space_path=search_space_path,
             output_dir=tmp_path / "out",
             stage_name="missing_stage",
+            repo_root=_repo_root(),
+        )
+
+
+def test_plan_sota_tuning_stage_rejects_promotion_stage_args_without_results(tmp_path: Path) -> None:
+    search_space_path = _write_search_space(tmp_path)
+
+    with pytest.raises(ValueError, match="only valid with --promote-from-results"):
+        plan_sota_tuning_study(
+            search_space_path=search_space_path,
+            output_dir=tmp_path / "out",
+            from_stage="stage1_low_fidelity",
+            to_stage="stage2_mid_fidelity",
             repo_root=_repo_root(),
         )
 
@@ -420,6 +491,41 @@ def test_plan_sota_tuning_promotion_requires_from_stage(tmp_path: Path) -> None:
         )
 
 
+def test_plan_sota_tuning_study_promotion_requires_from_and_to_stage(tmp_path: Path) -> None:
+    test_plan_sota_tuning_promotion_requires_to_stage(tmp_path)
+    test_plan_sota_tuning_promotion_requires_from_stage(tmp_path)
+
+
+def test_plan_sota_tuning_promotion_rejects_unknown_from_stage(tmp_path: Path) -> None:
+    search_space_path = _write_search_space(tmp_path)
+    result_path = _write_stage_results(tmp_path)
+
+    with pytest.raises(ValueError, match="unknown fidelity stage"):
+        plan_sota_tuning_study(
+            search_space_path=search_space_path,
+            output_dir=tmp_path / "out",
+            promote_from_results=result_path,
+            from_stage="missing_stage",
+            to_stage="stage2_mid_fidelity",
+            repo_root=_repo_root(),
+        )
+
+
+def test_plan_sota_tuning_promotion_rejects_unknown_to_stage(tmp_path: Path) -> None:
+    search_space_path = _write_search_space(tmp_path)
+    result_path = _write_stage_results(tmp_path)
+
+    with pytest.raises(ValueError, match="unknown fidelity stage"):
+        plan_sota_tuning_study(
+            search_space_path=search_space_path,
+            output_dir=tmp_path / "out",
+            promote_from_results=result_path,
+            from_stage="stage1_low_fidelity",
+            to_stage="missing_stage",
+            repo_root=_repo_root(),
+        )
+
+
 def test_plan_sota_tuning_promotion_rejects_same_stage(tmp_path: Path) -> None:
     search_space_path = _write_search_space(tmp_path)
     result_path = _write_stage_results(tmp_path)
@@ -450,6 +556,48 @@ def test_plan_sota_tuning_promotion_rejects_backward_stage_order(tmp_path: Path)
         )
 
 
+def test_plan_sota_tuning_study_rejects_backward_promotion(tmp_path: Path) -> None:
+    test_plan_sota_tuning_promotion_rejects_backward_stage_order(tmp_path)
+
+
+def test_plan_sota_tuning_promotion_uses_source_stage_promote_top_k(tmp_path: Path) -> None:
+    base_config_path = tmp_path / "base_model.yaml"
+    search_space_path = tmp_path / "search_space.yaml"
+    payload = _search_space_payload(str(base_config_path))
+    payload["schedule"]["stages"][0]["promote_top_k"] = 1  # type: ignore[index]
+    payload["schedule"]["stages"][1]["max_candidates"] = 2  # type: ignore[index]
+    dump_yaml_file(base_config_path, _base_model_config())
+    dump_yaml_file(search_space_path, payload)
+    stage_result = plan_sota_tuning_study(
+        search_space_path=search_space_path,
+        output_dir=tmp_path / "out",
+        study_id="sota_unit_study",
+        stage_name="stage1_low_fidelity",
+        repo_root=_repo_root(),
+    )
+    study_dir = Path(stage_result["study_dir"])
+    result_path = study_dir / "reports" / "stage1_results.csv"
+    _write_stage_results_from_summary(
+        result_path=result_path,
+        summary_path=study_dir / "reports" / "candidate_summary.csv",
+        study_id="sota_unit_study",
+        stage_name="stage1_low_fidelity",
+        row_count=2,
+    )
+
+    result = plan_sota_tuning_study(
+        search_space_path=search_space_path,
+        output_dir=tmp_path / "out",
+        study_id="sota_unit_study",
+        promote_from_results=result_path,
+        from_stage="stage1_low_fidelity",
+        to_stage="stage2_mid_fidelity",
+        repo_root=_repo_root(),
+    )
+
+    assert result["promoted_candidate_count"] == 1
+
+
 def test_plan_sota_tuning_promotion_rejects_target_capacity_below_promote_top_k(tmp_path: Path) -> None:
     base_config_path = tmp_path / "base_model.yaml"
     search_space_path = tmp_path / "search_space.yaml"
@@ -469,6 +617,88 @@ def test_plan_sota_tuning_promotion_rejects_target_capacity_below_promote_top_k(
             to_stage="stage2_mid_fidelity",
             repo_root=_repo_root(),
         )
+
+
+def test_plan_sota_tuning_promotion_refuses_existing_output_without_overwrite(tmp_path: Path) -> None:
+    search_space_path = _write_search_space(tmp_path)
+    stage_result = plan_sota_tuning_study(
+        search_space_path=search_space_path,
+        output_dir=tmp_path / "out",
+        study_id="sota_unit_study",
+        stage_name="stage1_low_fidelity",
+        repo_root=_repo_root(),
+    )
+    study_dir = Path(stage_result["study_dir"])
+    result_path = study_dir / "reports" / "stage1_results.csv"
+    _write_stage_results_from_summary(
+        result_path=result_path,
+        summary_path=study_dir / "reports" / "candidate_summary.csv",
+        study_id="sota_unit_study",
+        stage_name="stage1_low_fidelity",
+        row_count=2,
+    )
+    plan_sota_tuning_study(
+        search_space_path=search_space_path,
+        output_dir=tmp_path / "out",
+        study_id="sota_unit_study",
+        promote_from_results=result_path,
+        from_stage="stage1_low_fidelity",
+        to_stage="stage2_mid_fidelity",
+        repo_root=_repo_root(),
+    )
+
+    with pytest.raises(FileExistsError, match="promotion output directory already exists"):
+        plan_sota_tuning_study(
+            search_space_path=search_space_path,
+            output_dir=tmp_path / "out",
+            study_id="sota_unit_study",
+            promote_from_results=result_path,
+            from_stage="stage1_low_fidelity",
+            to_stage="stage2_mid_fidelity",
+            repo_root=_repo_root(),
+        )
+
+
+def test_plan_sota_tuning_study_writes_stage_aware_promotion_plan(tmp_path: Path) -> None:
+    search_space_path = _write_search_space(tmp_path)
+    stage_result = plan_sota_tuning_study(
+        search_space_path=search_space_path,
+        output_dir=tmp_path / "out",
+        study_id="sota_unit_study",
+        stage_name="stage1_low_fidelity",
+        repo_root=_repo_root(),
+    )
+    study_dir = Path(stage_result["study_dir"])
+    result_path = study_dir / "reports" / "stage1_results.csv"
+    _write_stage_results_from_summary(
+        result_path=result_path,
+        summary_path=study_dir / "reports" / "candidate_summary.csv",
+        study_id="sota_unit_study",
+        stage_name="stage1_low_fidelity",
+        row_count=2,
+    )
+
+    plan_sota_tuning_study(
+        search_space_path=search_space_path,
+        output_dir=tmp_path / "out",
+        study_id="sota_unit_study",
+        promote_from_results=result_path,
+        from_stage="stage1_low_fidelity",
+        to_stage="stage2_mid_fidelity",
+        repo_root=_repo_root(),
+    )
+    promotion_payload = json.loads(
+        (
+            study_dir
+            / "promotions"
+            / "stage2_mid_fidelity"
+            / "promotion_plan.json"
+        ).read_text(encoding="utf-8")
+    )
+
+    assert promotion_payload["from_stage"] == "stage1_low_fidelity"
+    assert promotion_payload["to_stage"] == "stage2_mid_fidelity"
+    assert promotion_payload["stage_overrides"] == {"training.epochs": 10}
 
 
 def test_plan_sota_tuning_promotion_rejects_foreign_stage_results(tmp_path: Path) -> None:

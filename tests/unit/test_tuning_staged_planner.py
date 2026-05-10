@@ -15,6 +15,7 @@ from recsys_lab.tuning import (
     materialize_promoted_candidates,
     materialize_stage_candidates,
     plan_stage_1_candidates,
+    validate_promotion_stage_contract,
 )
 
 
@@ -594,3 +595,71 @@ def test_materialize_promoted_candidates_can_apply_induction_stage_override(tmp_
 
     assert promoted_config["training"]["epochs"] == 3
     assert promoted_config["clustering"]["induction"]["epochs"] == 10
+
+
+def test_promotion_rejects_unknown_from_stage() -> None:
+    with pytest.raises(ValueError, match="source stage is not in schedule"):
+        validate_promotion_stage_contract(
+            source_stage_spec=_source_stage(promote_top_k=1),
+            target_stage_spec=_target_stage(max_candidates=1),
+            stage_order=["stage2_mid_fidelity"],
+        )
+
+
+def test_promotion_rejects_unknown_to_stage() -> None:
+    with pytest.raises(ValueError, match="target stage is not in schedule"):
+        validate_promotion_stage_contract(
+            source_stage_spec=_source_stage(promote_top_k=1),
+            target_stage_spec=_target_stage(max_candidates=1),
+            stage_order=["stage1_low_fidelity"],
+        )
+
+
+def test_promotion_rejects_backward_stage_order() -> None:
+    with pytest.raises(ValueError, match="target stage must come after source stage"):
+        validate_promotion_stage_contract(
+            source_stage_spec=FidelityStageSpec(
+                name="stage2_mid_fidelity",
+                max_candidates=1,
+                promote_top_k=1,
+                overrides={"training.epochs": 10},
+            ),
+            target_stage_spec=_source_stage(promote_top_k=1),
+            stage_order=["stage1_low_fidelity", "stage2_mid_fidelity"],
+        )
+
+
+def test_promotion_uses_source_stage_promote_top_k(tmp_path: Path) -> None:
+    test_promotion_count_uses_source_promote_top_k_not_target_max_candidates(tmp_path)
+
+
+def test_promotion_rejects_target_stage_capacity_below_promote_top_k(tmp_path: Path) -> None:
+    test_promotion_rejects_target_capacity_smaller_than_source_promote_top_k(tmp_path)
+
+
+def test_promotion_rejects_results_from_wrong_stage(tmp_path: Path) -> None:
+    test_promotion_rejects_stage_name_mismatch(tmp_path)
+
+
+def test_promotion_rejects_results_from_wrong_study(tmp_path: Path) -> None:
+    test_promotion_rejects_study_id_mismatch(tmp_path)
+
+
+def test_promotion_rejects_test_metric_columns(tmp_path: Path) -> None:
+    test_build_promotion_plan_rejects_test_metrics(tmp_path)
+
+
+def test_promotion_ignores_failed_candidates_when_enough_successes_exist(tmp_path: Path) -> None:
+    test_promotion_ignores_failed_candidates(tmp_path)
+
+
+def test_stage_candidate_manifest_records_stage_name(tmp_path: Path) -> None:
+    test_materialize_stage_candidates_applies_stage_overrides_without_changing_induction(tmp_path)
+
+
+def test_promoted_candidate_metadata_records_source_and_target_stage(tmp_path: Path) -> None:
+    test_materialize_promoted_candidates_applies_stage_overrides_and_writes_plan(tmp_path)
+
+
+def test_promotion_plan_records_stage_overrides(tmp_path: Path) -> None:
+    test_materialize_promoted_candidates_applies_stage_overrides_and_writes_plan(tmp_path)

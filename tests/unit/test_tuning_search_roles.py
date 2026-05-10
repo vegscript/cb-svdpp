@@ -221,3 +221,54 @@ def test_only_current_stage_outer_override_affects_reuse_key() -> None:
         "stage2_mid_fidelity": {"clustering.induction.epochs": 10}
     }
     assert stage1_plan.artifact_reuse_groups[0].group_id != stage2_plan.artifact_reuse_groups[0].group_id
+
+
+def test_stage1_reuse_key_ignores_stage2_outer_override() -> None:
+    test_stage2_inner_override_does_not_contaminate_stage1_reuse_key()
+
+
+def test_inner_stage_override_does_not_split_reuse_group() -> None:
+    payload = _payload_for_dimension("alpha", "clustering.alpha", [0.2, 0.3])
+    stage1_plan = build_study_plan(
+        SearchSpaceSpec.model_validate(payload),
+        stage_name="stage1_low_fidelity",
+        stage_overrides={"training.epochs": 3},
+    )
+    stage2_plan = build_study_plan(
+        SearchSpaceSpec.model_validate(payload),
+        stage_name="stage2_mid_fidelity",
+        stage_overrides={"training.epochs": 10},
+    )
+
+    assert len(stage1_plan.artifact_reuse_groups) == 1
+    assert len(stage2_plan.artifact_reuse_groups) == 1
+    assert stage1_plan.artifact_reuse_groups[0].group_id == stage2_plan.artifact_reuse_groups[0].group_id
+
+
+def test_outer_stage_override_splits_reuse_group() -> None:
+    payload = _payload_for_dimension("alpha", "clustering.alpha", [0.2, 0.3])
+    no_outer_override_plan = build_study_plan(
+        SearchSpaceSpec.model_validate(payload),
+        stage_name="stage1_low_fidelity",
+        stage_overrides={"training.epochs": 3},
+    )
+    outer_override_plan = build_study_plan(
+        SearchSpaceSpec.model_validate(payload),
+        stage_name="stage1_low_fidelity",
+        stage_overrides={"clustering.induction.epochs": 3},
+    )
+
+    assert len(no_outer_override_plan.artifact_reuse_groups) == 1
+    assert len(outer_override_plan.artifact_reuse_groups) == 1
+    assert (
+        no_outer_override_plan.artifact_reuse_groups[0].group_id
+        != outer_override_plan.artifact_reuse_groups[0].group_id
+    )
+
+
+def test_training_epochs_stage_override_keeps_one_reuse_group() -> None:
+    test_stage_training_epochs_override_does_not_change_reuse_key()
+
+
+def test_induction_epochs_stage_override_changes_reuse_group() -> None:
+    test_outer_stage_override_splits_reuse_group()
