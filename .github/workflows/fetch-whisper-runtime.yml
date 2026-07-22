@@ -1,4 +1,4 @@
-name: Fetch public Demucs model
+name: Fetch public Whisper Turbo model
 
 on:
   pull_request:
@@ -14,19 +14,19 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
-      - name: Download public Demucs voice-separation model
+      - name: Download public multilingual Whisper Turbo model
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p runtime
           curl -L --fail --retry 5 --retry-delay 2 \
-            -o runtime/955717e8-8726e21a.th \
-            'https://dl.fbaipublicfiles.com/demucs/hybrid_transformer/955717e8-8726e21a.th'
+            -o runtime/ggml-large-v3-turbo-q5_0.bin \
+            'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-turbo-q5_0.bin?download=true'
           sha256sum runtime/* | tee runtime/SHA256SUMS.txt
           ls -lh runtime
       - uses: actions/upload-artifact@v4
         with:
-          name: demucs-voice-model
+          name: whisper-turbo-model
           path: runtime/
           if-no-files-found: error
           retention-days: 1
