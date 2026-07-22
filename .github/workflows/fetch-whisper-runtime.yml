@@ -1,4 +1,4 @@
-name: Fetch public Whisper runtime
+name: Fetch public Whisper base model
 
 on:
   pull_request:
@@ -14,22 +14,19 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
-      - name: Download public runtime files
+      - name: Download public multilingual base model
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p runtime
           curl -L --fail --retry 5 --retry-delay 2 \
-            -o runtime/pywhispercpp-1.5.0-cp313-cp313-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl \
-            'https://files.pythonhosted.org/packages/dd/58/8e651f7210eeb64721562406a69c769e72fdd4560fa8d5ca4895cab5b4e2/pywhispercpp-1.5.0-cp313-cp313-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl'
-          curl -L --fail --retry 5 --retry-delay 2 \
-            -o runtime/ggml-tiny-q5_1.bin \
-            'https://raw.githubusercontent.com/bnosac/audio.whisper/refs/heads/master/inst/repo/ggml-tiny-q5_1.bin'
+            -o runtime/ggml-base-q5_1.bin \
+            'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base-q5_1.bin?download=true'
           sha256sum runtime/* | tee runtime/SHA256SUMS.txt
           ls -lh runtime
       - uses: actions/upload-artifact@v4
         with:
-          name: whisper-runtime
+          name: whisper-base-model
           path: runtime/
           if-no-files-found: error
           retention-days: 1
