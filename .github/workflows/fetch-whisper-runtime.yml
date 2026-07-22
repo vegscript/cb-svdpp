@@ -1,4 +1,4 @@
-name: Fetch public Whisper base model
+name: Fetch public Whisper small model
 
 on:
   pull_request:
@@ -14,19 +14,19 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
-      - name: Download public multilingual base model
+      - name: Download public multilingual small model
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p runtime
           curl -L --fail --retry 5 --retry-delay 2 \
-            -o runtime/ggml-base-q5_1.bin \
-            'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base-q5_1.bin?download=true'
+            -o runtime/ggml-small-q5_1.bin \
+            'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small-q5_1.bin?download=true'
           sha256sum runtime/* | tee runtime/SHA256SUMS.txt
           ls -lh runtime
       - uses: actions/upload-artifact@v4
         with:
-          name: whisper-base-model
+          name: whisper-small-model
           path: runtime/
           if-no-files-found: error
           retention-days: 1
